@@ -1,0 +1,20 @@
+# CodeAgent Vulnerability Scanner API
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+httpx==0.25.2
+
+# Security analyzers
+semgrep==1.81.0
+bandit==1.7.9
+pip-audit==2.6.1
+
+# Utilities
+python-dotenv==1.0.0
+aiofiles==23.2.1
+
+# For development/testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+requests==2.31.0
