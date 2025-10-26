@@ -1,6 +1,6 @@
 conda activate ChatDev_conda_env
 #!/bin/bash
-export OPENAI_API_KEY="your_openai_api_key_here"
+export OPENAI_API_KEY="sk-ijklmnopqrstuvwxijklmnopqrstuvwxijklmnop"
 # cd CodeAgent/WareHouse/FiveKeyWords_THUNLP_20230825072339
 # cd ${1}
 cd CompanyConfig/Default

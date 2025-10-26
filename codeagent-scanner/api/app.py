@@ -31,6 +31,7 @@ from pipeline.report_schema import (
     WebhookConfig, WebhookPayload, AnalyzerConfig, SeveritySummary
 )
 from analyzers.base import analyzer_registry
+from integration.agent_bridge import AgentBridge
 
 # Register all analyzers
 from analyzers.semgrep_runner import SemgrepAnalyzer
@@ -65,6 +66,7 @@ app.add_middleware(
 
 # Global state
 orchestrator: Optional[JobOrchestrator] = None
+agent_bridge: Optional[AgentBridge] = None
 webhooks: Dict[str, WebhookConfig] = {}
 sse_clients: Dict[str, List] = {}  # job_id -> list of response objects
 
@@ -72,8 +74,16 @@ sse_clients: Dict[str, List] = {}  # job_id -> list of response objects
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup."""
-    global orchestrator
+    global orchestrator, agent_bridge
     orchestrator = get_orchestrator(STORAGE_BASE)
+    
+    # Initialize AI agent bridge
+    try:
+        agent_bridge = AgentBridge()
+        logger.info("AI Agent Bridge initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize AI Agent Bridge: {e}")
+        agent_bridge = None
     
     # Register event callback for webhooks and SSE
     orchestrator.add_event_callback(handle_job_event)
@@ -88,7 +98,7 @@ async def shutdown_event():
 
 
 def handle_job_event(job_id: str, event_type: str, data: Dict[str, Any]):
-    """Handle job events for webhooks and SSE."""
+    """Handle job events for webhooks, SSE, and AI analysis."""
     # Handle SSE clients
     if job_id in sse_clients:
         event_data = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
@@ -100,9 +110,53 @@ def handle_job_event(job_id: str, event_type: str, data: Dict[str, Any]):
                 logger.error(f"Failed to send SSE event: {e}")
                 sse_clients[job_id].remove(response)
     
-    # Handle webhooks for completion events
+    # Handle webhooks and AI analysis for completion events
     if event_type == "finished" and data.get("status") == "completed":
-        asyncio.create_task(deliver_webhooks(job_id, data))
+        asyncio.create_task(process_completed_job(job_id, data))
+
+
+async def process_completed_job(job_id: str, data: Dict[str, Any]):
+    """Process completed job: run AI analysis and deliver webhooks."""
+    # First, trigger AI analysis if enabled
+    enable_ai = os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true"
+    
+    if enable_ai and agent_bridge:
+        try:
+            # Get full report
+            report_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}.json")
+            if os.path.exists(report_file):
+                with open(report_file, 'r') as f:
+                    report = json.load(f)
+                
+                # Get workspace path
+                workspace_path = os.path.join(STORAGE_BASE, "workspace", job_id)
+                
+                # Check if there are high/critical issues to analyze
+                summary = report.get('summary', {})
+                if summary.get('high', 0) > 0 or summary.get('critical', 0) > 0:
+                    logger.info(f"Starting AI analysis for job {job_id}")
+                    
+                    # Run AI analysis
+                    enhanced_report = await agent_bridge.process_vulnerabilities(
+                        job_id=job_id,
+                        report=report,
+                        workspace_path=workspace_path
+                    )
+                    
+                    # Save enhanced report
+                    enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
+                    with open(enhanced_file, 'w') as f:
+                        json.dump(enhanced_report, f, indent=2)
+                    
+                    logger.info(f"AI analysis completed for job {job_id}")
+                else:
+                    logger.info(f"No high/critical issues found for job {job_id}, skipping AI analysis")
+            
+        except Exception as e:
+            logger.error(f"AI analysis failed for job {job_id}: {e}")
+    
+    # Then deliver webhooks
+    await deliver_webhooks(job_id, data)
 
 
 async def deliver_webhooks(job_id: str, data: Dict[str, Any]):
@@ -429,6 +483,22 @@ async def get_report_summary(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to load report summary")
 
 
+@app.get("/reports/{job_id}/enhanced")
+async def get_enhanced_report(job_id: str) -> Dict[str, Any]:
+    """Get AI-enhanced scan report with fixes."""
+    enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
+    
+    if not os.path.exists(enhanced_file):
+        raise HTTPException(status_code=404, detail="Enhanced report not available yet")
+    
+    try:
+        with open(enhanced_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load enhanced report {job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load enhanced report")
+
+
 @app.get("/events/{job_id}")
 async def get_job_events(job_id: str) -> StreamingResponse:
     """Server-Sent Events stream for job progress."""
@@ -501,6 +571,157 @@ async def update_analyzer_config(config: Dict[str, Any]) -> Dict[str, bool]:
     
     orchestrator.update_analyzer_config(config)
     return {"ok": True}
+
+
+@app.get("/config/ai")
+async def get_ai_config() -> Dict[str, Any]:
+    """Get AI analysis configuration."""
+    return {
+        "enabled": os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true",
+        "model": os.getenv("AI_MODEL", "GPT_4"),
+        "min_severity": os.getenv("AI_ANALYSIS_MIN_SEVERITY", "high"),
+        "max_concurrent_reviews": int(os.getenv("MAX_CONCURRENT_AI_REVIEWS", "1")),
+        "timeout_sec": int(os.getenv("AI_ANALYSIS_TIMEOUT_SEC", "300")),
+        "bridge_initialized": agent_bridge is not None
+    }
+
+
+@app.patch("/config/ai")
+async def update_ai_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Update AI analysis configuration (runtime only)."""
+    updated = {}
+    
+    # Note: In production, these should be persisted to a database
+    # For now, we only update environment variables for the current session
+    
+    if "enabled" in config:
+        os.environ["ENABLE_AI_ANALYSIS"] = str(config["enabled"]).lower()
+        updated["enabled"] = config["enabled"]
+    
+    if "model" in config:
+        valid_models = ["GPT_4", "GPT_3_5_TURBO", "GPT_4_32K"]
+        if config["model"] in valid_models:
+            os.environ["AI_MODEL"] = config["model"]
+            updated["model"] = config["model"]
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid model. Must be one of: {', '.join(valid_models)}"
+            )
+    
+    if "min_severity" in config:
+        valid_severities = ["critical", "high", "medium", "low"]
+        if config["min_severity"] in valid_severities:
+            os.environ["AI_ANALYSIS_MIN_SEVERITY"] = config["min_severity"]
+            updated["min_severity"] = config["min_severity"]
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid severity. Must be one of: {', '.join(valid_severities)}"
+            )
+    
+    if "max_concurrent_reviews" in config:
+        try:
+            value = int(config["max_concurrent_reviews"])
+            if value < 1 or value > 10:
+                raise ValueError("Must be between 1 and 10")
+            os.environ["MAX_CONCURRENT_AI_REVIEWS"] = str(value)
+            updated["max_concurrent_reviews"] = value
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    
+    if "timeout_sec" in config:
+        try:
+            value = int(config["timeout_sec"])
+            if value < 60 or value > 600:
+                raise ValueError("Must be between 60 and 600 seconds")
+            os.environ["AI_ANALYSIS_TIMEOUT_SEC"] = str(value)
+            updated["timeout_sec"] = value
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    
+    logger.info(f"AI configuration updated: {updated}")
+    return {
+        "ok": True,
+        "updated": updated,
+        "message": "Configuration updated successfully (runtime only, not persisted)"
+    }
+
+
+@app.get("/dashboard/stats")
+async def get_dashboard_stats() -> Dict[str, Any]:
+    """Get overall statistics for dashboard."""
+    reports_dir = os.path.join(STORAGE_BASE, "reports")
+    
+    # Initialize stats
+    stats = {
+        "total_scans": 0,
+        "ai_enhanced_reports": 0,
+        "severity_distribution": {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0
+        },
+        "active_jobs": 0,
+        "recent_scans": []
+    }
+    
+    # Check if reports directory exists
+    if not os.path.exists(reports_dir):
+        os.makedirs(reports_dir, exist_ok=True)
+        return stats
+    
+    try:
+        report_files = os.listdir(reports_dir)
+        
+        # Count reports
+        regular_reports = [f for f in report_files if f.endswith('.json') and not f.endswith('_enhanced.json')]
+        enhanced_reports = [f for f in report_files if f.endswith('_enhanced.json')]
+        
+        stats["total_scans"] = len(regular_reports)
+        stats["ai_enhanced_reports"] = len(enhanced_reports)
+        
+        # Calculate severity distribution and collect recent scans
+        recent_scans = []
+        
+        for report_file in regular_reports:
+            try:
+                report_path = os.path.join(reports_dir, report_file)
+                with open(report_path, 'r') as f:
+                    report = json.load(f)
+                
+                # Update severity totals
+                summary = report.get('summary', {})
+                for severity in stats["severity_distribution"]:
+                    stats["severity_distribution"][severity] += summary.get(severity, 0)
+                
+                # Collect recent scan info
+                job_id = report.get('job_id', report_file.replace('.json', ''))
+                recent_scans.append({
+                    'job_id': job_id,
+                    'generated_at': report.get('meta', {}).get('generated_at', ''),
+                    'total_issues': sum(summary.values()),
+                    'has_ai_analysis': f"{job_id}_enhanced.json" in enhanced_reports
+                })
+                
+            except Exception as e:
+                logger.warning(f"Failed to process report {report_file}: {e}")
+                continue
+        
+        # Sort by generated_at and take 10 most recent
+        recent_scans.sort(key=lambda x: x['generated_at'], reverse=True)
+        stats["recent_scans"] = recent_scans[:10]
+        
+        # Get active jobs count
+        if orchestrator:
+            stats["active_jobs"] = len(orchestrator.active_jobs)
+        
+    except Exception as e:
+        logger.error(f"Failed to generate dashboard stats: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate statistics")
+    
+    return stats
 
 
 # Exception handlers

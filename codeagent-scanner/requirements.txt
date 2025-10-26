@@ -13,8 +13,20 @@ pip-audit==2.6.1
 # Utilities
 python-dotenv==1.0.0
 aiofiles==23.2.1
+tenacity==9.1.2
+openai>=1.0.0
 
 # For development/testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
 requests==2.31.0
+
+tiktoken==0.4.0
+importlib-metadata==6.8.0
+numpy==1.24.3
+regex==2023.6.3
+requests==2.31.0
+virtualenv==20.23.0
+Werkzeug==2.3.6
+Markdown==3.4.4
+Pillow==10.1.0

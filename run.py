@@ -83,21 +83,32 @@ parser.add_argument('--PRinfo', type=str, default="",
                     help="repoowner reponame githubtoken")
 parser.add_argument('--AcName', type=str, default="",
                     help="Action Name")
-args = parser.parse_args()
 
-if args.ifcode=="code":
-    task_initial_instruct= """
-    I hava a code, potentially have some bugs inside, please
-    generate the right one to me to fix it.
-    I would like a detailed code review based on the following aspect:
-    problems or potential bugs analysis: 
-    Conduct a potential bugs of the code. Provide details of any such findings like potential bugs or risks.
-    The final feedback should be structured as follows:
-    bug analysis: [Your detailed analysis and suggestions]
-    code revision suggestion: [Your proposed code revisions or alignment suggestions, if any]
-    """
+# Only parse args if running as main script, not when imported
+if __name__ == "__main__":
+    args = parser.parse_args()
 else:
-    task_initial_instruct = """
+    # When imported, create a minimal args object
+    import sys
+    sys.argv = ['']  # Clear argv to prevent arg parsing errors
+    args = parser.parse_args([])  # Parse empty args
+
+
+def main():
+    """Main function for running code review."""
+    if args.ifcode=="code":
+        task_initial_instruct= """
+        I hava a code, potentially have some bugs inside, please
+        generate the right one to me to fix it.
+        I would like a detailed code review based on the following aspect:
+        problems or potential bugs analysis: 
+        Conduct a potential bugs of the code. Provide details of any such findings like potential bugs or risks.
+        The final feedback should be structured as follows:
+        bug analysis: [Your detailed analysis and suggestions]
+        code revision suggestion: [Your proposed code revisions or alignment suggestions, if any]
+        """
+    else:
+        task_initial_instruct = """
     I have a code, which includes the commit message, and the corresponding original file, these file are connected like this 
     code <PAD> commit message <PAD> original file. 
     If there is commit message is null, please don't do Semantic Consistency Analysis. if orignial file is null, please don't do Format Analysis.
@@ -175,96 +186,99 @@ else:
         # Please provide a detailed analysis of these code changes based on the above aspects, highlighting any identified vulnerabilities and suggesting specific improvements.
             
 
-_file = []
-with open(args.commit, 'r') as f:
-    lines = f.readlines()
-    for line in lines:
-        _file.append(line)
-    _file.append('<PAD>')
-
-if args.commitmessage!="":
-    with open(args.commitmessage, 'r') as f:
+    _file = []
+    with open(args.commit, 'r') as f:
         lines = f.readlines()
         for line in lines:
             _file.append(line)
         _file.append('<PAD>')
 
-if args.originalfile!="":
-    with open(args.originalfile , 'r') as f:
-        lines = f.readlines()
-        for line in lines:
-            _file.append(line)
+    if args.commitmessage!="":
+        with open(args.commitmessage, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                _file.append(line)
+            _file.append('<PAD>')
+
+    if args.originalfile!="":
+        with open(args.originalfile , 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                _file.append(line)
 
 
-args.task = task_initial_instruct +" ".join(_file)
-from transformers import GPT2Tokenizer
+    args.task = task_initial_instruct +" ".join(_file)
+    from transformers import GPT2Tokenizer
 
-"""
-GPT3.5 Max Token: 4096
-GPT4 Max Token: 8000 
-GPT-4_32K Max Token: 32,768
-"""
-if args.model=="GPT_3_5_TURBO":
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-    encoded_input = tokenizer.encode(args.task)
-    if len(encoded_input) > 3000:
-        encoded_input = encoded_input[:3000]
-    args.task = tokenizer.decode(encoded_input)
-elif args.model=="GPT_4":
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-    encoded_input = tokenizer.encode(args.task)
-    if len(encoded_input) > 4000:
-        encoded_input = encoded_input[:4000]
-    args.task = tokenizer.decode(encoded_input)
-
-
+    """
+    GPT3.5 Max Token: 4096
+    GPT4 Max Token: 8000 
+    GPT-4_32K Max Token: 32,768
+    """
+    if args.model=="GPT_3_5_TURBO":
+        tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        encoded_input = tokenizer.encode(args.task)
+        if len(encoded_input) > 3000:
+            encoded_input = encoded_input[:3000]
+        args.task = tokenizer.decode(encoded_input)
+    elif args.model=="GPT_4":
+        tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        encoded_input = tokenizer.encode(args.task)
+        if len(encoded_input) > 4000:
+            encoded_input = encoded_input[:4000]
+        args.task = tokenizer.decode(encoded_input)
 
 
-# Start CodeAgent
 
-# ----------------------------------------
-#          Init ChatChain
-# ----------------------------------------
-config_path, config_phase_path, config_role_path = get_config(args.config)
-args2type = {'GPT_3_5_TURBO': ModelType.GPT_3_5_TURBO, 'GPT_4': ModelType.GPT_4, 'GPT_4_32K': ModelType.GPT_4_32k}
-chat_chain = ChatChain(config_path=config_path,
-                       config_phase_path=config_phase_path,
-                       config_role_path=config_role_path,
-                       task_prompt=args.task,
-                       project_name=args.name,
-                       org_name=args.org,
-                       model_type=args2type[args.model],
-                       code_path=args.path,
-                       PRinfo = args.PRinfo,
-                       AcName = args.AcName)
 
-# ----------------------------------------
-#          Init Log
-# ----------------------------------------
-logging.basicConfig(filename=chat_chain.log_filepath, level=logging.INFO,
-                    format='[%(asctime)s %(levelname)s] %(message)s',
-                    datefmt='%Y-%d-%m %H:%M:%S', encoding="utf-8")
+    # Start CodeAgent
 
-# ----------------------------------------
-#          Pre Processing
-# ----------------------------------------
+    # ----------------------------------------
+    #          Init ChatChain
+    # ----------------------------------------
+    config_path, config_phase_path, config_role_path = get_config(args.config)
+    args2type = {'GPT_3_5_TURBO': ModelType.GPT_3_5_TURBO, 'GPT_4': ModelType.GPT_4, 'GPT_4_32K': ModelType.GPT_4_32k}
+    chat_chain = ChatChain(config_path=config_path,
+                           config_phase_path=config_phase_path,
+                           config_role_path=config_role_path,
+                           task_prompt=args.task,
+                           project_name=args.name,
+                           org_name=args.org,
+                           model_type=args2type[args.model],
+                           code_path=args.path,
+                           PRinfo = args.PRinfo,
+                           AcName = args.AcName)
 
-chat_chain.pre_processing()
+    # ----------------------------------------
+    #          Init Log
+    # ----------------------------------------
+    logging.basicConfig(filename=chat_chain.log_filepath, level=logging.INFO,
+                        format='[%(asctime)s %(levelname)s] %(message)s',
+                        datefmt='%Y-%d-%m %H:%M:%S', encoding="utf-8")
 
-# ----------------------------------------
-#          Personnel Recruitment
-# ----------------------------------------
+    # ----------------------------------------
+    #          Pre Processing
+    # ----------------------------------------
 
-chat_chain.make_recruitment()
+    chat_chain.pre_processing()
 
-# ----------------------------------------
-#          Chat Chain
-# ----------------------------------------
+    # ----------------------------------------
+    #          Personnel Recruitment
+    # ----------------------------------------
 
-chat_chain.execute_chain()
+    chat_chain.make_recruitment()
 
-# ----------------------------------------
-#          Post Processing
-# ----------------------------------------
+    # ----------------------------------------
+    #          Chat Chain
+    # ----------------------------------------
 
-chat_chain.post_processing()
+    chat_chain.execute_chain()
+
+    # ----------------------------------------
+    #          Post Processing
+    # ----------------------------------------
+
+    chat_chain.post_processing()
+
+if __name__ == "__main__":
+    main()
