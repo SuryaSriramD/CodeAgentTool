@@ -6,7 +6,16 @@ import time
 import markdown
 import inspect
 from camel.messages.system_messages import SystemMessage
-from online_log.app import send_msg
+
+# Make online_log optional (only used for web UI logging)
+try:
+    from online_log.app import send_msg
+    ONLINE_LOG_AVAILABLE = True
+except ImportError:
+    ONLINE_LOG_AVAILABLE = False
+    def send_msg(role, content):
+        """Fallback when online_log is not available."""
+        pass
 
 
 def now():

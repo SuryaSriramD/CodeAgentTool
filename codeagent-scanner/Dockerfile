@@ -2,6 +2,8 @@
 FROM python:3.11-slim
 
 # Set working directory
+# Set Python path and working directory
+ENV PYTHONPATH="/app"
 WORKDIR /app
 
 # Install system dependencies
@@ -18,7 +20,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY api/ ./api/
 COPY analyzers/ ./analyzers/
 COPY ingestion/ ./ingestion/
+COPY integration/ ./integration/
 COPY pipeline/ ./pipeline/
+COPY storage/ ./storage/
+COPY camel/ ./camel/
+COPY codeagent/ ./codeagent/
+COPY run.py ./run.py
 
 # Create storage directories
 RUN mkdir -p /app/storage/workspace /app/storage/reports /app/storage/logs

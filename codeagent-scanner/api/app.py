@@ -31,7 +31,7 @@ from pipeline.report_schema import (
     WebhookConfig, WebhookPayload, AnalyzerConfig, SeveritySummary
 )
 from analyzers.base import analyzer_registry
-from integration.agent_bridge import AgentBridge
+from integration.camel_bridge import CamelBridge
 
 # Register all analyzers
 from analyzers.semgrep_runner import SemgrepAnalyzer
@@ -66,7 +66,7 @@ app.add_middleware(
 
 # Global state
 orchestrator: Optional[JobOrchestrator] = None
-agent_bridge: Optional[AgentBridge] = None
+agent_bridge: Optional[CamelBridge] = None
 webhooks: Dict[str, WebhookConfig] = {}
 sse_clients: Dict[str, List] = {}  # job_id -> list of response objects
 
@@ -77,12 +77,12 @@ async def startup_event():
     global orchestrator, agent_bridge
     orchestrator = get_orchestrator(STORAGE_BASE)
     
-    # Initialize AI agent bridge
+    # Initialize AI agent bridge (multi-agent system)
     try:
-        agent_bridge = AgentBridge()
-        logger.info("AI Agent Bridge initialized successfully")
+        agent_bridge = CamelBridge()
+        logger.info("Multi-Agent Bridge (CAMEL) initialized successfully")
     except Exception as e:
-        logger.warning(f"Failed to initialize AI Agent Bridge: {e}")
+        logger.warning(f"Failed to initialize Multi-Agent Bridge: {e}")
         agent_bridge = None
     
     # Register event callback for webhooks and SSE
