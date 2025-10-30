@@ -112,7 +112,19 @@ def handle_job_event(job_id: str, event_type: str, data: Dict[str, Any]):
     
     # Handle webhooks and AI analysis for completion events
     if event_type == "finished" and data.get("status") == "completed":
-        asyncio.create_task(process_completed_job(job_id, data))
+        # Run async function in background thread since we're in a sync context
+        import threading
+        def run_async_task():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(process_completed_job(job_id, data))
+                loop.close()
+            except Exception as e:
+                logger.error(f"Error in background AI analysis: {e}", exc_info=True)
+        
+        thread = threading.Thread(target=run_async_task, daemon=True)
+        thread.start()
 
 
 async def process_completed_job(job_id: str, data: Dict[str, Any]):

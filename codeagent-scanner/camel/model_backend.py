@@ -72,8 +72,19 @@ class OpenAIModel(ModelBackend):
 
         try:
             response = openai.ChatCompletion.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
-        except AttributeError:
-            response = openai.chat.completions.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
+        except (AttributeError, openai.APIRemovedInV1):
+            # Use new OpenAI v1.0+ API
+            client = openai.OpenAI()
+            completion = client.chat.completions.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
+            # Convert new response format to old format for compatibility
+            response = {
+                "choices": [{"message": {"content": completion.choices[0].message.content}}],
+                "usage": {
+                    "prompt_tokens": completion.usage.prompt_tokens,
+                    "completion_tokens": completion.usage.completion_tokens,
+                    "total_tokens": completion.usage.total_tokens
+                }
+            }
 
         cost = prompt_cost(
                 self.model_type.value, 

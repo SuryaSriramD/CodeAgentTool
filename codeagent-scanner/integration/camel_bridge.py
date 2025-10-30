@@ -441,7 +441,13 @@ Please work together as a team to provide a comprehensive security review.
             minimal_chain_config = {
                 "chain": [
                     {
-                        "phase": "SecurityReview",
+                        "phase": "CodeSecurityAnalyst",
+                        "phaseType": "SimplePhase",
+                        "max_turn_step": 3,
+                        "need_reflect": "False"
+                    },
+                    {
+                        "phase": "CodeReviewModification",
                         "phaseType": "SimplePhase",
                         "max_turn_step": 3,
                         "need_reflect": "False"
@@ -459,3 +465,62 @@ Please work together as a team to provide a comprehensive security review.
                 json.dump(minimal_chain_config, f, indent=2)
             
             logger.info(f"Created minimal config at {self.config_path}")
+        
+        # Create minimal PhaseConfig.json if needed
+        if not self.config_phase_path.exists():
+            minimal_phase_config = {
+                "CodeSecurityAnalyst": {
+                    "assistant_role_name": "Programmer",
+                    "user_role_name": "Security Tester",
+                    "phase_prompt": [
+                        "Analyze the detected security vulnerabilities and explain their impact"
+                    ]
+                },
+                "CodeReviewModification": {
+                    "assistant_role_name": "Code Reviewer",
+                    "user_role_name": "Programmer",
+                    "phase_prompt": [
+                        "Review the code and provide secure fixes for all vulnerabilities"
+                    ]
+                }
+            }
+            
+            with open(self.config_phase_path, 'w') as f:
+                json.dump(minimal_phase_config, f, indent=2)
+            
+            logger.info(f"Created minimal phase config at {self.config_phase_path}")
+        
+        # Create minimal RoleConfig.json if needed
+        if not self.config_role_path.exists():
+            minimal_role_config = {
+                "Chief Executive Officer": [
+                    "You are the project coordinator for security code review.",
+                    "Orchestrate the analysis process between security testers and programmers.",
+                    "Ensure comprehensive vulnerability remediation and quality standards."
+                ],
+                "Counselor": [
+                    "You are an expert advisor who provides feedback and recommendations.",
+                    "Review the work done by other roles and suggest improvements.",
+                    "Ensure best practices are followed and quality is maintained."
+                ],
+                "Security Tester": [
+                    "You are a security expert who analyzes code vulnerabilities.",
+                    "Identify security risks and explain how they can be exploited.",
+                    "Provide clear, actionable security recommendations."
+                ],
+                "Programmer": [
+                    "You are an experienced programmer who writes secure code.",
+                    "Fix security vulnerabilities while maintaining functionality.",
+                    "Write clean, well-documented, production-ready code."
+                ],
+                "Code Reviewer": [
+                    "You are a senior code reviewer focused on security.",
+                    "Review fixes to ensure they address the root cause.",
+                    "Verify that the code follows security best practices."
+                ]
+            }
+            
+            with open(self.config_role_path, 'w') as f:
+                json.dump(minimal_role_config, f, indent=2)
+            
+            logger.info(f"Created minimal role config at {self.config_role_path}")

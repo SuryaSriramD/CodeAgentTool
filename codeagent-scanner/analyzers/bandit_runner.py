@@ -74,7 +74,7 @@ class BanditAnalyzer(BaseAnalyzer):
                 "-r",  # Recursive
                 "-f", "json",  # JSON format
                 "-o", output_file,  # Output file
-                "-ll",  # Low confidence level (catch more issues)
+                "-l",  # Report all severity levels (low, medium, high)
                 workspace_path
             ]
             

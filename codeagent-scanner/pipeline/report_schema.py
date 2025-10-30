@@ -392,23 +392,31 @@ class ReportBuilder:
         """Add results from an analyzer."""
         # Import here to avoid circular imports
         # result should be an AnalyzerResult object
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"Adding analyzer result: tool={result.tool_name}, success={result.success}, issues_count={len(result.issues)}")
         
         if result.success:
             self.tools_used.append(result.tool_name)
             
             # Convert analyzer issues to report issues
             for analyzer_issue in result.issues:
-                issue = Issue(
-                    tool=analyzer_issue.tool,
-                    type=analyzer_issue.type,
-                    message=analyzer_issue.message,
-                    severity=Severity(analyzer_issue.severity.value),
-                    file=analyzer_issue.file,
-                    line=analyzer_issue.line,
-                    rule_id=analyzer_issue.rule_id,
-                    suggestion=analyzer_issue.suggestion
-                )
-                self.issues.append(issue)
+                try:
+                    issue = Issue(
+                        tool=analyzer_issue.tool,
+                        type=analyzer_issue.type,
+                        message=analyzer_issue.message,
+                        severity=Severity(analyzer_issue.severity.value),
+                        file=analyzer_issue.file,
+                        line=analyzer_issue.line,
+                        rule_id=analyzer_issue.rule_id,
+                        suggestion=analyzer_issue.suggestion
+                    )
+                    self.issues.append(issue)
+                    logger.debug(f"Added issue: {analyzer_issue.type} in {analyzer_issue.file}")
+                except Exception as e:
+                    logger.error(f"Failed to convert issue: {e}", exc_info=True)
     
     def build_report(
         self,
