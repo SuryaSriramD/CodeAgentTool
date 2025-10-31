@@ -52,7 +52,11 @@ class OpenAIModel(ModelBackend):
         
     def run(self, *args, **kwargs) -> Dict[str, Any]:
         string = "\n".join([message["content"] for message in kwargs["messages"]])
-        encoding = tiktoken.encoding_for_model(self.model_type.value)
+        try:
+            encoding = tiktoken.encoding_for_model(self.model_type.value)
+        except KeyError:
+            # Fall back to cl100k_base encoding for newer models like gpt-4o-mini
+            encoding = tiktoken.get_encoding("cl100k_base")
         num_prompt_tokens = len(encoding.encode(string))
         gap_between_send_receive = 15 * len(kwargs["messages"])
         num_prompt_tokens += gap_between_send_receive
@@ -65,6 +69,8 @@ class OpenAIModel(ModelBackend):
             "gpt-4": 8192,
             "gpt-4-0613": 8192,
             "gpt-4-32k": 32768,
+            "gpt-4o": 128000,
+            "gpt-4o-mini": 128000,
         }
         num_max_token = num_max_token_map[self.model_type.value]
         num_max_completion_tokens = num_max_token - num_prompt_tokens
@@ -72,19 +78,23 @@ class OpenAIModel(ModelBackend):
 
         try:
             response = openai.ChatCompletion.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
-        except (AttributeError, openai.APIRemovedInV1):
-            # Use new OpenAI v1.0+ API
-            client = openai.OpenAI()
-            completion = client.chat.completions.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
-            # Convert new response format to old format for compatibility
-            response = {
-                "choices": [{"message": {"content": completion.choices[0].message.content}}],
-                "usage": {
-                    "prompt_tokens": completion.usage.prompt_tokens,
-                    "completion_tokens": completion.usage.completion_tokens,
-                    "total_tokens": completion.usage.total_tokens
+        except AttributeError:
+            # Use new OpenAI v1.0+ API if available
+            try:
+                client = openai.OpenAI()
+                completion = client.chat.completions.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
+                # Convert new response format to old format for compatibility
+                response = {
+                    "choices": [{"message": {"content": completion.choices[0].message.content}}],
+                    "usage": {
+                        "prompt_tokens": completion.usage.prompt_tokens,
+                        "completion_tokens": completion.usage.completion_tokens,
+                        "total_tokens": completion.usage.total_tokens
+                    }
                 }
-            }
+            except Exception:
+                # If both fail, re-raise the original error
+                raise
 
         cost = prompt_cost(
                 self.model_type.value, 
@@ -133,6 +143,7 @@ class ModelFactory:
 
         if model_type in {
             ModelType.GPT_3_5_TURBO, ModelType.GPT_4, ModelType.GPT_4_32k,
+            ModelType.GPT_4O, ModelType.GPT_4O_MINI,
             None
         }:
             model_class = OpenAIModel

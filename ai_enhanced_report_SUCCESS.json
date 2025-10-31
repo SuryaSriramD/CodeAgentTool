@@ -1,0 +1,51 @@
+﻿{
+    "job_id":  "9386010e-19ab-43f3-9070-290741b05380",
+    "status":  "complete",
+    "enhanced_issues":  [
+                            {
+                                "file":  "test_vulnerable.py",
+                                "issues_analyzed":  1,
+                                "original_issues":  [
+                                                        {
+                                                            "tool":  "bandit",
+                                                            "type":  "B605",
+                                                            "message":  "Starting a process with a shell, possible injection detected, security issue.",
+                                                            "severity":  "critical",
+                                                            "file":  "test_vulnerable.py",
+                                                            "line":  10,
+                                                            "rule_id":  "B605",
+                                                            "suggestion":  "See: https://bandit.readthedocs.io/en/1.7.9/plugins/b605_start_process_with_a_shell.html"
+                                                        }
+                                                    ],
+                                "ai_analysis":  {
+                                                    "file":  "test_vulnerable.py",
+                                                    "analysis":  "",
+                                                    "suggested_fix":  "",
+                                                    "explanation":  "Analysis completed but output file not found",
+                                                    "security_impact":  "",
+                                                    "best_practices":  [
+
+                                                                       ]
+                                                }
+                            }
+                        ],
+    "summary":  {
+                    "total_files_scanned":  1,
+                    "files_with_issues":  1,
+                    "files_analyzed_by_ai":  1,
+                    "issues_analyzed_by_ai":  1,
+                    "ai_fixes_generated":  0,
+                    "severity_breakdown":  {
+                                               "critical":  1,
+                                               "high":  0,
+                                               "medium":  2,
+                                               "low":  2
+                                           },
+                    "status":  "complete"
+                },
+    "meta":  {
+                 "ai_model_used":  "gpt-3.5-turbo",
+                 "min_severity_analyzed":  "high",
+                 "generated_at":  "2025-10-31T03:11:28.222502"
+             }
+}

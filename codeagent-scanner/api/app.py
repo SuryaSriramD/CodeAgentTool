@@ -360,6 +360,23 @@ async def analyze_async(request: AnalyzeRequest = Depends(create_analyze_request
         return error_response("INTERNAL", str(e))
 
 
+@app.get("/jobs")
+async def list_jobs(
+    limit: int = 100,
+    status: Optional[str] = None
+) -> Dict[str, Any]:
+    """List all jobs, optionally filtered by status."""
+    if not orchestrator:
+        raise HTTPException(status_code=500, detail="Service not initialized")
+    
+    jobs = orchestrator.list_all_jobs(limit=limit, status=status)
+    return {
+        "jobs": jobs,
+        "total": len(jobs),
+        "limit": limit
+    }
+
+
 @app.get("/jobs/{job_id}")
 async def get_job_status(job_id: str) -> JobInfo:
     """Get job status and progress."""

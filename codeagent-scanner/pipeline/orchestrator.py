@@ -114,6 +114,35 @@ class JobOrchestrator:
         
         return job_info
     
+    def list_all_jobs(self, limit: int = 100, status: Optional[str] = None) -> List[JobInfo]:
+        """List all jobs, optionally filtered by status."""
+        jobs = []
+        
+        # Get active jobs
+        with self.job_lock:
+            jobs.extend(self.active_jobs.values())
+        
+        # Get jobs from disk (reports directory)
+        try:
+            reports_dir = self.storage_manager.get_reports_path()
+            if reports_dir.exists():
+                for report_file in reports_dir.glob("*.json"):
+                    job_id = report_file.stem.replace("_enhanced", "")
+                    if job_id not in self.active_jobs:
+                        job_info = self._load_job_state(job_id)
+                        if job_info:
+                            jobs.append(job_info)
+        except Exception as e:
+            logger.warning(f"Error loading job history: {e}")
+        
+        # Filter by status if provided
+        if status:
+            jobs = [j for j in jobs if j.status.value == status]
+        
+        # Sort by submitted_at (newest first) and limit
+        jobs.sort(key=lambda j: j.submitted_at, reverse=True)
+        return jobs[:limit]
+    
     def cancel_job(self, job_id: str) -> bool:
         """Cancel a running or queued job."""
         with self.job_lock:

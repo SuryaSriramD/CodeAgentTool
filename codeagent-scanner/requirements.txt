@@ -11,7 +11,8 @@ bandit==1.7.9
 pip-audit==2.6.1
 
 # AI and LLM dependencies (for camel & codeagent)
-openai>=1.0.0
+# Using openai 0.28.0 for CAMEL framework compatibility
+openai==0.28.0
 tiktoken==0.4.0
 
 # Utilities

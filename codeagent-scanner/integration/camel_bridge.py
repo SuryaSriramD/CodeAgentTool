@@ -33,14 +33,14 @@ class CamelBridge:
     def __init__(
         self,
         config_dir: Optional[str] = None,
-        model_type: ModelType = ModelType.GPT_4
+        model_type: Optional[ModelType] = None
     ):
         """
         Initialize the multi-agent bridge.
         
         Args:
             config_dir: Path to CompanyConfig directory (optional)
-            model_type: LLM model to use for agents
+            model_type: LLM model to use for agents (reads from AI_MODEL env if not specified)
         """
         # Set up config paths
         if config_dir is None:
@@ -65,9 +65,26 @@ class CamelBridge:
         if not self.config_path.exists():
             self._create_minimal_config()
         
-        self.model_type = model_type
+        # Ensure WareHouse directory exists for AI agent outputs
+        # ChatChain expects WareHouse to be in parent of codeagent module
+        codeagent_module_dir = Path(__file__).parent.parent / "codeagent"
+        warehouse_parent = codeagent_module_dir.parent
+        self.warehouse_path = warehouse_parent / "WareHouse"
+        self.warehouse_path.mkdir(parents=True, exist_ok=True)
+        logger.info(f"WareHouse directory ensured at {self.warehouse_path}")
         
-        logger.info(f"CamelBridge initialized with model {model_type.value}")
+        # Determine model type from env or parameter
+        if model_type is None:
+            ai_model_env = os.getenv('AI_MODEL', 'GPT_4').upper()
+            try:
+                self.model_type = ModelType[ai_model_env]
+            except KeyError:
+                logger.warning(f"Unknown AI_MODEL value '{ai_model_env}', defaulting to GPT_4")
+                self.model_type = ModelType.GPT_4
+        else:
+            self.model_type = model_type
+        
+        logger.info(f"CamelBridge initialized with model {self.model_type.value}")
     
     async def process_vulnerabilities(
         self,
@@ -205,7 +222,14 @@ class CamelBridge:
             chat_chain.pre_processing()
             chat_chain.make_recruitment()
             chat_chain.execute_chain()
-            chat_chain.post_processing()
+            
+            # Post-processing may fail due to missing log files, handle gracefully
+            try:
+                chat_chain.post_processing()
+            except FileNotFoundError as log_err:
+                logger.warning(f"Post-processing log file not found (non-critical): {log_err}")
+            except Exception as post_err:
+                logger.warning(f"Post-processing failed (non-critical): {post_err}")
             
             # Extract recommendations from the generated output
             warehouse_path = Path(__file__).parent.parent.parent / "WareHouse" / f"{project_name}_security_scan_{chat_chain.start_time}"

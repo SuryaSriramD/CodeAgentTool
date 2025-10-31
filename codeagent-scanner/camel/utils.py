@@ -84,6 +84,7 @@ def num_tokens_from_messages(
 
     if model in {
         ModelType.GPT_3_5_TURBO, ModelType.GPT_4, ModelType.GPT_4_32k,
+        ModelType.GPT_4O, ModelType.GPT_4O_MINI,
         ModelType.STUB
     }:
         return count_tokens_openai_chat_models(messages, encoding)
@@ -113,6 +114,10 @@ def get_model_token_limit(model: ModelType) -> int:
         return 8192
     elif model == ModelType.GPT_4_32k:
         return 32768
+    elif model == ModelType.GPT_4O:
+        return 128000  # GPT-4o has 128K context
+    elif model == ModelType.GPT_4O_MINI:
+        return 128000  # GPT-4o-mini also has 128K context
     elif model == ModelType.STUB:
         return 4096
     else:
