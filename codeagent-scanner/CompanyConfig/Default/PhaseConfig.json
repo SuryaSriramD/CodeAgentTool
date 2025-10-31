@@ -3,14 +3,24 @@
     "assistant_role_name": "Programmer",
     "user_role_name": "Security Tester",
     "phase_prompt": [
-      "Analyze the detected security vulnerabilities and explain their impact"
+      "Read the TASK DESCRIPTION above carefully. It contains the file path, detected security issues, and the complete source code.",
+      "Analyze each vulnerability listed in the task description.",
+      "Identify the specific lines of code causing the security issues.",
+      "Explain how each vulnerability can be exploited and its security impact.",
+      "Propose concrete code fixes with exact line numbers and replacement code.",
+      "DO NOT ask for the code - it is already provided in the task description above."
     ]
   },
   "CodeReviewModification": {
     "assistant_role_name": "Code Reviewer",
     "user_role_name": "Programmer",
     "phase_prompt": [
-      "Review the code and provide secure fixes for all vulnerabilities"
+      "Review the security fixes proposed in the previous phase.",
+      "Verify that each fix addresses the root cause of the vulnerability.",
+      "Check that the fixed code is syntactically correct and follows best practices.",
+      "Provide the final, production-ready code with all security fixes applied.",
+      "Include explanations for why each fix works.",
+      "List best practices to prevent similar vulnerabilities in the future."
     ]
   }
 }

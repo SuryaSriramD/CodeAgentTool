@@ -30,7 +30,7 @@ services:
 
       # AI Integration (Optional - set your API key)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - AI_MODEL=GPT_4
+      - AI_MODEL=GPT_4O_MINI
       - ENABLE_AI_ANALYSIS=${ENABLE_AI_ANALYSIS:-false}
       - AI_ANALYSIS_MIN_SEVERITY=high
       - MAX_CONCURRENT_AI_REVIEWS=1
@@ -55,6 +55,8 @@ services:
       - ./codeagent-scanner/analyzers:/app/analyzers
       - ./codeagent-scanner/pipeline:/app/pipeline
       - ./codeagent-scanner/integration:/app/integration
+      # Mount CAMEL configurations for live updates
+      - ./codeagent-scanner/CompanyConfig:/app/CompanyConfig
 
     networks:
       - codeagent-network

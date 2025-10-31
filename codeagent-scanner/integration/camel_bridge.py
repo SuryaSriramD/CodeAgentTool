@@ -13,6 +13,7 @@ from pathlib import Path
 
 from camel.typing import ModelType
 from codeagent.chat_chain import ChatChain
+from integration.simple_ai_analyzer import SimpleAIAnalyzer
 
 
 logger = logging.getLogger(__name__)
@@ -36,12 +37,25 @@ class CamelBridge:
         model_type: Optional[ModelType] = None
     ):
         """
-        Initialize the multi-agent bridge.
+        Initialize the multi-agent bridge with SIMPLE analyzer for demo.
         
         Args:
-            config_dir: Path to CompanyConfig directory (optional)
+            config_dir: Path to CompanyConfig directory (optional, not used in simple mode)
             model_type: LLM model to use for agents (reads from AI_MODEL env if not specified)
         """
+        logger.info("Initializing CamelBridge with SIMPLE AI analyzer for demo")
+        
+        # Initialize the simple direct OpenAI analyzer
+        try:
+            self.simple_analyzer = SimpleAIAnalyzer()
+            self.use_simple_mode = True
+            logger.info("Simple AI analyzer initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize simple analyzer: {e}")
+            self.use_simple_mode = False
+            self.simple_analyzer = None
+        
+        # Keep original config setup for potential fallback
         # Set up config paths
         if config_dir is None:
             # Try to find CompanyConfig in parent directory
@@ -117,26 +131,29 @@ class CamelBridge:
             if not issues:
                 continue
             
-            # Focus on critical and high severity issues
-            critical_high = [i for i in issues if i['severity'] in ['critical', 'high']]
+            # Sort issues by severity priority: critical > high > medium > low
+            severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+            sorted_issues = sorted(
+                issues, 
+                key=lambda x: severity_order.get(x.get('severity', 'low'), 4)
+            )
             
-            if critical_high:
-                logger.info(f"Analyzing {len(critical_high)} critical/high issues in {file_path}")
-                
-                # Run multi-agent analysis
-                ai_analysis = await self._analyze_with_agents(
-                    job_id=job_id,
-                    file_path=file_path,
-                    issues=critical_high,
-                    workspace_path=workspace_path
-                )
-                
-                enhanced_issues.append({
-                    'file': file_path,
-                    'issues_analyzed': len(critical_high),
-                    'original_issues': critical_high,
-                    'ai_analysis': ai_analysis
-                })
+            logger.info(f"Analyzing {len(sorted_issues)} issues in {file_path} (all severity levels)")
+            
+            # Run multi-agent analysis on ALL issues, prioritized by severity
+            ai_analysis = await self._analyze_with_agents(
+                job_id=job_id,
+                file_path=file_path,
+                issues=sorted_issues,
+                workspace_path=workspace_path
+            )
+            
+            enhanced_issues.append({
+                'file': file_path,
+                'issues_analyzed': len(sorted_issues),
+                'original_issues': sorted_issues,
+                'ai_analysis': ai_analysis
+            })
         
         # Generate summary
         summary = self._create_enhanced_summary(enhanced_issues, report)
@@ -150,7 +167,8 @@ class CamelBridge:
             'summary': summary,
             'meta': {
                 'ai_model_used': self.model_type.value,
-                'min_severity_analyzed': 'high',
+                'min_severity_analyzed': 'low',  # Now analyzing all severity levels
+                'severity_priority': 'critical > high > medium > low',
                 'generated_at': report.get('meta', {}).get('generated_at')
             }
         }
@@ -163,14 +181,7 @@ class CamelBridge:
         workspace_path: str
     ) -> Dict[str, Any]:
         """
-        Analyze vulnerabilities using the multi-agent CodeAgent system.
-        
-        This method:
-        1. Reads the vulnerable file
-        2. Creates a security review task prompt
-        3. Initializes the ChatChain with AI agents
-        4. Runs the agent conversation
-        5. Extracts and structures the recommendations
+        Analyze vulnerabilities using SIMPLE AI analyzer (direct OpenAI API).
         
         Args:
             job_id: Job identifier
@@ -192,6 +203,36 @@ class CamelBridge:
             
             with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
                 file_content = f.read()
+            
+            # Use SIMPLE analyzer if available
+            if self.use_simple_mode and self.simple_analyzer:
+                logger.info(f"Using SIMPLE AI analyzer for {file_path}")
+                
+                result = self.simple_analyzer.analyze_vulnerabilities(
+                    file_path=file_path,
+                    file_content=file_content,
+                    issues=issues
+                )
+                
+                # Transform to expected format
+                fixes_list = result.get('fixes', [])
+                recommendations_list = result.get('recommendations', [])
+                
+                logger.info(f"Simple analyzer generated {len(fixes_list)} fixes for {file_path}")
+                
+                return {
+                    'file': file_path,
+                    'fixes': fixes_list,
+                    'recommendations': recommendations_list,
+                    'analysis': result.get('raw_response', ''),
+                    'suggested_fix': '\n\n'.join([f['fixed_code'] for f in fixes_list if 'fixed_code' in f]),
+                    'explanation': '\n\n'.join([f['explanation'] for f in fixes_list if 'explanation' in f]),
+                    'security_impact': '\n\n'.join([f['security_impact'] for f in fixes_list if 'security_impact' in f]),
+                    'best_practices': [r['description'] for r in recommendations_list]
+                }
+            
+            # Fallback to original ChatChain if simple mode not available
+            logger.warning("Simple analyzer not available, using ChatChain (may have issues)")
             
             # Create the task prompt for the AI agents
             task_prompt = self._create_security_review_prompt(

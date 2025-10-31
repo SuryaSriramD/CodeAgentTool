@@ -148,10 +148,14 @@ async def process_completed_job(job_id: str, data: Dict[str, Any]):
                 # Get workspace path
                 workspace_path = os.path.join(STORAGE_BASE, "workspace", job_id)
                 
-                # Check if there are high/critical issues to analyze
+                # Check if there are any issues to analyze (all severity levels)
                 summary = report.get('summary', {})
-                if summary.get('high', 0) > 0 or summary.get('critical', 0) > 0:
-                    logger.info(f"Starting AI analysis for job {job_id}")
+                total_issues = summary.get('critical', 0) + summary.get('high', 0) + summary.get('medium', 0) + summary.get('low', 0)
+                
+                if total_issues > 0:
+                    severity_info = f"critical: {summary.get('critical', 0)}, high: {summary.get('high', 0)}, medium: {summary.get('medium', 0)}, low: {summary.get('low', 0)}"
+                    logger.info(f"Starting AI analysis for job {job_id} - {total_issues} total issues ({severity_info})")
+
                     
                     # Run AI analysis
                     ai_result = await agent_bridge.process_vulnerabilities(
@@ -182,6 +186,8 @@ async def process_completed_job(job_id: str, data: Dict[str, Any]):
                                 fixes.append({
                                     'file': file_path,
                                     'line': fix.get('line', 0),
+                                    'severity': fix.get('severity', 'unknown'),  # Include severity for proper ordering
+                                    'vulnerability_type': fix.get('vulnerability_type', ''),
                                     'original_code': fix.get('original_code', ''),
                                     'fixed_code': fix.get('fixed_code', ''),
                                     'explanation': fix.get('explanation', '')
@@ -191,11 +197,52 @@ async def process_completed_job(job_id: str, data: Dict[str, Any]):
                         if 'recommendations' in ai_analysis:
                             recommendations.extend(ai_analysis['recommendations'])
                     
+                    # Sort fixes by severity (critical > high > medium > low) for emphasis
+                    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'unknown': 4}
+                    fixes.sort(key=lambda x: severity_order.get(x.get('severity', 'unknown'), 4))
+                    
+                    # Group fixes by severity for better organization
+                    fixes_by_severity = {
+                        'critical': [f for f in fixes if f.get('severity') == 'critical'],
+                        'high': [f for f in fixes if f.get('severity') == 'high'],
+                        'medium': [f for f in fixes if f.get('severity') == 'medium'],
+                        'low': [f for f in fixes if f.get('severity') == 'low']
+                    }
+                    
+                    # Create severity summary
+                    severity_summary = {
+                        'critical': len(fixes_by_severity['critical']),
+                        'high': len(fixes_by_severity['high']),
+                        'medium': len(fixes_by_severity['medium']),
+                        'low': len(fixes_by_severity['low']),
+                        'total': len(fixes)
+                    }
+                    
+                    # Sort and group recommendations by priority
+                    priority_order = {'high': 0, 'medium': 1, 'low': 2}
+                    # Deduplicate recommendations by title (keep first occurrence)
+                    seen_titles = set()
+                    recommendations_list = []
+                    for rec in recommendations:
+                        if rec.get('title') not in seen_titles:
+                            seen_titles.add(rec.get('title'))
+                            recommendations_list.append(rec)
+                    recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
+                    
+                    recommendations_by_priority = {
+                        'high': [r for r in recommendations_list if r.get('priority') == 'high'],
+                        'medium': [r for r in recommendations_list if r.get('priority') == 'medium'],
+                        'low': [r for r in recommendations_list if r.get('priority') == 'low']
+                    }
+                    
                     # Create enhanced report by merging original report with AI analysis
                     # Always include ai_analysis field, even if empty
                     ai_analysis_data = {
-                        'fixes': fixes,
-                        'recommendations': list(set(recommendations))  # Remove duplicates
+                        'fixes': fixes,  # All fixes in priority order
+                        'fixes_by_severity': fixes_by_severity,  # Grouped by severity
+                        'severity_summary': severity_summary,  # Count per severity
+                        'recommendations': recommendations_list,  # All recommendations in priority order
+                        'recommendations_by_priority': recommendations_by_priority  # Grouped by priority
                     }
                     
                     # Add error information if present
@@ -217,7 +264,7 @@ async def process_completed_job(job_id: str, data: Dict[str, Any]):
                     
                     logger.info(f"AI analysis completed for job {job_id} - Generated {len(fixes)} fixes and {len(recommendations)} recommendations")
                 else:
-                    logger.info(f"No high/critical issues found for job {job_id}, skipping AI analysis")
+                    logger.info(f"No security issues found for job {job_id}, skipping AI analysis")
             
         except Exception as e:
             logger.error(f"AI analysis failed for job {job_id}: {e}")
@@ -599,25 +646,34 @@ async def trigger_enhanced_report(job_id: str, background_tasks: BackgroundTasks
         logger.error(f"Failed to load report {job_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to load report")
     
-    # Check if there are issues worth analyzing
+    # Check if there are issues worth analyzing (all severity levels)
     summary = report.get('summary', {})
-    total_issues = summary.get('high', 0) + summary.get('critical', 0)
+    total_issues = summary.get('critical', 0) + summary.get('high', 0) + summary.get('medium', 0) + summary.get('low', 0)
     
     if total_issues == 0:
         return {
             "status": "skipped",
-            "message": "No high or critical severity issues found",
+            "message": "No security issues found to analyze",
             "job_id": job_id
         }
     
     # Trigger AI analysis in background
     background_tasks.add_task(run_ai_analysis, job_id, report)
     
+    # Log severity breakdown
+    severity_breakdown = {
+        "critical": summary.get('critical', 0),
+        "high": summary.get('high', 0),
+        "medium": summary.get('medium', 0),
+        "low": summary.get('low', 0)
+    }
+    
     return {
         "status": "processing",
-        "message": f"AI analysis started for {total_issues} high/critical issues",
+        "message": f"AI analysis started for {total_issues} issues (all severity levels - prioritized: critical > high > medium > low)",
         "job_id": job_id,
-        "issues_count": total_issues
+        "issues_count": total_issues,
+        "severity_breakdown": severity_breakdown
     }
 
 
@@ -658,6 +714,8 @@ async def run_ai_analysis(job_id: str, report: Dict[str, Any]):
                     fixes.append({
                         'file': file_path,
                         'line': fix.get('line', 0),
+                        'severity': fix.get('severity', 'unknown'),  # Include severity for proper ordering
+                        'vulnerability_type': fix.get('vulnerability_type', ''),
                         'original_code': fix.get('original_code', ''),
                         'fixed_code': fix.get('fixed_code', ''),
                         'explanation': fix.get('explanation', '')
@@ -667,14 +725,54 @@ async def run_ai_analysis(job_id: str, report: Dict[str, Any]):
             if 'recommendations' in ai_analysis:
                 recommendations.extend(ai_analysis['recommendations'])
         
+        # Sort fixes by severity (critical > high > medium > low) for emphasis
+        severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'unknown': 4}
+        fixes.sort(key=lambda x: severity_order.get(x.get('severity', 'unknown'), 4))
+        
+        # Group fixes by severity for better organization
+        fixes_by_severity = {
+            'critical': [f for f in fixes if f.get('severity') == 'critical'],
+            'high': [f for f in fixes if f.get('severity') == 'high'],
+            'medium': [f for f in fixes if f.get('severity') == 'medium'],
+            'low': [f for f in fixes if f.get('severity') == 'low']
+        }
+        
+        # Create severity summary
+        severity_summary = {
+            'critical': len(fixes_by_severity['critical']),
+            'high': len(fixes_by_severity['high']),
+            'medium': len(fixes_by_severity['medium']),
+            'low': len(fixes_by_severity['low']),
+            'total': len(fixes)
+        }
+        
+        # Sort and group recommendations by priority
+        priority_order = {'high': 0, 'medium': 1, 'low': 2}
+        # Deduplicate recommendations by title (keep first occurrence)
+        seen_titles = set()
+        recommendations_list = []
+        for rec in recommendations:
+            if rec.get('title') not in seen_titles:
+                seen_titles.add(rec.get('title'))
+                recommendations_list.append(rec)
+        recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
+        recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
+        
+        recommendations_by_priority = {
+            'high': [r for r in recommendations_list if r.get('priority') == 'high'],
+            'medium': [r for r in recommendations_list if r.get('priority') == 'medium'],
+            'low': [r for r in recommendations_list if r.get('priority') == 'low']
+        }
+        
         # Create enhanced report by merging original report with AI analysis
         # Always include ai_analysis field, even if empty
         ai_analysis_data = {
-            'fixes': fixes,
-            'recommendations': list(set(recommendations))  # Remove duplicates
-        }
-        
-        # Add error information if present
+            'fixes': fixes,  # All fixes in priority order
+            'fixes_by_severity': fixes_by_severity,  # Grouped by severity
+            'severity_summary': severity_summary,  # Count per severity
+            'recommendations': recommendations_list,  # All recommendations in priority order
+            'recommendations_by_priority': recommendations_by_priority  # Grouped by priority
+        }        # Add error information if present
         if has_errors:
             ai_analysis_data['errors'] = error_messages
             ai_analysis_data['status'] = 'partial' if fixes else 'failed'
