@@ -1,12 +1,12 @@
 # =========== Copyright 2023 @ CAMEL-AI.org. All Rights Reserved. ===========
-# Licensed under the Apache License, Version 2.0 (the “License”);
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an “AS IS” BASIS,
+# distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
@@ -18,8 +18,6 @@ import openai
 import tiktoken
 
 from camel.typing import ModelType
-# from chatdev.statistics import prompt_cost
-# from chatdev.utils import log_and_print_online
 from codeagent.statistics import prompt_cost
 from codeagent.utils import log_and_print_online
 
@@ -78,23 +76,20 @@ class OpenAIModel(ModelBackend):
 
         try:
             response = openai.ChatCompletion.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
-        except AttributeError:
-            # Use new OpenAI v1.0+ API if available
-            try:
-                client = openai.OpenAI()
-                completion = client.chat.completions.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
-                # Convert new response format to old format for compatibility
-                response = {
-                    "choices": [{"message": {"content": completion.choices[0].message.content}}],
-                    "usage": {
-                        "prompt_tokens": completion.usage.prompt_tokens,
-                        "completion_tokens": completion.usage.completion_tokens,
-                        "total_tokens": completion.usage.total_tokens
-                    }
+        except Exception as e:
+            # Use new OpenAI v1.0+ API (handles openai>=1.0.0)
+            # Catch any exception from old API and use new API instead
+            client = openai.OpenAI()
+            completion = client.chat.completions.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
+            # Convert new response format to old format for compatibility
+            response = {
+                "choices": [{"message": {"content": completion.choices[0].message.content}}],
+                "usage": {
+                    "prompt_tokens": completion.usage.prompt_tokens,
+                    "completion_tokens": completion.usage.completion_tokens,
+                    "total_tokens": completion.usage.total_tokens
                 }
-            except Exception:
-                # If both fail, re-raise the original error
-                raise
+            }
 
         cost = prompt_cost(
                 self.model_type.value, 
@@ -155,6 +150,5 @@ class ModelFactory:
         if model_type is None:
             model_type = default_model_type
 
-        # log_and_print_online("Model Type: {}".format(model_type))
         inst = model_class(model_type, model_config_dict)
         return inst

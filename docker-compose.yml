@@ -1,0 +1,119 @@
+version: "3.8"
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ./codeagent-scanner
+      dockerfile: Dockerfile
+    container_name: codeagent-scanner-backend
+    ports:
+      - "8000:8080" # Host:Container - Frontend connects to localhost:8000
+    environment:
+      # Server Configuration
+      - HOST=0.0.0.0
+      - PORT=8080
+      - WORKERS=1
+
+      # CORS Configuration
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000
+
+      # Storage Configuration
+      - STORAGE_BASE=/app/storage
+      - MAX_UPLOAD_SIZE=52428800
+      - MAX_CONCURRENT_JOBS=2
+
+      # Analyzer Configuration
+      - DEFAULT_TIMEOUT_SEC=600
+      - MAX_FILES_PER_JOB=10000
+      - DEFAULT_ANALYZERS=bandit,semgrep,depcheck
+
+      # AI Integration (Optional - set your API key)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - AI_MODEL=GPT_4
+      - ENABLE_AI_ANALYSIS=${ENABLE_AI_ANALYSIS:-false}
+      - AI_ANALYSIS_MIN_SEVERITY=high
+      - MAX_CONCURRENT_AI_REVIEWS=1
+      - AI_ANALYSIS_TIMEOUT_SEC=300
+
+      # Logging
+      - LOG_LEVEL=INFO
+
+      # Rate Limiting
+      - RATE_LIMIT_PER_MINUTE=60
+      - MAX_JOBS_PER_API_KEY=2
+
+      # Cleanup
+      - JOB_RETENTION_DAYS=7
+      - REPORT_RETENTION_DAYS=30
+
+    volumes:
+      # Persist storage data
+      - ./codeagent-scanner/storage:/app/storage
+      # Mount source code for development (optional - comment out for production)
+      - ./codeagent-scanner/api:/app/api
+      - ./codeagent-scanner/analyzers:/app/analyzers
+      - ./codeagent-scanner/pipeline:/app/pipeline
+      - ./codeagent-scanner/integration:/app/integration
+
+    networks:
+      - codeagent-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    restart: unless-stopped
+
+  # Frontend UI Service
+  frontend:
+    build:
+      context: ./codeagent-scanner-ui
+      dockerfile: Dockerfile
+    container_name: codeagent-scanner-frontend
+    ports:
+      - "3000:3000" # Host:Container
+    environment:
+      # API Configuration
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+
+      # Node Environment
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    networks:
+      - codeagent-network
+
+    restart: unless-stopped
+
+  # Optional: Add a reverse proxy (Nginx) for production
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: codeagent-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./certs:/etc/nginx/certs:ro
+  #   depends_on:
+  #     - backend
+  #     - frontend
+  #   networks:
+  #     - codeagent-network
+  #   restart: unless-stopped
+
+networks:
+  codeagent-network:
+    driver: bridge
+
+volumes:
+  storage-data:
+    driver: local

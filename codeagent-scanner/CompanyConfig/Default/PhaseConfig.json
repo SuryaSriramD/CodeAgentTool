@@ -1,0 +1,16 @@
+{
+  "CodeSecurityAnalyst": {
+    "assistant_role_name": "Programmer",
+    "user_role_name": "Security Tester",
+    "phase_prompt": [
+      "Analyze the detected security vulnerabilities and explain their impact"
+    ]
+  },
+  "CodeReviewModification": {
+    "assistant_role_name": "Code Reviewer",
+    "user_role_name": "Programmer",
+    "phase_prompt": [
+      "Review the code and provide secure fixes for all vulnerabilities"
+    ]
+  }
+}

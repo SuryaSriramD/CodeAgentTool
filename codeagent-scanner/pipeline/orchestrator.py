@@ -237,6 +237,9 @@ class JobOrchestrator:
             self._update_job_progress(job_id, JobPhase.WRITE, 95)
             self._save_report(job_id, report)
             
+            # Update progress to 100% before completion
+            self._update_job_progress(job_id, JobPhase.WRITE, 100)
+            
             # Complete job
             end_time = datetime.now()
             self._update_job_status(

@@ -205,6 +205,15 @@ class CamelBridge:
             
             logger.info(f"Initializing ChatChain for {file_path}")
             
+            # Create WareHouse directory structure before initializing ChatChain
+            # This is required by CAMEL's ChatChain.pre_processing() method
+            # Using the same path logic as chat_chain.py: root = os.path.dirname(os.path.dirname(__file__))
+            integration_dir = Path(__file__).parent  # /app/integration
+            app_root = integration_dir.parent  # /app
+            warehouse_root = app_root / "WareHouse"  # /app/WareHouse
+            warehouse_root.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created WareHouse directory at: {warehouse_root}")
+            
             # Initialize the multi-agent system
             chat_chain = ChatChain(
                 config_path=str(self.config_path),
