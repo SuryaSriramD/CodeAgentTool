@@ -1,0 +1,71 @@
+version: "3.8"
+
+services:
+  # Backend API Service (Development Mode)
+  backend:
+    build:
+      context: ./codeagent-scanner
+      dockerfile: Dockerfile
+    container_name: codeagent-scanner-backend-dev
+    ports:
+      - "8000:8080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - WORKERS=1
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000
+      - STORAGE_BASE=/app/storage
+      - MAX_UPLOAD_SIZE=52428800
+      - MAX_CONCURRENT_JOBS=2
+      - DEFAULT_TIMEOUT_SEC=600
+      - DEFAULT_ANALYZERS=bandit,semgrep,depcheck
+      - LOG_LEVEL=DEBUG
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ENABLE_AI_ANALYSIS=${ENABLE_AI_ANALYSIS:-false}
+
+    volumes:
+      # Mount source code for hot reload
+      - ./codeagent-scanner:/app
+      - ./codeagent-scanner/storage:/app/storage
+
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8080 --reload
+
+    networks:
+      - codeagent-network
+
+    restart: unless-stopped
+
+  # Frontend UI Service (Development Mode)
+  frontend:
+    image: node:20-alpine
+    container_name: codeagent-scanner-frontend-dev
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true # For Windows Docker Desktop
+
+    volumes:
+      # Mount source code for hot reload
+      - ./codeagent-scanner-ui:/app
+      - /app/node_modules # Anonymous volume for node_modules
+      - /app/.next # Anonymous volume for .next
+
+    command: sh -c "corepack enable pnpm && pnpm install && pnpm run dev"
+
+    depends_on:
+      - backend
+
+    networks:
+      - codeagent-network
+
+    stdin_open: true
+    tty: true
+
+    restart: unless-stopped
+
+networks:
+  codeagent-network:
+    driver: bridge

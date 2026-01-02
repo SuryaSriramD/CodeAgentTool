@@ -1,0 +1,26 @@
+{
+  "chain": [
+    {
+      "phase": "CodeSecurityAnalyst",
+      "phaseType": "SimplePhase",
+      "max_turn_step": 3,
+      "need_reflect": "False"
+    },
+    {
+      "phase": "CodeReviewModification",
+      "phaseType": "SimplePhase",
+      "max_turn_step": 3,
+      "need_reflect": "False"
+    }
+  ],
+  "recruitments": [
+    "Security Tester",
+    "Programmer",
+    "Code Reviewer"
+  ],
+  "clear_structure": "True",
+  "gui_design": "False",
+  "git_management": "False",
+  "incremental_develop": "False",
+  "self_improve": "False"
+}

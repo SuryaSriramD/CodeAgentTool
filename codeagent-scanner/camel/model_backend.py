@@ -1,12 +1,12 @@
 # =========== Copyright 2023 @ CAMEL-AI.org. All Rights Reserved. ===========
-# Licensed under the Apache License, Version 2.0 (the “License”);
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an “AS IS” BASIS,
+# distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
@@ -18,8 +18,6 @@ import openai
 import tiktoken
 
 from camel.typing import ModelType
-# from chatdev.statistics import prompt_cost
-# from chatdev.utils import log_and_print_online
 from codeagent.statistics import prompt_cost
 from codeagent.utils import log_and_print_online
 
@@ -72,29 +70,27 @@ class OpenAIModel(ModelBackend):
             "gpt-4o": 128000,
             "gpt-4o-mini": 128000,
         }
+        
+        # Map of max COMPLETION tokens (not total context window)
+        max_completion_tokens_map = {
+            "gpt-3.5-turbo": 4096,
+            "gpt-3.5-turbo-16k": 16384,
+            "gpt-3.5-turbo-0613": 4096,
+            "gpt-3.5-turbo-16k-0613": 16384,
+            "gpt-4": 8192,
+            "gpt-4-0613": 8192,
+            "gpt-4-32k": 32768,
+            "gpt-4o": 16384,  # GPT-4o max completion tokens
+            "gpt-4o-mini": 16384,  # GPT-4o-mini max completion tokens
+        }
+        
         num_max_token = num_max_token_map[self.model_type.value]
-        num_max_completion_tokens = num_max_token - num_prompt_tokens
+        max_completion_tokens = max_completion_tokens_map.get(self.model_type.value, 4096)
+        num_max_completion_tokens = min(num_max_token - num_prompt_tokens, max_completion_tokens)
         self.model_config_dict['max_tokens'] = num_max_completion_tokens
 
-        try:
-            response = openai.ChatCompletion.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
-        except AttributeError:
-            # Use new OpenAI v1.0+ API if available
-            try:
-                client = openai.OpenAI()
-                completion = client.chat.completions.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
-                # Convert new response format to old format for compatibility
-                response = {
-                    "choices": [{"message": {"content": completion.choices[0].message.content}}],
-                    "usage": {
-                        "prompt_tokens": completion.usage.prompt_tokens,
-                        "completion_tokens": completion.usage.completion_tokens,
-                        "total_tokens": completion.usage.total_tokens
-                    }
-                }
-            except Exception:
-                # If both fail, re-raise the original error
-                raise
+        # Use OpenAI v0.28.0 API (old API style)
+        response = openai.ChatCompletion.create(*args, **kwargs, model=self.model_type.value, **self.model_config_dict)
 
         cost = prompt_cost(
                 self.model_type.value, 
@@ -155,6 +151,5 @@ class ModelFactory:
         if model_type is None:
             model_type = default_model_type
 
-        # log_and_print_online("Model Type: {}".format(model_type))
         inst = model_class(model_type, model_config_dict)
         return inst

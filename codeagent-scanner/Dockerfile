@@ -22,7 +22,6 @@ COPY analyzers/ ./analyzers/
 COPY ingestion/ ./ingestion/
 COPY integration/ ./integration/
 COPY pipeline/ ./pipeline/
-COPY storage/ ./storage/
 COPY camel/ ./camel/
 COPY codeagent/ ./codeagent/
 COPY run.py ./run.py

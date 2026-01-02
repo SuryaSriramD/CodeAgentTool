@@ -56,12 +56,17 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Development: Allow localhost origins for frontend integration
+# Production: Replace with your actual domain(s)
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=ALLOWED_ORIGINS,  # Configured for local development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # Allow frontend to read response headers
 )
 
 # Global state
@@ -143,26 +148,123 @@ async def process_completed_job(job_id: str, data: Dict[str, Any]):
                 # Get workspace path
                 workspace_path = os.path.join(STORAGE_BASE, "workspace", job_id)
                 
-                # Check if there are high/critical issues to analyze
+                # Check if there are any issues to analyze (all severity levels)
                 summary = report.get('summary', {})
-                if summary.get('high', 0) > 0 or summary.get('critical', 0) > 0:
-                    logger.info(f"Starting AI analysis for job {job_id}")
+                total_issues = summary.get('critical', 0) + summary.get('high', 0) + summary.get('medium', 0) + summary.get('low', 0)
+                
+                if total_issues > 0:
+                    severity_info = f"critical: {summary.get('critical', 0)}, high: {summary.get('high', 0)}, medium: {summary.get('medium', 0)}, low: {summary.get('low', 0)}"
+                    logger.info(f"Starting AI analysis for job {job_id} - {total_issues} total issues ({severity_info})")
+
                     
                     # Run AI analysis
-                    enhanced_report = await agent_bridge.process_vulnerabilities(
+                    ai_result = await agent_bridge.process_vulnerabilities(
                         job_id=job_id,
                         report=report,
                         workspace_path=workspace_path
                     )
+                    
+                    # Transform AI result to match frontend expectations
+                    fixes = []
+                    recommendations = []
+                    has_errors = False
+                    error_messages = []
+                    
+                    # Extract fixes from enhanced_issues
+                    for enhanced_issue in ai_result.get('enhanced_issues', []):
+                        ai_analysis = enhanced_issue.get('ai_analysis', {})
+                        file_path = enhanced_issue.get('file', '')
+                        
+                        # Check for errors
+                        if 'error' in ai_analysis:
+                            has_errors = True
+                            error_messages.append(f"{file_path}: {ai_analysis['error']}")
+                        
+                        # Check if AI analysis has fixes (not just error)
+                        if 'fixes' in ai_analysis:
+                            for fix in ai_analysis['fixes']:
+                                fixes.append({
+                                    'file': file_path,
+                                    'line': fix.get('line', 0),
+                                    'severity': fix.get('severity', 'unknown'),  # Include severity for proper ordering
+                                    'vulnerability_type': fix.get('vulnerability_type', ''),
+                                    'original_code': fix.get('original_code', ''),
+                                    'fixed_code': fix.get('fixed_code', ''),
+                                    'explanation': fix.get('explanation', '')
+                                })
+                        
+                        # Extract recommendations
+                        if 'recommendations' in ai_analysis:
+                            recommendations.extend(ai_analysis['recommendations'])
+                    
+                    # Sort fixes by severity (critical > high > medium > low) for emphasis
+                    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'unknown': 4}
+                    fixes.sort(key=lambda x: severity_order.get(x.get('severity', 'unknown'), 4))
+                    
+                    # Group fixes by severity for better organization
+                    fixes_by_severity = {
+                        'critical': [f for f in fixes if f.get('severity') == 'critical'],
+                        'high': [f for f in fixes if f.get('severity') == 'high'],
+                        'medium': [f for f in fixes if f.get('severity') == 'medium'],
+                        'low': [f for f in fixes if f.get('severity') == 'low']
+                    }
+                    
+                    # Create severity summary
+                    severity_summary = {
+                        'critical': len(fixes_by_severity['critical']),
+                        'high': len(fixes_by_severity['high']),
+                        'medium': len(fixes_by_severity['medium']),
+                        'low': len(fixes_by_severity['low']),
+                        'total': len(fixes)
+                    }
+                    
+                    # Sort and group recommendations by priority
+                    priority_order = {'high': 0, 'medium': 1, 'low': 2}
+                    # Deduplicate recommendations by title (keep first occurrence)
+                    seen_titles = set()
+                    recommendations_list = []
+                    for rec in recommendations:
+                        if rec.get('title') not in seen_titles:
+                            seen_titles.add(rec.get('title'))
+                            recommendations_list.append(rec)
+                    recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
+                    
+                    recommendations_by_priority = {
+                        'high': [r for r in recommendations_list if r.get('priority') == 'high'],
+                        'medium': [r for r in recommendations_list if r.get('priority') == 'medium'],
+                        'low': [r for r in recommendations_list if r.get('priority') == 'low']
+                    }
+                    
+                    # Create enhanced report by merging original report with AI analysis
+                    # Always include ai_analysis field, even if empty
+                    ai_analysis_data = {
+                        'fixes': fixes,  # All fixes in priority order
+                        'fixes_by_severity': fixes_by_severity,  # Grouped by severity
+                        'severity_summary': severity_summary,  # Count per severity
+                        'recommendations': recommendations_list,  # All recommendations in priority order
+                        'recommendations_by_priority': recommendations_by_priority  # Grouped by priority
+                    }
+                    
+                    # Add error information if present
+                    if has_errors:
+                        ai_analysis_data['errors'] = error_messages
+                        ai_analysis_data['status'] = 'partial' if fixes else 'failed'
+                    else:
+                        ai_analysis_data['status'] = 'complete'
+                    
+                    enhanced_report = {
+                        **report,  # Include all original report fields
+                        'ai_analysis': ai_analysis_data
+                    }
                     
                     # Save enhanced report
                     enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
                     with open(enhanced_file, 'w') as f:
                         json.dump(enhanced_report, f, indent=2)
                     
-                    logger.info(f"AI analysis completed for job {job_id}")
+                    logger.info(f"AI analysis completed for job {job_id} - Generated {len(fixes)} fixes and {len(recommendations)} recommendations")
                 else:
-                    logger.info(f"No high/critical issues found for job {job_id}, skipping AI analysis")
+                    logger.info(f"No security issues found for job {job_id}, skipping AI analysis")
             
         except Exception as e:
             logger.error(f"AI analysis failed for job {job_id}: {e}")
@@ -360,23 +462,6 @@ async def analyze_async(request: AnalyzeRequest = Depends(create_analyze_request
         return error_response("INTERNAL", str(e))
 
 
-@app.get("/jobs")
-async def list_jobs(
-    limit: int = 100,
-    status: Optional[str] = None
-) -> Dict[str, Any]:
-    """List all jobs, optionally filtered by status."""
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Service not initialized")
-    
-    jobs = orchestrator.list_all_jobs(limit=limit, status=status)
-    return {
-        "jobs": jobs,
-        "total": len(jobs),
-        "limit": limit
-    }
-
-
 @app.get("/jobs/{job_id}")
 async def get_job_status(job_id: str) -> JobInfo:
     """Get job status and progress."""
@@ -528,26 +613,252 @@ async def get_enhanced_report(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to load enhanced report")
 
 
+@app.post("/reports/{job_id}/enhance")
+async def trigger_enhanced_report(job_id: str, background_tasks: BackgroundTasks) -> Dict[str, Any]:
+    """Trigger AI analysis for a job report on-demand."""
+    
+    # Check if enhanced report already exists
+    enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
+    if os.path.exists(enhanced_file):
+        return {
+            "status": "already_exists",
+            "message": "Enhanced report already available",
+            "job_id": job_id
+        }
+    
+    # Check if regular report exists
+    report_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}.json")
+    if not os.path.exists(report_file):
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # Check if AI is enabled
+    if not agent_bridge:
+        raise HTTPException(
+            status_code=503, 
+            detail="AI analysis not available. Please configure OpenAI API key."
+        )
+    
+    # Load report to check severity
+    try:
+        with open(report_file, 'r') as f:
+            report = json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load report {job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load report")
+    
+    # Check if there are issues worth analyzing (all severity levels)
+    summary = report.get('summary', {})
+    total_issues = summary.get('critical', 0) + summary.get('high', 0) + summary.get('medium', 0) + summary.get('low', 0)
+    
+    if total_issues == 0:
+        return {
+            "status": "skipped",
+            "message": "No security issues found to analyze",
+            "job_id": job_id
+        }
+    
+    # Trigger AI analysis in background
+    background_tasks.add_task(run_ai_analysis, job_id, report)
+    
+    # Log severity breakdown
+    severity_breakdown = {
+        "critical": summary.get('critical', 0),
+        "high": summary.get('high', 0),
+        "medium": summary.get('medium', 0),
+        "low": summary.get('low', 0)
+    }
+    
+    return {
+        "status": "processing",
+        "message": f"AI analysis started for {total_issues} issues (all severity levels - prioritized: critical > high > medium > low)",
+        "job_id": job_id,
+        "issues_count": total_issues,
+        "severity_breakdown": severity_breakdown
+    }
+
+
+async def run_ai_analysis(job_id: str, report: Dict[str, Any]):
+    """Background task to run AI analysis."""
+    try:
+        logger.info(f"Starting on-demand AI analysis for job {job_id}")
+        
+        workspace_path = os.path.join(STORAGE_BASE, "workspace", job_id)
+        
+        # Run AI analysis
+        ai_result = await agent_bridge.process_vulnerabilities(
+            job_id=job_id,
+            report=report,
+            workspace_path=workspace_path
+        )
+        
+        # Transform AI result to match frontend expectations
+        # Frontend expects: Report + { ai_analysis: { fixes: [...], recommendations: [...] } }
+        fixes = []
+        recommendations = []
+        has_errors = False
+        error_messages = []
+        
+        # Extract fixes from enhanced_issues
+        for enhanced_issue in ai_result.get('enhanced_issues', []):
+            ai_analysis = enhanced_issue.get('ai_analysis', {})
+            file_path = enhanced_issue.get('file', '')
+            
+            # Check for errors
+            if 'error' in ai_analysis:
+                has_errors = True
+                error_messages.append(f"{file_path}: {ai_analysis['error']}")
+            
+            # Check if AI analysis has fixes (not just error)
+            if 'fixes' in ai_analysis:
+                for fix in ai_analysis['fixes']:
+                    fixes.append({
+                        'file': file_path,
+                        'line': fix.get('line', 0),
+                        'severity': fix.get('severity', 'unknown'),  # Include severity for proper ordering
+                        'vulnerability_type': fix.get('vulnerability_type', ''),
+                        'original_code': fix.get('original_code', ''),
+                        'fixed_code': fix.get('fixed_code', ''),
+                        'explanation': fix.get('explanation', '')
+                    })
+            
+            # Extract recommendations
+            if 'recommendations' in ai_analysis:
+                recommendations.extend(ai_analysis['recommendations'])
+        
+        # Sort fixes by severity (critical > high > medium > low) for emphasis
+        severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'unknown': 4}
+        fixes.sort(key=lambda x: severity_order.get(x.get('severity', 'unknown'), 4))
+        
+        # Group fixes by severity for better organization
+        fixes_by_severity = {
+            'critical': [f for f in fixes if f.get('severity') == 'critical'],
+            'high': [f for f in fixes if f.get('severity') == 'high'],
+            'medium': [f for f in fixes if f.get('severity') == 'medium'],
+            'low': [f for f in fixes if f.get('severity') == 'low']
+        }
+        
+        # Create severity summary
+        severity_summary = {
+            'critical': len(fixes_by_severity['critical']),
+            'high': len(fixes_by_severity['high']),
+            'medium': len(fixes_by_severity['medium']),
+            'low': len(fixes_by_severity['low']),
+            'total': len(fixes)
+        }
+        
+        # Sort and group recommendations by priority
+        priority_order = {'high': 0, 'medium': 1, 'low': 2}
+        # Deduplicate recommendations by title (keep first occurrence)
+        seen_titles = set()
+        recommendations_list = []
+        for rec in recommendations:
+            if rec.get('title') not in seen_titles:
+                seen_titles.add(rec.get('title'))
+                recommendations_list.append(rec)
+        recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
+        recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
+        
+        recommendations_by_priority = {
+            'high': [r for r in recommendations_list if r.get('priority') == 'high'],
+            'medium': [r for r in recommendations_list if r.get('priority') == 'medium'],
+            'low': [r for r in recommendations_list if r.get('priority') == 'low']
+        }
+        
+        # Create enhanced report by merging original report with AI analysis
+        # Always include ai_analysis field, even if empty
+        ai_analysis_data = {
+            'fixes': fixes,  # All fixes in priority order
+            'fixes_by_severity': fixes_by_severity,  # Grouped by severity
+            'severity_summary': severity_summary,  # Count per severity
+            'recommendations': recommendations_list,  # All recommendations in priority order
+            'recommendations_by_priority': recommendations_by_priority  # Grouped by priority
+        }        # Add error information if present
+        if has_errors:
+            ai_analysis_data['errors'] = error_messages
+            ai_analysis_data['status'] = 'partial' if fixes else 'failed'
+        else:
+            ai_analysis_data['status'] = 'complete'
+        
+        enhanced_report = {
+            **report,  # Include all original report fields
+            'ai_analysis': ai_analysis_data
+        }
+        
+        # Save enhanced report
+        enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
+        with open(enhanced_file, 'w') as f:
+            json.dump(enhanced_report, f, indent=2)
+        
+        logger.info(f"On-demand AI analysis completed for job {job_id} - Generated {len(fixes)} fixes and {len(recommendations)} recommendations")
+        
+    except Exception as e:
+        logger.error(f"On-demand AI analysis failed for job {job_id}: {e}")
+
+
 @app.get("/events/{job_id}")
 async def get_job_events(job_id: str) -> StreamingResponse:
     """Server-Sent Events stream for job progress."""
-    # This is a simplified SSE implementation
+    
     async def event_generator():
-        # Register client for this job
-        if job_id not in sse_clients:
-            sse_clients[job_id] = []
+        # Verify job exists
+        if not orchestrator:
+            yield f"data: {json.dumps({'error': 'Service not initialized'})}\n\n"
+            return
+            
+        try:
+            job_info = orchestrator.get_job_status(job_id)
+        except Exception as e:
+            logger.error(f"Failed to get job status for {job_id}: {e}")
+            yield f"data: {json.dumps({'error': 'Job not found'})}\n\n"
+            return
         
-        # Send initial status
-        job_info = orchestrator.get_job_status(job_id) if orchestrator else None
+        # Send initial status immediately
         if job_info:
             yield f"data: {json.dumps(job_info.to_dict())}\n\n"
         
-        # Keep connection open for updates
-        # In practice, you'd implement proper SSE with connection management
-        import asyncio
-        await asyncio.sleep(60)  # Keep connection open for 1 minute
+        # Poll for updates until job is in terminal state
+        terminal_statuses = ['completed', 'failed', 'canceled']
+        poll_interval = 2  # seconds
+        max_duration = 600  # 10 minutes max
+        elapsed = 0
+        
+        while elapsed < max_duration:
+            try:
+                # Get current job status
+                current_status = orchestrator.get_job_status(job_id)
+                
+                # Send update
+                yield f"data: {json.dumps(current_status.to_dict())}\n\n"
+                
+                # Stop if job is in terminal state
+                if current_status.status in terminal_statuses:
+                    logger.info(f"Job {job_id} reached terminal state: {current_status.status}")
+                    break
+                
+                # Wait before next poll
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                
+            except Exception as e:
+                logger.error(f"Error polling job {job_id}: {e}")
+                break
+        
+        # Send final update
+        try:
+            final_status = orchestrator.get_job_status(job_id)
+            yield f"data: {json.dumps(final_status.to_dict())}\n\n"
+        except Exception as e:
+            logger.error(f"Failed to get final status for {job_id}: {e}")
     
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "Connection": "keep-alive",
+        }
+    )
 
 
 @app.post("/webhooks/register")
