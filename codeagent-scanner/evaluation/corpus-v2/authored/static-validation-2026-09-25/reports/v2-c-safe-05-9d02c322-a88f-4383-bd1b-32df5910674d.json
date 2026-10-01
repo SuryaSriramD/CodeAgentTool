@@ -1,0 +1,307 @@
+{
+  "schema_version": "2.0",
+  "job_id": "9d02c322-a88f-4383-bd1b-32df5910674d",
+  "meta": {
+    "duration_ms": 4456,
+    "generated_at": "2026-09-25T14:45:40.546083+00:00",
+    "labels": [
+      "corpus-v2",
+      "authoring-validation",
+      "unapproved"
+    ],
+    "repo": {
+      "baseline": {
+        "job_id": "0889fbb4-49da-4e46-bcfc-e9e0a4fd0d33",
+        "report_hash": "c80322c569369c5d50f655cb5f4add21be86f0c658c0aaf8d3516d8af02d24e3"
+      },
+      "commit": null,
+      "digest": "0dd0c01bfdcfff8b0e2e381bc15c92fb438290ba96d51818e5ad86fdf4495994",
+      "filename": "v2-c-safe-05.zip",
+      "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+      "snapshot_id": "9d02c322-a88f-4383-bd1b-32df5910674d",
+      "source": "zip",
+      "stream": "default"
+    },
+    "rulepack_version": "2.0.0-candidate",
+    "snapshot": {
+      "digest": "0dd0c01bfdcfff8b0e2e381bc15c92fb438290ba96d51818e5ad86fdf4495994",
+      "excluded_files": [],
+      "files": {
+        "src/upload_count.c": "5439d15aa44dd20a256b2425c54fd54a1362e583796e02a88831d9c91b1c81f1"
+      },
+      "id": "9d02c322-a88f-4383-bd1b-32df5910674d",
+      "ingestion_version": 2,
+      "inventory_complete": true,
+      "source": {
+        "baseline": {
+          "job_id": "0889fbb4-49da-4e46-bcfc-e9e0a4fd0d33",
+          "report_hash": "c80322c569369c5d50f655cb5f4add21be86f0c658c0aaf8d3516d8af02d24e3"
+        },
+        "commit": null,
+        "digest": "0dd0c01bfdcfff8b0e2e381bc15c92fb438290ba96d51818e5ad86fdf4495994",
+        "filename": "v2-c-safe-05.zip",
+        "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+        "snapshot_id": "9d02c322-a88f-4383-bd1b-32df5910674d",
+        "source": "zip",
+        "stream": "default"
+      },
+      "source_inventory": [
+        "src/upload_count.c"
+      ],
+      "warnings": []
+    },
+    "tool_runs": [
+      {
+        "duration_ms": 2892,
+        "name": "semgrep",
+        "status": "failed",
+        "version": "1.178.0"
+      },
+      {
+        "duration_ms": 1,
+        "name": "bandit",
+        "status": "skipped",
+        "version": "bandit 1.9.4"
+      },
+      {
+        "duration_ms": 0,
+        "name": "dotnet",
+        "status": "skipped",
+        "version": "codeagent-dotnet 1.1.0"
+      },
+      {
+        "duration_ms": 0,
+        "name": "depcheck",
+        "status": "skipped",
+        "version": "Version: 0.74.0"
+      }
+    ],
+    "tools": [
+      "semgrep",
+      "bandit",
+      "dotnet",
+      "depcheck"
+    ]
+  },
+  "summary": {
+    "critical": 0,
+    "high": 0,
+    "low": 0,
+    "medium": 0
+  },
+  "files": [],
+  "coverage": [
+    {
+      "tool": "semgrep",
+      "status": "failed",
+      "files_discovered": 1,
+      "files_scanned": 0,
+      "files_skipped": 1,
+      "errors": [
+        "src/upload_count.c: source could not be fully parsed",
+        "1 source files were skipped or did not parse: src/upload_count.c"
+      ],
+      "version": "1.178.0",
+      "languages": [
+        "c"
+      ],
+      "path_outcomes": [
+        {
+          "language": "c",
+          "path": "src/upload_count.c",
+          "rule_ids": [
+            "codeagent.c.security.v1",
+            "codeagent.c.format-string.v2",
+            "codeagent.c.shell-injection.v2"
+          ],
+          "status": "not_assessed"
+        }
+      ],
+      "profile": "security-v2",
+      "rule_ids": [
+        "codeagent.bash.dynamic-evaluation.v2",
+        "codeagent.bash.security.v1",
+        "codeagent.bash.tls-validation.v2",
+        "codeagent.c.format-string.v2",
+        "codeagent.c.security.v1",
+        "codeagent.c.shell-injection.v2",
+        "codeagent.cpp.format-string.v2",
+        "codeagent.cpp.security.v1",
+        "codeagent.cpp.shell-injection.v2",
+        "codeagent.dockerfile.security.v1",
+        "codeagent.go.security.v1",
+        "codeagent.go.sql-injection.v2",
+        "codeagent.go.ssrf.v2",
+        "codeagent.go.tls-validation.v2",
+        "codeagent.html.security.v1",
+        "codeagent.java.security.v1",
+        "codeagent.java.sql-injection.v2",
+        "codeagent.java.unsafe-xml.v2",
+        "codeagent.javascript.path-traversal.v2",
+        "codeagent.javascript.security.v1",
+        "codeagent.javascript.shell-injection.v2",
+        "codeagent.javascript.ssrf.v2",
+        "codeagent.json.security.v1",
+        "codeagent.kotlin.security.v1",
+        "codeagent.kotlin.sql-injection.v2",
+        "codeagent.kotlin.unsafe-xml.v2",
+        "codeagent.php.path-traversal.v2",
+        "codeagent.php.security.v1",
+        "codeagent.php.sql-injection.v2",
+        "codeagent.python.path-traversal.v2",
+        "codeagent.python.security.v1",
+        "codeagent.python.sql-injection.v2",
+        "codeagent.python.ssrf.v2",
+        "codeagent.ruby.security.v1",
+        "codeagent.ruby.sql-injection.v2",
+        "codeagent.ruby.unsafe-deserialization.v2",
+        "codeagent.rust.security.v1",
+        "codeagent.rust.sql-injection.v2",
+        "codeagent.rust.tls-validation.v2",
+        "codeagent.scala.security.v1",
+        "codeagent.scala.sql-injection.v2",
+        "codeagent.scala.unsafe-xml.v2",
+        "codeagent.swift.security.v1",
+        "codeagent.swift.tls-validation.v2",
+        "codeagent.swift.unsafe-deserialization.v2",
+        "codeagent.typescript.path-traversal.v2",
+        "codeagent.typescript.security.v1",
+        "codeagent.typescript.shell-injection.v2",
+        "codeagent.typescript.ssrf.v2",
+        "codeagent.xml.security.v1",
+        "codeagent.yaml.security.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "bandit",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "bandit 1.9.4",
+      "languages": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "dotnet",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "codeagent-dotnet 1.1.0",
+      "languages": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [
+        "dotnet.binary-formatter.v1",
+        "dotnet.shell-injection.v2",
+        "dotnet.sql-injection.v2",
+        "dotnet.tls-validation.v1",
+        "dotnet.weak-crypto.v1",
+        "dotnet.xml-dtd.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "depcheck",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "Version: 0.74.0",
+      "languages": [],
+      "ecosystems": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    }
+  ],
+  "ai_analysis": null,
+  "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+  "stream": "default",
+  "profiles": {
+    "config": "a4fe670958b7e7e5211507e6eedd06b7a9529657e36cdfb695bc3b240b722e50",
+    "dependency": "506ced042a7c4d394e4645ff697a57003bef4f09ef6163ccd46a31fb6b69955d",
+    "name": "security-v2",
+    "source": "ba3ad3aa99b3ed698cad695e5fde69d3636effb1eac852347458d7daa70dff56",
+    "tools": {
+      "bandit": "f9eeff7a1ad667596326358c2d2b95c3ae7beb0bded3a68724212ecadaded9fb",
+      "depcheck": "506ced042a7c4d394e4645ff697a57003bef4f09ef6163ccd46a31fb6b69955d",
+      "dotnet": "5931ae9b9a311d36013df95db06efe91d42f4db9264a785c84424464f5109df4",
+      "semgrep": "6a70bfcededb875c0b17aade117babb7ffaf0640abe2b3e5299d31a353c7bd16"
+    }
+  },
+  "baseline": {
+    "job_id": "0889fbb4-49da-4e46-bcfc-e9e0a4fd0d33",
+    "report_hash": "c80322c569369c5d50f655cb5f4add21be86f0c658c0aaf8d3516d8af02d24e3"
+  },
+  "report_hash": "948ae1d597037277c9db56079a576a27f3ff82b412547b21aaaea9047634fdad",
+  "errors": [],
+  "profile_digests": {
+    "dependency": "b2a78d8167fb4b467bc3674bccf022ff4ed6923e17e86ffa68b5921f4312644b",
+    "dependency_details": {
+      "adapter": "ca0f18d2ad98c3d5dc9aa76369f1ed5b04575bd24191157a3b4b9fffe8ede749",
+      "database": {
+        "metadata_hash": "5b57f7738d885f1a1d506eb717e5e1dc1eb743fe99e18791b3e5d474a4d06eea",
+        "next_update": "2026-09-26T06:36:11.019457213Z",
+        "ready": true,
+        "updated_at": "2026-09-25T06:36:11.019457553Z"
+      },
+      "expected_version": "0.74.0",
+      "version": "Version: 0.74.0"
+    },
+    "source": "addb5891684c529093e5e3dbb181becb30ba3db4909989a95666609a2fbd076e",
+    "source_details": {
+      "adapters": {
+        "bandit_runner.py": "ded1e85cc29baeb6fd5e9429eaee84762b4a458f1c8355d6533e5f0c943f66fd",
+        "common.py": "9746e28ee5e07e3df08846b4ef48f5c185ab8cc85ac055ad8f21bbb05a597a49",
+        "dotnet_runner.py": "bda87fedcfcd8b72b40b58b6478d4a8f8e4113cdbb296cabe372f6068035a5bf",
+        "semgrep_runner.py": "f621ba6e2097b6dd4a6e7d045bb826d8c6f62a0eba25391b213c73f15a38af7d"
+      },
+      "dotnet": {
+        "Program.fs": "78dd7da6bf86a8fb03fa2f100b9542b787725d94acb3ef6ade36adf7366c85c6",
+        "Roslyn/Analyzer.cs": "fee1df8cef9b41638c0b4f9a615c8ac60f54dd5e9991057526da22863ef2fd33"
+      },
+      "effective_tools": [
+        {
+          "name": "semgrep",
+          "version": "1.178.0"
+        },
+        {
+          "name": "bandit",
+          "version": "bandit 1.9.4"
+        },
+        {
+          "name": "dotnet",
+          "version": "codeagent-dotnet 1.1.0"
+        }
+      ],
+      "profile": "security-v2",
+      "rules": "661bd24355ffd634f28fa7abe17f56c17598b7d39832a8d1c47a93fc181b633f",
+      "versions": {
+        "bandit": "1.9.4",
+        "dotnet_analyzer": "1.1.0",
+        "dotnet_sdk": "10.0.401",
+        "fsharp_compiler_service": "43.12.401",
+        "roslyn": "5.9.0",
+        "rulepack": "1.0.0",
+        "semgrep": "1.178.0"
+      }
+    }
+  },
+  "profile_reproducibility": "pinned",
+  "status": "failed",
+  "warnings": []
+}

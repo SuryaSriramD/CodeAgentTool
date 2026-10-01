@@ -1,0 +1,977 @@
+{
+  "language": "java",
+  "cases": [
+    {
+      "id": "v2-java-safe-01",
+      "language": "java",
+      "vulnerable": false,
+      "scenario": "municipal-map-page-sort-enum",
+      "files": {
+        "MapPage.java": "import java.sql.Connection;\nimport java.util.ArrayList;\nimport java.util.List;\npublic final class MapPage {\n    public static List<String> towns(Connection db, String order, int limit) throws Exception {\n        String column = switch (order) {\n            case \"name\" -> \"name\";\n            case \"population\" -> \"population\";\n            default -> throw new IllegalArgumentException(\"unsupported order\");\n        };\n        if (limit < 1 || limit > 100) throw new IllegalArgumentException(\"limit\");\n        String sql = \"SELECT name FROM towns ORDER BY \" + column + \", id LIMIT ?\";\n        try (var statement = db.prepareStatement(sql)) {\n            statement.setInt(1, limit);\n            try (var rows = statement.executeQuery()) {\n                List<String> result = new ArrayList<>();\n                while (rows.next()) result.add(rows.getString(1));\n                return result;\n            }\n        }\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Although the SQL string is assembled, only closed switch literals enter identifier position and the numeric limit is bound. User text never becomes SQL grammar.",
+      "remediation_constraints": [
+        "List public towns using one of two published sort orders and a bounded limit.",
+        "Preserve closed identifier selection and parameter binding.",
+        "Do not try binding a column identifier as a value or alphabetize every requested order."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "PostgreSQL 16 JDBC 42.7.4; towns(id,name,population) contains public map data; trusted connection initialization."
+      },
+      "operation_contract": {
+        "purpose": "List public towns using one of two published sort orders and a bounded limit.",
+        "trust_boundary": "Untrusted sort names select trusted literal identifiers; the limit is bound as integer.",
+        "legitimate_examples": [
+          {
+            "input": "order=population, limit=2",
+            "expected": "Two lowest populations, stable by id"
+          },
+          {
+            "input": "order=name; DROP TABLE towns",
+            "expected": "Reject unsupported order"
+          }
+        ],
+        "permitted_changes": [
+          "Preserve closed identifier selection and parameter binding."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not try binding a column identifier as a value or alphabetize every requested order."
+        ]
+      },
+      "regression_traps": [
+        "Do not try binding a column identifier as a value or alphabetize every requested order."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Connection, schema and public-data authorization are trusted; result strings are data for a separate JSON serializer."
+        ]
+      },
+      "derivation": {
+        "group": "municipal-map-page-sort-enum",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around list public towns using one of two published sort orders and a bounded limit. Boundary: Untrusted sort names select trusted literal identifiers; the limit is bound as integer. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/PreparedStatement.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-safe-02",
+      "language": "java",
+      "vulnerable": false,
+      "scenario": "offline-quiz-dom-reader",
+      "files": {
+        "QuizReader.java": "import javax.xml.parsers.DocumentBuilderFactory;\nimport javax.xml.XMLConstants;\nimport java.io.ByteArrayInputStream;\npublic final class QuizReader {\n    public static String question(byte[] upload) throws Exception {\n        if (upload.length > 8192) throw new IllegalArgumentException(\"too large\");\n        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\n        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);\n        factory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\n        factory.setFeature(\"http://xml.org/sax/features/external-general-entities\", false);\n        factory.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", false);\n        factory.setXIncludeAware(false);\n        factory.setExpandEntityReferences(false);\n        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, \"\");\n        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, \"\");\n        var doc = factory.newDocumentBuilder().parse(new ByteArrayInputStream(upload));\n        return doc.getDocumentElement().getTextContent();\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The parser is configured before use, disallows document types, blocks external protocols and includes, and has no permissive fallback. Ordinary predefined entities still yield text.",
+      "remediation_constraints": [
+        "Read a text question from bounded offline quiz XML.",
+        "Retain the data-only XML format and fail closed if a security setting is unsupported.",
+        "Do not replace the text result with serialized markup or reject all XML."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "JDK built-in Xerces; public quiz upload is limited to plain text XML with no DTD/schema. Parse exceptions are returned as a rejected upload, never retried with weaker options."
+      },
+      "operation_contract": {
+        "purpose": "Read a text question from bounded offline quiz XML.",
+        "trust_boundary": "The entire XML upload is untrusted; document types and external resolution are disabled before parsing.",
+        "legitimate_examples": [
+          {
+            "input": "<question>2 &lt; 3?</question>",
+            "expected": "2 < 3?"
+          },
+          {
+            "input": "A document containing a DOCTYPE",
+            "expected": "Rejected upload"
+          }
+        ],
+        "permitted_changes": [
+          "Retain the data-only XML format and fail closed if a security setting is unsupported."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not replace the text result with serialized markup or reject all XML."
+        ]
+      },
+      "regression_traps": [
+        "Do not replace the text result with serialized markup or reject all XML."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Very large/deep inputs are governed by byte limit and JDK secure-processing limits; consumers render returned text rather than HTML."
+        ]
+      },
+      "derivation": {
+        "group": "offline-quiz-dom-reader",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around read a text question from bounded offline quiz xml. Boundary: The entire XML upload is untrusted; document types and external resolution are disabled before parsing. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/security/java-api-xml-processing-jaxp-security-guide.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-safe-03",
+      "language": "java",
+      "vulnerable": false,
+      "scenario": "release-signature-verification",
+      "files": {
+        "ReleaseVerifier.java": "import java.security.PublicKey;\nimport java.security.Signature;\npublic final class ReleaseVerifier {\n    public static boolean eligible(byte[] manifest, byte[] detachedSignature, PublicKey pinnedKey) throws Exception {\n        if (manifest.length > 65536 || detachedSignature.length != 64) return false;\n        Signature verifier = Signature.getInstance(\"Ed25519\");\n        verifier.initVerify(pinnedKey);\n        verifier.update(manifest);\n        return verifier.verify(detachedSignature);\n    }\n}\n",
+        "Updater.java": "import java.security.PublicKey;\npublic final class Updater {\n    public static byte[] acceptedManifest(byte[] bytes, byte[] signature, PublicKey bundledKey) throws Exception {\n        if (!ReleaseVerifier.eligible(bytes, signature, bundledKey))\n            throw new SecurityException(\"invalid release signature\");\n        return bytes.clone();\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "A keyed signature verification gates the consumer and operates on the same bytes it returns. Algorithm selection and trust root are not attacker controlled.",
+      "remediation_constraints": [
+        "Release only an authenticated manifest to the updater.",
+        "Preserve exact-byte verification and fail closed on invalid signatures.",
+        "Do not hash instead of verify a signature or reserialize before checking it."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "Trusted Ed25519 public key is embedded by signed application distribution, not delivered in the release response. Manifest signature covers the exact downloaded bytes; rollback policy is checked by a separate trusted version gate."
+      },
+      "operation_contract": {
+        "purpose": "Release only an authenticated manifest to the updater.",
+        "trust_boundary": "Attacker can modify downloaded manifest/signature but cannot replace the pinned public key.",
+        "legitimate_examples": [
+          {
+            "input": "Correctly signed manifest",
+            "expected": "Returns identical bytes"
+          },
+          {
+            "input": "Same signature with changed manifest byte",
+            "expected": "Rejects manifest"
+          }
+        ],
+        "permitted_changes": [
+          "Preserve exact-byte verification and fail closed on invalid signatures."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not hash instead of verify a signature or reserialize before checking it."
+        ]
+      },
+      "regression_traps": [
+        "Do not hash instead of verify a signature or reserialize before checking it."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Freshness/rollback is explicitly enforced outside this excerpt; key distribution is a trusted setup input."
+        ]
+      },
+      "derivation": {
+        "group": "release-signature-verification",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around release only an authenticated manifest to the updater. Boundary: Attacker can modify downloaded manifest/signature but cannot replace the pinned public key. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/security/Signature.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-safe-04",
+      "language": "java",
+      "vulnerable": false,
+      "scenario": "printer-text-through-standard-input",
+      "files": {
+        "LabelPrinter.java": "import java.nio.charset.StandardCharsets;\npublic final class LabelPrinter {\n    public static int print(String text) throws Exception {\n        if (text.length() > 1024) throw new IllegalArgumentException(\"label too long\");\n        Process printer = new ProcessBuilder(\"/usr/bin/lp\", \"-d\", \"shipping-labels\")\n                .redirectOutput(ProcessBuilder.Redirect.DISCARD)\n                .redirectError(ProcessBuilder.Redirect.DISCARD).start();\n        try (var input = printer.getOutputStream()) {\n            input.write(text.getBytes(StandardCharsets.UTF_8));\n        }\n        return printer.waitFor();\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "No shell or argument interpolation consumes the user text. The process is awaited and its input is closed, preserving a meaningful operation rather than an echo-only placeholder.",
+      "remediation_constraints": [
+        "Print exactly the supplied bounded text to the shipping label queue and return its exit status.",
+        "Keep text on stdin and keep fixed printer selection.",
+        "Do not split text into command arguments, drop Unicode, or stop returning the process status."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "Linux CUPS lp; fixed trusted queue configured in raw text mode without document-language interpretation. This operation is offered only to authenticated warehouse staff with print permission."
+      },
+      "operation_contract": {
+        "purpose": "Print exactly the supplied bounded text to the shipping label queue and return its exit status.",
+        "trust_boundary": "Form text is written to the child standard input; executable, queue and arguments are constants.",
+        "legitimate_examples": [
+          {
+            "input": "Handle with care; fragile",
+            "expected": "One literal text label"
+          },
+          {
+            "input": "-o media=A4",
+            "expected": "Literal label text, no printer option change"
+          }
+        ],
+        "permitted_changes": [
+          "Keep text on stdin and keep fixed printer selection."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not split text into command arguments, drop Unicode, or stop returning the process status."
+        ]
+      },
+      "regression_traps": [
+        "Do not split text into command arguments, drop Unicode, or stop returning the process status."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Printer control-language execution is disabled by the stated raw-text queue contract; user authorization and trusted executable ownership are deployment prerequisites."
+        ]
+      },
+      "derivation": {
+        "group": "printer-text-through-standard-input",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around print exactly the supplied bounded text to the shipping label queue and return its exit status. Boundary: Form text is written to the child standard input; executable, queue and arguments are constants. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ProcessBuilder.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-safe-05",
+      "language": "java",
+      "vulnerable": false,
+      "scenario": "signed-bundle-public-resource-selector",
+      "files": {
+        "HelpResources.java": "import java.io.InputStream;\nimport java.util.Map;\npublic final class HelpResources {\n    private static final Map<String, String> PAGES = Map.of(\n            \"install\", \"/public-help/install.txt\",\n            \"licenses\", \"/public-help/licenses.txt\");\n    public static byte[] load(String pageId) throws Exception {\n        String path = PAGES.get(pageId);\n        if (path == null) throw new IllegalArgumentException(\"unknown help page\");\n        try (InputStream input = HelpResources.class.getResourceAsStream(path)) {\n            if (input == null) throw new IllegalStateException(\"missing bundled page\");\n            return input.readAllBytes();\n        }\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "A closed map selects public immutable resources; no user path concatenation or filesystem traversal occurs. The restricted IDs are the original public API, not a remediation that narrows a filename API.",
+      "remediation_constraints": [
+        "Serve one of two published help-page IDs from bundled resources.",
+        "Maintain explicit published IDs and public-resource mapping.",
+        "Do not allow arbitrary classpath names or fabricate empty content when a resource is missing."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "Resources are immutable public text inside a trusted signed application jar; no plugins or user-controlled class loaders. Resource sizes are bounded at packaging."
+      },
+      "operation_contract": {
+        "purpose": "Serve one of two published help-page IDs from bundled resources.",
+        "trust_boundary": "Untrusted page ID can choose only two constant public classpath paths.",
+        "legitimate_examples": [
+          {
+            "input": "install",
+            "expected": "Bytes of public-help/install.txt"
+          },
+          {
+            "input": "../secrets",
+            "expected": "Rejected unknown page ID"
+          }
+        ],
+        "permitted_changes": [
+          "Maintain explicit published IDs and public-resource mapping."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not allow arbitrary classpath names or fabricate empty content when a resource is missing."
+        ]
+      },
+      "regression_traps": [
+        "Do not allow arbitrary classpath names or fabricate empty content when a resource is missing."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Application jar and class loader are trusted; mapping intentionally contains no credentials or private resources."
+        ]
+      },
+      "derivation": {
+        "group": "signed-bundle-public-resource-selector",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around serve one of two published help-page ids from bundled resources. Boundary: Untrusted page ID can choose only two constant public classpath paths. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Class.html#getResourceAsStream(java.lang.String)"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-safe-06",
+      "language": "java",
+      "vulnerable": false,
+      "scenario": "public-http-status-with-standard-client",
+      "files": {
+        "TransitStatus.java": "import java.net.URI;\nimport java.net.http.HttpClient;\nimport java.net.http.HttpRequest;\nimport java.net.http.HttpResponse;\nimport java.time.Duration;\npublic final class TransitStatus {\n    private static final HttpClient CLIENT = HttpClient.newBuilder()\n            .connectTimeout(Duration.ofSeconds(3))\n            .followRedirects(HttpClient.Redirect.NEVER).build();\n    public static int status() throws Exception {\n        var request = HttpRequest.newBuilder(URI.create(\"https://transit.example.org/status\"))\n                .timeout(Duration.ofSeconds(3)).GET().build();\n        return CLIENT.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The client uses default certificate/hostname verification and refuses redirects. No caller-controlled destination, permissive trust callback, or secret response content exists.",
+      "remediation_constraints": [
+        "Return the public transit service HTTP status without downloading its body.",
+        "Retain TLS verification, timeouts and no-redirect policy.",
+        "Do not return 200 on connection failures or add insecure fallback for convenience."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "System trust store managed by deployment; no global SSL overrides or proxies controlled by users. Status host is operator-owned public service."
+      },
+      "operation_contract": {
+        "purpose": "Return the public transit service HTTP status without downloading its body.",
+        "trust_boundary": "The network is untrusted; a fixed HTTPS URL is authenticated by the standard client.",
+        "legitimate_examples": [
+          {
+            "input": "Trusted endpoint returns 204",
+            "expected": 204
+          },
+          {
+            "input": "Untrusted certificate",
+            "expected": "TLS exception, not a success status"
+          }
+        ],
+        "permitted_changes": [
+          "Retain TLS verification, timeouts and no-redirect policy."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not return 200 on connection failures or add insecure fallback for convenience."
+        ]
+      },
+      "regression_traps": [
+        "Do not return 200 on connection failures or add insecure fallback for convenience."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "CA compromise and operator DNS ownership are trust-store/domain assumptions, not suppressed source vulnerabilities."
+        ]
+      },
+      "derivation": {
+        "group": "public-http-status-with-standard-client",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around return the public transit service http status without downloading its body. Boundary: The network is untrusted; a fixed HTTPS URL is authenticated by the standard client. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.net.http/java/net/http/HttpClient.Builder.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-vulnerable-01",
+      "language": "java",
+      "vulnerable": true,
+      "scenario": "forum-label-filter-native-query",
+      "files": {
+        "LabelSearch.java": "import org.hibernate.Session;\nimport java.util.List;\npublic final class LabelSearch {\n    public static List<String> search(Session session, String label) {\n        String clause = \"label = '\" + label + \"'\";\n        String sql = \"SELECT title FROM public_topics WHERE \" + clause + \" ORDER BY id\";\n        return session.createNativeQuery(sql, String.class).getResultList();\n    }\n}\n",
+        "ForumEndpoint.java": "import org.hibernate.Session;\nimport java.util.List;\nimport java.util.Map;\npublic final class ForumEndpoint {\n    public static List<String> get(Session session, Map<String, String> query) {\n        String label = query.getOrDefault(\"label\", \"general\");\n        if (label.length() > 80) throw new IllegalArgumentException(\"label too long\");\n        return LabelSearch.search(session, label);\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "LabelSearch.java"
+        }
+      ],
+      "rationale": "The bound on length does not separate SQL syntax from the label inserted into the WHERE expression. Native-query execution reaches the server; no ORM escaping is applied to the concatenated clause.",
+      "remediation_constraints": [
+        "Return titles in ID order for one exact public-topic label.",
+        "Bind label as a native-query parameter while retaining ordering and exact-match semantics.",
+        "Do not strip apostrophes, change equality to substring matching, or return every topic."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "Hibernate ORM 6.6.4.Final, PostgreSQL 16; public_topics(id bigint,title text,label text) seeded with public and draft labels; Session is server-owned. Endpoint adapter supplies untrusted decoded query parameters."
+      },
+      "operation_contract": {
+        "purpose": "Return titles in ID order for one exact public-topic label.",
+        "trust_boundary": "An unauthenticated query parameter becomes Hibernate native SQL text.",
+        "legitimate_examples": [
+          {
+            "input": "label=release notes",
+            "expected": "Titles labeled release notes, in ID order"
+          },
+          {
+            "input": "label=author's picks",
+            "expected": "Exact apostrophe-containing label is supported"
+          }
+        ],
+        "permitted_changes": [
+          "Bind label as a native-query parameter while retaining ordering and exact-match semantics."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not strip apostrophes, change equality to substring matching, or return every topic."
+        ]
+      },
+      "regression_traps": [
+        "Do not strip apostrophes, change equality to substring matching, or return every topic."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Only public_topics is exposed by this operation; database account and Session creation are trusted. No raw SQL supplied by operators is required."
+        ]
+      },
+      "derivation": {
+        "group": "forum-label-filter-native-query",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around return titles in id order for one exact public-topic label. Boundary: An unauthenticated query parameter becomes Hibernate native SQL text. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.jboss.org/hibernate/orm/6.6/userguide/html_single/Hibernate_User_Guide.html#sql"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-vulnerable-02",
+      "language": "java",
+      "vulnerable": true,
+      "scenario": "warehouse-stax-import-external-entities",
+      "files": {
+        "InventoryImport.java": "import javax.xml.stream.XMLInputFactory;\nimport javax.xml.stream.XMLStreamConstants;\nimport javax.xml.XMLConstants;\nimport java.io.InputStream;\nimport java.util.ArrayList;\nimport java.util.List;\npublic final class InventoryImport {\n    public static List<String> skuNames(InputStream upload) throws Exception {\n        XMLInputFactory factory = XMLInputFactory.newFactory();\n        factory.setProperty(XMLInputFactory.SUPPORT_DTD, true);\n        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, true);\n        factory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, \"all\");\n        var reader = factory.createXMLStreamReader(upload);\n        List<String> names = new ArrayList<>();\n        try {\n            while (reader.hasNext()) {\n                if (reader.next() == XMLStreamConstants.START_ELEMENT && reader.getLocalName().equals(\"sku\"))\n                    names.add(reader.getElementText());\n            }\n            return names;\n        } finally { reader.close(); }\n    }\n}\n",
+        "UploadController.java": "import java.io.ByteArrayInputStream;\nimport java.util.List;\npublic final class UploadController {\n    public static List<String> preview(byte[] authenticatedPartnerUpload) throws Exception {\n        if (authenticatedPartnerUpload.length > 65536) throw new IllegalArgumentException(\"upload too large\");\n        return InventoryImport.skuNames(new ByteArrayInputStream(authenticatedPartnerUpload));\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-xml",
+          "cwe": "CWE-611",
+          "path": "InventoryImport.java"
+        }
+      ],
+      "rationale": "The explicit parser settings permit external entity replacement and external DTD access, so a small upload can make the preview expose local or network resource content. This does not depend on version-specific default settings.",
+      "remediation_constraints": [
+        "Preview SKU text from a partner inventory XML document without resolving external resources.",
+        "Disable DTD/external resolution and reject documents requiring external entities.",
+        "Do not remove ordinary escaped ampersands, Unicode text, or multi-item previews."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "JDK default StAX implementation; no jaxp.properties override. Partner can submit XML but cannot read application filesystem. Import previews are returned to that partner."
+      },
+      "operation_contract": {
+        "purpose": "Preview SKU text from a partner inventory XML document without resolving external resources.",
+        "trust_boundary": "Partner XML is parsed with external entity resolution and all external DTD protocols enabled.",
+        "legitimate_examples": [
+          {
+            "input": "<stock><sku>A&amp;B</sku></stock>",
+            "expected": [
+              "A&B"
+            ]
+          },
+          {
+            "input": "<stock><sku>office paper</sku><sku>胶水</sku></stock>",
+            "expected": [
+              "office paper",
+              "胶水"
+            ]
+          }
+        ],
+        "permitted_changes": [
+          "Disable DTD/external resolution and reject documents requiring external entities."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not remove ordinary escaped ampersands, Unicode text, or multi-item previews."
+        ]
+      },
+      "regression_traps": [
+        "Do not remove ordinary escaped ampersands, Unicode text, or multi-item previews."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Ingress enforces upload size; XML depth/resource limits still need maintainers to confirm against production input policies."
+        ]
+      },
+      "derivation": {
+        "group": "warehouse-stax-import-external-entities",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around preview sku text from a partner inventory xml document without resolving external resources. Boundary: Partner XML is parsed with external entity resolution and all external DTD protocols enabled. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.xml/javax/xml/stream/XMLInputFactory.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-vulnerable-03",
+      "language": "java",
+      "vulnerable": true,
+      "scenario": "desktop-shared-layout-bean-decoder",
+      "files": {
+        "LayoutRestore.java": "import java.beans.XMLDecoder;\nimport java.io.ByteArrayInputStream;\nimport java.awt.Point;\npublic final class LayoutRestore {\n    public static Point restore(byte[] sharedLayout) {\n        if (sharedLayout.length > 32768) throw new IllegalArgumentException(\"layout too large\");\n        try (XMLDecoder decoder = new XMLDecoder(new ByteArrayInputStream(sharedLayout))) {\n            Object value = decoder.readObject();\n            if (!(value instanceof Point)) throw new IllegalArgumentException(\"expected point\");\n            return (Point) value;\n        }\n    }\n}\n",
+        "LayoutAction.java": "import java.awt.Point;\npublic final class LayoutAction {\n    public static String openAttachment(byte[] attachmentFromCoworker) {\n        Point location = LayoutRestore.restore(attachmentFromCoworker);\n        return location.x + \",\" + location.y;\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-deserialization",
+          "cwe": "CWE-502",
+          "path": "LayoutRestore.java"
+        }
+      ],
+      "rationale": "XMLDecoder instantiates beans and invokes methods while reading. Checking that the final object is a Point occurs after those effects. Merely filtering the cast does not constrain the instruction language.",
+      "remediation_constraints": [
+        "Restore the window origin from a shared legacy layout and render x,y.",
+        "Implement a data-only reader for the documented Point subset, or provide an explicit format migration preserving coordinate imports.",
+        "Do not return raw XML text or reject all legacy coordinates; negative coordinates are valid."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "Desktop java.desktop module available; a user opens an untrusted shared layout attachment. No sandbox or SecurityManager is installed. Legacy supported documents contain one java.awt.Point encoded by XMLEncoder."
+      },
+      "operation_contract": {
+        "purpose": "Restore the window origin from a shared legacy layout and render x,y.",
+        "trust_boundary": "A document sender controls the XMLDecoder instruction stream before the Point type check.",
+        "legitimate_examples": [
+          {
+            "input": "XMLEncoder Point(40,80) document",
+            "expected": "40,80"
+          },
+          {
+            "input": "XMLEncoder Point(-12,0) document",
+            "expected": "-12,0"
+          }
+        ],
+        "permitted_changes": [
+          "Implement a data-only reader for the documented Point subset, or provide an explicit format migration preserving coordinate imports."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not return raw XML text or reject all legacy coordinates; negative coordinates are valid."
+        ]
+      },
+      "regression_traps": [
+        "Do not return raw XML text or reject all legacy coordinates; negative coordinates are valid."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The test requires instruction-stream safety, not proof of one installed third-party gadget; java.beans method invocation is intrinsic."
+        ]
+      },
+      "derivation": {
+        "group": "desktop-shared-layout-bean-decoder",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around restore the window origin from a shared legacy layout and render x,y. Boundary: A document sender controls the XMLDecoder instruction stream before the Point type check. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.desktop/java/beans/XMLDecoder.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-vulnerable-04",
+      "language": "java",
+      "vulnerable": true,
+      "scenario": "payment-confirmation-trust-manager",
+      "files": {
+        "GatewayClient.java": "import javax.net.ssl.*;\nimport java.net.URI;\nimport java.security.cert.X509Certificate;\nimport java.nio.charset.StandardCharsets;\npublic final class GatewayClient {\n    public static String confirmation(String paymentId) throws Exception {\n        X509TrustManager trust = new X509TrustManager() {\n            public void checkClientTrusted(X509Certificate[] chain, String authType) { }\n            public void checkServerTrusted(X509Certificate[] chain, String authType) { }\n            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }\n        };\n        SSLContext context = SSLContext.getInstance(\"TLS\");\n        context.init(null, new TrustManager[]{trust}, null);\n        var url = URI.create(\"https://payments.example.org/confirmation/\" + paymentId).toURL();\n        HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();\n        connection.setSSLSocketFactory(context.getSocketFactory());\n        connection.setConnectTimeout(3000);\n        connection.setReadTimeout(3000);\n        try (var input = connection.getInputStream()) {\n            return new String(input.readNBytes(8192), StandardCharsets.UTF_8);\n        } finally { connection.disconnect(); }\n    }\n}\n",
+        "Settlement.java": "public final class Settlement {\n    public static boolean paid(long paymentId) throws Exception {\n        return GatewayClient.confirmation(Long.toUnsignedString(paymentId)).equals(\"settled\");\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "GatewayClient.java"
+        }
+      ],
+      "rationale": "The configured TrustManager accepts every server chain, so hostname matching alone cannot authenticate the peer. The returned body has a concrete financial consumer.",
+      "remediation_constraints": [
+        "Read an authenticated settlement status for a numeric payment ID.",
+        "Use system trust roots or a deployment-provided CA with full chain and hostname validation.",
+        "Do not hardcode settled/pending, remove the gateway call, or accept any certificate on fallback."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "JSSE default implementation; valid numeric IDs originate in trusted database. Network attacker can present an untrusted certificate containing payments.example.org; default hostname verifier still runs."
+      },
+      "operation_contract": {
+        "purpose": "Read an authenticated settlement status for a numeric payment ID.",
+        "trust_boundary": "An on-path attacker controls the HTTPS peer chain and response used to mark a payment settled.",
+        "legitimate_examples": [
+          {
+            "input": "paymentId=812, gateway body settled",
+            "expected": true
+          },
+          {
+            "input": "paymentId=813, gateway body pending",
+            "expected": false
+          }
+        ],
+        "permitted_changes": [
+          "Use system trust roots or a deployment-provided CA with full chain and hostname validation."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not hardcode settled/pending, remove the gateway call, or accept any certificate on fallback."
+        ]
+      },
+      "regression_traps": [
+        "Do not hardcode settled/pending, remove the gateway call, or accept any certificate on fallback."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The endpoint and ID are trusted; URL injection is not part of this case. Response protocol is deliberately exact and bounded."
+        ]
+      },
+      "derivation": {
+        "group": "payment-confirmation-trust-manager",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around read an authenticated settlement status for a numeric payment id. Boundary: An on-path attacker controls the HTTPS peer chain and response used to mark a payment settled. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/net/ssl/X509TrustManager.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-vulnerable-05",
+      "language": "java",
+      "vulnerable": true,
+      "scenario": "membership-password-verifier-md5",
+      "files": {
+        "PasswordStore.java": "import java.nio.charset.StandardCharsets;\nimport java.security.MessageDigest;\nimport java.util.HexFormat;\npublic final class PasswordStore {\n    public static String enroll(String password) throws Exception {\n        return HexFormat.of().formatHex(MessageDigest.getInstance(\"MD5\")\n                .digest(password.getBytes(StandardCharsets.UTF_8)));\n    }\n    public static boolean authenticate(String submitted, String storedDigest) throws Exception {\n        byte[] actual = enroll(submitted).getBytes(StandardCharsets.US_ASCII);\n        return MessageDigest.isEqual(actual, storedDigest.getBytes(StandardCharsets.US_ASCII));\n    }\n}\n",
+        "LoginService.java": "public final class LoginService {\n    public static boolean login(String formPassword, String digestLoadedForUser) throws Exception {\n        if (formPassword.length() > 1024) return false;\n        return PasswordStore.authenticate(formPassword, digestLoadedForUser);\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "weak-cryptography",
+          "cwe": "CWE-916",
+          "path": "PasswordStore.java"
+        }
+      ],
+      "rationale": "MD5 is used as an actual password verifier rather than a non-security checksum. Fast unsalted hashing permits efficient offline guessing; changing only the digest spelling to SHA-256 would retain that weakness.",
+      "remediation_constraints": [
+        "Authenticate existing members and enroll new passwords using stored verifiers.",
+        "Use a salted adaptive password KDF with versioned verifier records and an explicit legacy-login migration.",
+        "Do not invalidate all existing members without migration, normalize passwords, or silently truncate them."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "UTF-8 passwords; digest column stores lowercase hex of legacy MD5. Application uses TLS and online throttling. Threat is an attacker obtaining the database verifier column."
+      },
+      "operation_contract": {
+        "purpose": "Authenticate existing members and enroll new passwords using stored verifiers.",
+        "trust_boundary": "User-chosen low-entropy passwords are protected only by a fast unsalted digest in a database readable after breach.",
+        "legitimate_examples": [
+          {
+            "input": "correct Unicode password for an enrolled account",
+            "expected": true
+          },
+          {
+            "input": "different password",
+            "expected": false
+          }
+        ],
+        "permitted_changes": [
+          "Use a salted adaptive password KDF with versioned verifier records and an explicit legacy-login migration."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not invalidate all existing members without migration, normalize passwords, or silently truncate them."
+        ]
+      },
+      "regression_traps": [
+        "Do not invalidate all existing members without migration, normalize passwords, or silently truncate them."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Constant-time byte comparison is already used; rate limiting does not address offline verifier attacks."
+        ]
+      },
+      "derivation": {
+        "group": "membership-password-verifier-md5",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around authenticate existing members and enroll new passwords using stored verifiers. Boundary: User-chosen low-entropy passwords are protected only by a fast unsalted digest in a database readable after breach. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/security/MessageDigest.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-java-vulnerable-06",
+      "language": "java",
+      "vulnerable": true,
+      "scenario": "image-watermark-shell-caption",
+      "files": {
+        "Watermark.java": "import java.io.IOException;\npublic final class Watermark {\n    public static int render(String caption) throws IOException, InterruptedException {\n        String command = \"/usr/bin/convert /srv/job/input.png -set comment '\" + caption\n                + \"' /srv/job/output.png\";\n        Process child = new ProcessBuilder(\"/bin/sh\", \"-c\", command)\n                .redirectOutput(ProcessBuilder.Redirect.DISCARD)\n                .redirectError(ProcessBuilder.Redirect.DISCARD).start();\n        return child.waitFor();\n    }\n}\n",
+        "CaptionForm.java": "public final class CaptionForm {\n    public static int submit(String caption) throws Exception {\n        if (caption.length() > 120) throw new IllegalArgumentException(\"caption too long\");\n        return Watermark.render(caption);\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "Watermark.java"
+        }
+      ],
+      "rationale": "A quote in the caption ends the shell literal before ProcessBuilder starts /bin/sh. Trusted image paths and a length limit do not protect the distinct caption boundary.",
+      "remediation_constraints": [
+        "Write a literal user caption into PNG comment metadata and return the child exit code.",
+        "Invoke the executable using an argument list with the caption as the comment value and preserve process waiting/status.",
+        "Do not strip punctuation, use stdout as the success code, or replace the running JVM on success."
+      ],
+      "runtime_assumptions": {
+        "runtime": "OpenJDK 21; Java source level 21",
+        "libraries_platform_setup": "Linux; trusted ImageMagick executable and policy disallow delegates/network. A per-request private job directory supplies trusted PNG input and output. Caption is untrusted metadata, not an ImageMagick expression."
+      },
+      "operation_contract": {
+        "purpose": "Write a literal user caption into PNG comment metadata and return the child exit code.",
+        "trust_boundary": "The caption form is embedded into a shell command between single quotes.",
+        "legitimate_examples": [
+          {
+            "input": "A photographer's day",
+            "expected": "Comment equals A photographer's day; success exit code"
+          },
+          {
+            "input": "two words ; still caption",
+            "expected": "Comment remains literal, with no additional command"
+          }
+        ],
+        "permitted_changes": [
+          "Invoke the executable using an argument list with the caption as the comment value and preserve process waiting/status."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not strip punctuation, use stdout as the success code, or replace the running JVM on success."
+        ]
+      },
+      "regression_traps": [
+        "Do not strip punctuation, use stdout as the success code, or replace the running JVM on success."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "ImageMagick delegates and image decoding vulnerabilities are excluded by trusted predecoded PNG and deployment policy; no path is supplied by the caller."
+        ]
+      },
+      "derivation": {
+        "group": "image-watermark-shell-caption",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around write a literal user caption into png comment metadata and return the child exit code. Boundary: The caption form is embedded into a shell command between single quotes. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ProcessBuilder.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

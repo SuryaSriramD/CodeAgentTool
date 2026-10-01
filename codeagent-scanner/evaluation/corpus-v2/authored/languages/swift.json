@@ -1,0 +1,976 @@
+{
+  "language": "swift",
+  "cases": [
+    {
+      "id": "v2-swift-safe-01",
+      "language": "swift",
+      "vulnerable": false,
+      "scenario": "secure-note-title-keyed-decoding",
+      "files": {
+        "NoteTitle.swift": "import Foundation\nstruct NoteTitle {\n    enum DecodeError: Error { case tooLarge, invalid }\n    static func read(_ attachment: Data) throws -> String {\n        guard attachment.count <= 8192 else { throw DecodeError.tooLarge }\n        guard let value = try NSKeyedUnarchiver.unarchivedObject(ofClass: NSString.self, from: attachment),\n              value.length <= 200 else { throw DecodeError.invalid }\n        return value as String\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The allowed class is supplied to secure decoding before construction, and the returned value has a bounded length. There is no general decoder followed only by a cast.",
+      "remediation_constraints": [
+        "Decode one bounded note title from a class-constrained archive.",
+        "Retain pre-decode class restriction and format-specific length limits.",
+        "Do not add NSObject or arbitrary classes to the allowed set to silence errors."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "Title files are keyed archives containing a single NSString, generated using requiringSecureCoding=true; other graph shapes were never part of the format. Foundation NSString conforms to NSSecureCoding."
+      },
+      "operation_contract": {
+        "purpose": "Decode one bounded note title from a class-constrained archive.",
+        "trust_boundary": "Untrusted bytes may select only the explicitly permitted secure string class.",
+        "legitimate_examples": [
+          {
+            "input": "Secure archive of Meeting notes",
+            "expected": "Meeting notes"
+          },
+          {
+            "input": "Archive rooted in an unrelated class",
+            "expected": "Rejected"
+          }
+        ],
+        "permitted_changes": [
+          "Retain pre-decode class restriction and format-specific length limits."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not add NSObject or arbitrary classes to the allowed set to silence errors."
+        ]
+      },
+      "regression_traps": [
+        "Do not add NSObject or arbitrary classes to the allowed set to silence errors."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The allowed string object is inert; malformed archive failure is propagated to the import UI."
+        ]
+      },
+      "derivation": {
+        "group": "secure-note-title-keyed-decoding",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around decode one bounded note title from a class-constrained archive. Boundary: Untrusted bytes may select only the explicitly permitted secure string class. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/documentation/foundation/nskeyedunarchiver/unarchivedobject(ofclass:from:)"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-safe-02",
+      "language": "swift",
+      "vulnerable": false,
+      "scenario": "typed-shortcut-property-list",
+      "files": {
+        "ShortcutPreferences.swift": "import Foundation\nstruct ShortcutPreferences: Decodable {\n    let title: String\n    let repeatCount: Int\n}\nstruct ShortcutImport {\n    enum ImportError: Error { case invalid }\n    static func load(_ data: Data) throws -> ShortcutPreferences {\n        guard data.count <= 4096 else { throw ImportError.invalid }\n        let value = try PropertyListDecoder().decode(ShortcutPreferences.self, from: data)\n        guard value.title.count <= 80, (1...5).contains(value.repeatCount) else { throw ImportError.invalid }\n        return value\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "PropertyListDecoder targets a fixed data model and validates bounded fields. Serialized input by itself does not imply unsafe object deserialization.",
+      "remediation_constraints": [
+        "Import display-only repeated-title preferences from a typed property list.",
+        "Retain typed decoding and value bounds.",
+        "Do not infer executable classes/commands from title or accept unbounded repeat counts."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "XML or binary plist accepted; the typed model contains only String and Int. Import consumer displays title repeatCount times, with text rendering, and never executes named shortcuts or shell commands."
+      },
+      "operation_contract": {
+        "purpose": "Import display-only repeated-title preferences from a typed property list.",
+        "trust_boundary": "Untrusted plist fields populate a fixed Decodable struct without runtime class activation.",
+        "legitimate_examples": [
+          {
+            "input": "title=Hello, repeatCount=2",
+            "expected": "Model for two Hello displays"
+          },
+          {
+            "input": "repeatCount=1000000",
+            "expected": "Rejected"
+          }
+        ],
+        "permitted_changes": [
+          "Retain typed decoding and value bounds."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not infer executable classes/commands from title or accept unbounded repeat counts."
+        ]
+      },
+      "regression_traps": [
+        "Do not infer executable classes/commands from title or accept unbounded repeat counts."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The document is presentation data; no arbitrary URL, filesystem path or privileged action is derived from it."
+        ]
+      },
+      "derivation": {
+        "group": "typed-shortcut-property-list",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around import display-only repeated-title preferences from a typed property list. Boundary: Untrusted plist fields populate a fixed Decodable struct without runtime class activation. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/documentation/foundation/propertylistdecoder"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-safe-03",
+      "language": "swift",
+      "vulnerable": false,
+      "scenario": "literal-document-search-regex-escaping",
+      "files": {
+        "DocumentSearch.swift": "import Foundation\nstruct DocumentSearch {\n    enum SearchError: Error { case tooLarge }\n    static func first(needle: String, in document: String) throws -> NSRange? {\n        guard needle.utf8.count <= 80, document.utf8.count <= 65536 else { throw SearchError.tooLarge }\n        if needle.isEmpty { return nil }\n        let literal = NSRegularExpression.escapedPattern(for: needle)\n        let expression = try NSRegularExpression(pattern: literal)\n        let whole = NSRange(document.startIndex..<document.endIndex, in: document)\n        return expression.firstMatch(in: document, range: whole)?.range\n    }\n}\n",
+        "SearchSelection.swift": "import Foundation\nstruct SearchSelection {\n    static func highlight(query: String, loadedText: String) throws -> NSRange? {\n        try DocumentSearch.first(needle: query, in: loadedText)\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Escaping converts regex metacharacters to literal data, and input bounds constrain the search. Unicode range conversion uses Foundation string indexing rather than byte offsets.",
+      "remediation_constraints": [
+        "Find the first exact literal phrase in a bounded document for highlighting.",
+        "Retain literal escaping, bounded lengths and UTF-16-compatible result ranges.",
+        "Do not enable user regexes, remove punctuation from the phrase, or compute ranges from UTF-8 bytes."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "Foundation ICU regular-expression engine; output range is consumed by a text view using UTF-16 NSRange. Both search string and document are plain text, not patterns or executable templates."
+      },
+      "operation_contract": {
+        "purpose": "Find the first exact literal phrase in a bounded document for highlighting.",
+        "trust_boundary": "User text is escaped before it becomes regular-expression syntax; no raw regex is accepted.",
+        "legitimate_examples": [
+          {
+            "input": "needle=a.*b, document=try a.*b now",
+            "expected": "Highlights literal a.*b"
+          },
+          {
+            "input": "needle=🍎, document=x🍎y",
+            "expected": "Correct UTF-16 range for the emoji"
+          }
+        ],
+        "permitted_changes": [
+          "Retain literal escaping, bounded lengths and UTF-16-compatible result ranges."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not enable user regexes, remove punctuation from the phrase, or compute ranges from UTF-8 bytes."
+        ]
+      },
+      "regression_traps": [
+        "Do not enable user regexes, remove punctuation from the phrase, or compute ranges from UTF-8 bytes."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "General regex denial-of-service is not inferred from a fixed escaped literal; empty query intentionally yields no highlight."
+        ]
+      },
+      "derivation": {
+        "group": "literal-document-search-regex-escaping",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around find the first exact literal phrase in a bounded document for highlighting. Boundary: User text is escaped before it becomes regular-expression syntax; no raw regex is accepted. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/documentation/foundation/nsregularexpression/escapedpattern(for:)"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-safe-04",
+      "language": "swift",
+      "vulnerable": false,
+      "scenario": "public-calendar-default-urlsession",
+      "files": {
+        "HolidayCalendar.swift": "import Foundation\nstruct HolidayCalendar {\n    enum CalendarError: Error { case response }\n    static func fetch() async throws -> Data {\n        let configuration = URLSessionConfiguration.ephemeral\n        configuration.timeoutIntervalForRequest = 4\n        let session = URLSession(configuration: configuration)\n        defer { session.invalidateAndCancel() }\n        let url = URL(string: \"https://calendar.example.org/holidays.json\")!\n        let (data, response) = try await session.data(from: url)\n        guard let http = response as? HTTPURLResponse, http.statusCode == 200,\n              response.url?.scheme == \"https\", response.url?.host == \"calendar.example.org\",\n              data.count <= 65536 else { throw CalendarError.response }\n        return data\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "No certificate/hostname checks are disabled, and the fixed URL carries no secrets. Final origin and size are validated before data is used.",
+      "remediation_constraints": [
+        "Download a bounded public holiday calendar over default platform-authenticated HTTPS.",
+        "Preserve platform authentication and validate successful response metadata.",
+        "Do not add permissive challenge handling or return failed-response bytes as a calendar."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "Default ATS enabled with no exceptions, no custom trust delegate or global protocol overrides. Endpoint is public and operator-controlled; authenticated HTTPS redirects only within the same final host are accepted. No credentials are sent."
+      },
+      "operation_contract": {
+        "purpose": "Download a bounded public holiday calendar over default platform-authenticated HTTPS.",
+        "trust_boundary": "Network response is untrusted until URLSession certificate checks and response validation complete.",
+        "legitimate_examples": [
+          {
+            "input": "200 JSON from calendar host",
+            "expected": "Returns bytes"
+          },
+          {
+            "input": "Bad certificate or final different host",
+            "expected": "Throws"
+          }
+        ],
+        "permitted_changes": [
+          "Preserve platform authentication and validate successful response metadata."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not add permissive challenge handling or return failed-response bytes as a calendar."
+        ]
+      },
+      "regression_traps": [
+        "Do not add permissive challenge handling or return failed-response bytes as a calendar."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The public endpoint and system trust store are deployment assumptions. Redirect requests carry no credentials and do not represent arbitrary user-directed SSRF."
+        ]
+      },
+      "derivation": {
+        "group": "public-calendar-default-urlsession",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around download a bounded public holiday calendar over default platform-authenticated https. Boundary: Network response is untrusted until URLSession certificate checks and response validation complete. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/documentation/foundation/urlsession"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-safe-05",
+      "language": "swift",
+      "vulnerable": false,
+      "scenario": "filesystem-image-literal-name-stat",
+      "files": {
+        "ImageMetadata.swift": "import Foundation\nstruct ImageMetadata {\n    static func byteCount(of selectedFile: URL) throws -> UInt64 {\n        guard selectedFile.isFileURL else { throw CocoaError(.fileReadUnsupportedScheme) }\n        let attributes = try FileManager.default.attributesOfItem(atPath: selectedFile.path)\n        guard let size = attributes[.size] as? NSNumber else { throw CocoaError(.fileReadUnknown) }\n        return size.uint64Value\n    }\n}\n",
+        "OpenPanelAction.swift": "import Foundation\nstruct OpenPanelAction {\n    func inspect(userSelectedAuthorizedURL: URL) throws -> String {\n        \"Size: \\(try ImageMetadata.byteCount(of: userSelectedAuthorizedURL)) bytes\"\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "An arbitrary user-authorized filesystem selection is the intended desktop operation. A pathname alone does not establish traversal, and FileManager does not interpret shell punctuation.",
+      "remediation_constraints": [
+        "Display byte size of a user-selected authorized local file.",
+        "Retain the explicit file-URL check and user-selected sandbox authorization.",
+        "Do not narrow legitimate selections to invented resource IDs or invoke shell stat with interpolation."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "User explicitly selects a file through the macOS open panel; sandbox grants access to that selected URL only. Operation intentionally accepts any user-authorized local filename, including spaces and leading dashes."
+      },
+      "operation_contract": {
+        "purpose": "Display byte size of a user-selected authorized local file.",
+        "trust_boundary": "A selected filename is passed to a filesystem metadata API, never to a shell or app-root traversal boundary.",
+        "legitimate_examples": [
+          {
+            "input": "Selected filename --help.png",
+            "expected": "Its actual byte count"
+          },
+          {
+            "input": "Selected filename photo;notes.jpg",
+            "expected": "Its actual byte count"
+          }
+        ],
+        "permitted_changes": [
+          "Retain the explicit file-URL check and user-selected sandbox authorization."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not narrow legitimate selections to invented resource IDs or invoke shell stat with interpolation."
+        ]
+      },
+      "regression_traps": [
+        "Do not narrow legitimate selections to invented resource IDs or invoke shell stat with interpolation."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The selection/entitlement boundary is trusted UI infrastructure; attacker access to unrelated files is not granted by this function."
+        ]
+      },
+      "derivation": {
+        "group": "filesystem-image-literal-name-stat",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around display byte size of a user-selected authorized local file. Boundary: A selected filename is passed to a filesystem metadata API, never to a shell or app-root traversal boundary. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/documentation/foundation/filemanager/attributesofitem(atpath:)"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-safe-06",
+      "language": "swift",
+      "vulnerable": false,
+      "scenario": "preferences-sqlite-bound-update",
+      "files": {
+        "ColorPreference.swift": "import Foundation\nimport SQLite3\nstruct ColorPreference {\n    enum DBError: Error { case failure }\n    static func save(label: String, database: OpaquePointer) throws {\n        guard label.utf8.count <= 80 else { throw DBError.failure }\n        var statement: OpaquePointer?\n        guard sqlite3_prepare_v2(database, \"UPDATE preferences SET color_label=?1 WHERE id=1\", -1, &statement, nil) == SQLITE_OK else {\n            throw DBError.failure\n        }\n        defer { sqlite3_finalize(statement) }\n        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)\n        let bound = label.withCString { sqlite3_bind_text(statement, 1, $0, -1, transient) }\n        guard bound == SQLITE_OK, sqlite3_step(statement) == SQLITE_DONE else { throw DBError.failure }\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The prepared UPDATE binds a copied string value with correct lifetime, handles errors and finalizes the statement. A misleading unsafeBitCast is the documented SQLITE_TRANSIENT sentinel conversion rather than input-derived pointer arithmetic.",
+      "remediation_constraints": [
+        "Save the exact user color label into one fixed preferences row.",
+        "Retain prepared binding and correct SQLite buffer ownership.",
+        "Do not remove apostrophes, expand the UPDATE to every row, or replace SQLITE_TRANSIENT with an invalid buffer lifetime."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "SQLite3.45; one app-owned preferences row id1 exists. UI labels disallow embedded NUL before this API and contain arbitrary other Unicode. SQLITE_TRANSIENT makes SQLite copy temporary UTF-8 buffer data."
+      },
+      "operation_contract": {
+        "purpose": "Save the exact user color label into one fixed preferences row.",
+        "trust_boundary": "Untrusted label is bound after statement preparation and never contributes to SQL syntax.",
+        "legitimate_examples": [
+          {
+            "input": "label=artist's blue",
+            "expected": "Exact label saved"
+          },
+          {
+            "input": "label=red; DELETE",
+            "expected": "Punctuation remains label data"
+          }
+        ],
+        "permitted_changes": [
+          "Retain prepared binding and correct SQLite buffer ownership."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not remove apostrophes, expand the UPDATE to every row, or replace SQLITE_TRANSIENT with an invalid buffer lifetime."
+        ]
+      },
+      "regression_traps": [
+        "Do not remove apostrophes, expand the UPDATE to every row, or replace SQLITE_TRANSIENT with an invalid buffer lifetime."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Embedded NUL is excluded by the stated input contract; the case tests binding and lifetime rather than silent C-string truncation."
+        ]
+      },
+      "derivation": {
+        "group": "preferences-sqlite-bound-update",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around save the exact user color label into one fixed preferences row. Boundary: Untrusted label is bound after statement preparation and never contributes to SQL syntax. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.sqlite.org/c3ref/bind_blob.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-vulnerable-01",
+      "language": "swift",
+      "vulnerable": true,
+      "scenario": "desktop-license-session-trust-override",
+      "files": {
+        "LicenseService.swift": "import Foundation\nimport Security\nfinal class LicenseService: NSObject, URLSessionDelegate {\n    private lazy var session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)\n    func licensed() async throws -> Bool {\n        let url = URL(string: \"https://license.example.org/desktop/status\")!\n        let (data, _) = try await session.data(from: url)\n        return data == Data(\"licensed\".utf8)\n    }\n    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,\n                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {\n        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,\n           let trust = challenge.protectionSpace.serverTrust {\n            completionHandler(.useCredential, URLCredential(trust: trust))\n        } else { completionHandler(.performDefaultHandling, nil) }\n    }\n}\n",
+        "Info.plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict>\n<key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict>\n</dict></plist>\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "LicenseService.swift"
+        }
+      ],
+      "rationale": "The application both relaxes ATS and returns a trust credential without evaluating the peer. Fixed URL selection does not authenticate its TLS responder.",
+      "remediation_constraints": [
+        "Authenticate the licensing service before using its licensed response to unlock desktop features.",
+        "Restore platform trust/hostname evaluation and remove unnecessary ATS exceptions without eliminating the license request.",
+        "Do not always return licensed, silently allow TLS errors, or replace network status with a local constant."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "Application bundle includes the supplied ATS exception. Developer mode is disabled; the shown delegate is used in production. An active network attacker can present an untrusted certificate matching the fixed hostname."
+      },
+      "operation_contract": {
+        "purpose": "Authenticate the licensing service before using its licensed response to unlock desktop features.",
+        "trust_boundary": "The network response controls a licensing decision while every server trust challenge is accepted.",
+        "legitimate_examples": [
+          {
+            "input": "Authenticated service sends licensed",
+            "expected": true
+          },
+          {
+            "input": "Authenticated service sends expired",
+            "expected": false
+          }
+        ],
+        "permitted_changes": [
+          "Restore platform trust/hostname evaluation and remove unnecessary ATS exceptions without eliminating the license request."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not always return licensed, silently allow TLS errors, or replace network status with a local constant."
+        ]
+      },
+      "regression_traps": [
+        "Do not always return licensed, silently allow TLS errors, or replace network status with a local constant."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "License protocol freshness and offline grace policy are separately controlled; the candidate isolates reachable transport authentication."
+        ]
+      },
+      "derivation": {
+        "group": "desktop-license-session-trust-override",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around authenticate the licensing service before using its licensed response to unlock desktop features. Boundary: The network response controls a licensing decision while every server trust challenge is accepted. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/NetworkingTopics/Articles/OverridingSSLChainValidationCorrectly.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-vulnerable-02",
+      "language": "swift",
+      "vulnerable": true,
+      "scenario": "mobile-support-alamofire-upload-trust",
+      "files": {
+        "SupportUpload.swift": "import Foundation\nimport Alamofire\nfinal class SupportUpload {\n    private let session: Session\n    init() {\n        let manager = ServerTrustManager(evaluators: [\"support.example.org\": DisabledTrustEvaluator()])\n        session = Session(serverTrustManager: manager)\n    }\n    func send(redactedLog: Data, completion: @escaping (Bool) -> Void) {\n        session.upload(redactedLog, to: \"https://support.example.org/logs\", method: .post)\n            .validate(statusCode: 200..<300)\n            .response { result in completion(result.error == nil) }\n    }\n}\n",
+        "Info.plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict>\n<key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict>\n</dict></plist>\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "SupportUpload.swift"
+        }
+      ],
+      "rationale": "DisabledTrustEvaluator removes server authentication on the exact production host used by Session.upload. HTTP status validation occurs after the private body has crossed the untrusted connection.",
+      "remediation_constraints": [
+        "Upload private support diagnostics only to the authenticated support origin.",
+        "Use default or correctly pinned trust evaluation for the support domain.",
+        "Do not replace the upload with a success callback, leak logs to a fallback HTTP endpoint, or suppress transport errors."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "Alamofire5.9.1; supplied ATS exception is active. Logs are redacted of credentials but contain private user diagnostics. Uploader instance remains alive until completion; URL is operator-controlled."
+      },
+      "operation_contract": {
+        "purpose": "Upload private support diagnostics only to the authenticated support origin.",
+        "trust_boundary": "A network attacker can receive the uploaded body because trust evaluation for the production host is disabled.",
+        "legitimate_examples": [
+          {
+            "input": "Successful trusted upload",
+            "expected": "Completion true"
+          },
+          {
+            "input": "Rejected HTTP response",
+            "expected": "Completion false"
+          }
+        ],
+        "permitted_changes": [
+          "Use default or correctly pinned trust evaluation for the support domain."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not replace the upload with a success callback, leak logs to a fallback HTTP endpoint, or suppress transport errors."
+        ]
+      },
+      "regression_traps": [
+        "Do not replace the upload with a success callback, leak logs to a fallback HTTP endpoint, or suppress transport errors."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Redaction does not make diagnostic content public. Request size is capped by the trusted diagnostic collector before this method."
+        ]
+      },
+      "derivation": {
+        "group": "mobile-support-alamofire-upload-trust",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around upload private support diagnostics only to the authenticated support origin. Boundary: A network attacker can receive the uploaded body because trust evaluation for the production host is disabled. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://alamofire.github.io/Alamofire/Classes/DisabledTrustEvaluator.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-vulnerable-03",
+      "language": "swift",
+      "vulnerable": true,
+      "scenario": "shared-sketch-legacy-object-archive",
+      "files": {
+        "SketchImport.swift": "import Foundation\nstruct SketchImport {\n    static func labels(from sharedAttachment: Data) throws -> [String] {\n        guard sharedAttachment.count <= 65536 else { throw ImportError.tooLarge }\n        let object = try NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(sharedAttachment)\n        guard let labels = object as? [String], labels.count <= 20 else {\n            throw ImportError.invalidShape\n        }\n        return labels\n    }\n    enum ImportError: Error { case tooLarge, invalidShape }\n}\n",
+        "SketchViewModel.swift": "import Foundation\nfinal class SketchViewModel {\n    private(set) var labels: [String] = []\n    func openSharedAttachment(_ data: Data) throws {\n        labels = try SketchImport.labels(from: data)\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-deserialization",
+          "cwe": "CWE-502",
+          "path": "SketchImport.swift"
+        }
+      ],
+      "rationale": "An unrestricted unarchiver constructs the object graph before the shape check. A post-decode cast cannot prevent decoding an unintended NSCoding class; arbitrary-code execution is not presumed for every class.",
+      "remediation_constraints": [
+        "Import up to20 text labels from a shared sketch attachment.",
+        "Use secure class-constrained decoding of the documented array/string graph, preserving legacy supported label archives where safe.",
+        "Do not return archive bytes as text, accept arbitrary NSCoding classes, or clear every imported label."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "Legacy NSKeyedArchiver document format; desktop app links AppKit/Foundation NSCoding classes. Coworker attachments are untrusted even when their extension matches. Legacy APIs remain available in this runtime."
+      },
+      "operation_contract": {
+        "purpose": "Import up to20 text labels from a shared sketch attachment.",
+        "trust_boundary": "Archive class metadata is interpreted before an array-of-strings cast is performed.",
+        "legitimate_examples": [
+          {
+            "input": "Legacy archive of [north, south]",
+            "expected": [
+              "north",
+              "south"
+            ]
+          },
+          {
+            "input": "Legacy archive of Unicode labels",
+            "expected": "Same Unicode strings in order"
+          }
+        ],
+        "permitted_changes": [
+          "Use secure class-constrained decoding of the documented array/string graph, preserving legacy supported label archives where safe."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not return archive bytes as text, accept arbitrary NSCoding classes, or clear every imported label."
+        ]
+      },
+      "regression_traps": [
+        "Do not return archive bytes as text, accept arbitrary NSCoding classes, or clear every imported label."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The candidate concerns object activation; specific installed gadgets and their side effects require human runtime review rather than an invented exploit claim."
+        ]
+      },
+      "derivation": {
+        "group": "shared-sketch-legacy-object-archive",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around import up to20 text labels from a shared sketch attachment. Boundary: Archive class metadata is interpreted before an array-of-strings cast is performed. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/videos/play/wwdc2020/10189/"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-vulnerable-04",
+      "language": "swift",
+      "vulnerable": true,
+      "scenario": "local-receipt-tag-deletion-sql",
+      "files": {
+        "ReceiptTags.swift": "import Foundation\nimport SQLite3\nstruct ReceiptTags {\n    enum StoreError: Error { case sql(Int32) }\n    static func removeTag(_ name: String, database: OpaquePointer) throws {\n        guard name.utf8.count <= 100 else { throw StoreError.sql(SQLITE_TOOBIG) }\n        let statement = \"DELETE FROM receipt_tags WHERE tag = '\" + name + \"'\"\n        let result = sqlite3_exec(database, statement, nil, nil, nil)\n        guard result == SQLITE_OK else { throw StoreError.sql(result) }\n    }\n}\n",
+        "TagAction.swift": "import Foundation\nstruct TagAction {\n    let database: OpaquePointer\n    func remove(importedTag: String) throws {\n        try ReceiptTags.removeTag(importedTag, database: database)\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "ReceiptTags.swift"
+        }
+      ],
+      "rationale": "String concatenation allows tag content to close the quoted predicate or add statements. The database handle is trusted, but imported labels are not SQL syntax.",
+      "remediation_constraints": [
+        "Delete exactly the selected tag from local receipts.",
+        "Use a prepared DELETE with one bound text parameter and preserve error propagation.",
+        "Do not delete all tags, strip apostrophes from names, or silently ignore SQL errors."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "SQLite3.45; open database handle is app-owned. receipt_tags(receipt_id INTEGER,tag TEXT) is populated by imported receipts. User may remove a selected imported tag, not unrelated receipts/tags."
+      },
+      "operation_contract": {
+        "purpose": "Delete exactly the selected tag from local receipts.",
+        "trust_boundary": "Untrusted imported tag names become SQLite statement text, including multiple-statement execution through sqlite3_exec.",
+        "legitimate_examples": [
+          {
+            "input": "tag=travel",
+            "expected": "Only travel tag rows are deleted"
+          },
+          {
+            "input": "tag=client's copy",
+            "expected": "Apostrophe-containing tag can be removed"
+          }
+        ],
+        "permitted_changes": [
+          "Use a prepared DELETE with one bound text parameter and preserve error propagation."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not delete all tags, strip apostrophes from names, or silently ignore SQL errors."
+        ]
+      },
+      "regression_traps": [
+        "Do not delete all tags, strip apostrophes from names, or silently ignore SQL errors."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Database ownership is local; the attacker controls imported metadata and can influence a later legitimate removal action."
+        ]
+      },
+      "derivation": {
+        "group": "local-receipt-tag-deletion-sql",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around delete exactly the selected tag from local receipts. Boundary: Untrusted imported tag names become SQLite statement text, including multiple-statement execution through sqlite3_exec. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.sqlite.org/c3ref/exec.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-vulnerable-05",
+      "language": "swift",
+      "vulnerable": true,
+      "scenario": "signed-design-manifest-md5-binding",
+      "files": {
+        "DesignGate.swift": "import Foundation\nimport CryptoKit\nstruct ApprovedDesign { let md5: String }\nstruct DesignGate {\n    static func accept(download: Data, trustedEntry: ApprovedDesign) throws -> Data {\n        guard download.count <= 1048576 else { throw GateError.size }\n        let digest = Insecure.MD5.hash(data: download)\n        let hex = digest.map { String(format: \"%02x\", $0) }.joined()\n        guard hex == trustedEntry.md5 else { throw GateError.digest }\n        return download\n    }\n    enum GateError: Error { case size, digest }\n}\n",
+        "DesignDisplay.swift": "import Foundation\nstruct DesignDisplay {\n    static func approvedBytes(untrustedDownload: Data, verifiedManifestEntry: ApprovedDesign) throws -> Data {\n        try DesignGate.accept(download: untrustedDownload, trustedEntry: verifiedManifestEntry)\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "weak-cryptography",
+          "cwe": "CWE-328",
+          "path": "DesignGate.swift"
+        }
+      ],
+      "rationale": "A collision-capable supplier can substitute a different file with the same MD5 after one file is approved. Authenticating the manifest does not repair a collision-weak content binding.",
+      "remediation_constraints": [
+        "Bind approved design artwork to the signed manifest before display.",
+        "Version the manifest to a collision-resistant content digest and migrate trust records through the approval workflow.",
+        "Do not remove digest checking, treat the unsigned download digest as authoritative, or silently accept all old/new algorithms."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "Manifest signature is verified upstream with a trusted key. A malicious supplier can choose a pair of colliding design files before submitting one for approval, then serve the other. Accepted bytes are displayed as approved regulatory artwork."
+      },
+      "operation_contract": {
+        "purpose": "Bind approved design artwork to the signed manifest before display.",
+        "trust_boundary": "Supplier-controlled artwork is identified by collision-broken MD5 in an otherwise authenticated manifest.",
+        "legitimate_examples": [
+          {
+            "input": "Bytes of the approved artwork",
+            "expected": "Returns identical approved bytes"
+          },
+          {
+            "input": "Ordinary changed artwork",
+            "expected": "Rejects mismatched digest"
+          }
+        ],
+        "permitted_changes": [
+          "Version the manifest to a collision-resistant content digest and migrate trust records through the approval workflow."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not remove digest checking, treat the unsigned download digest as authoritative, or silently accept all old/new algorithms."
+        ]
+      },
+      "regression_traps": [
+        "Do not remove digest checking, treat the unsigned download digest as authoritative, or silently accept all old/new algorithms."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The threat requires supplier control before approval and a suitable colliding file pair; arbitrary second-preimage attacks are not claimed."
+        ]
+      },
+      "derivation": {
+        "group": "signed-design-manifest-md5-binding",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around bind approved design artwork to the signed manifest before display. Boundary: Supplier-controlled artwork is identified by collision-broken MD5 in an otherwise authenticated manifest. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/documentation/cryptokit/insecure/md5"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-swift-vulnerable-06",
+      "language": "swift",
+      "vulnerable": true,
+      "scenario": "report-renderer-manifest-executable-selection",
+      "files": {
+        "ReportRenderer.swift": "import Foundation\nstruct ReportRenderer {\n    enum RenderError: Error { case invalid }\n    static func render(kindFromManifest: String, ownedInput: URL) throws -> Int32 {\n        guard kindFromManifest.count <= 200 else { throw RenderError.invalid }\n        let helperPath = \"/Applications/Reports.app/Contents/Helpers/\" + kindFromManifest\n        let child = Process()\n        child.executableURL = URL(fileURLWithPath: helperPath)\n        child.arguments = [ownedInput.path]\n        child.standardOutput = FileHandle.nullDevice\n        child.standardError = FileHandle.nullDevice\n        try child.run()\n        child.waitUntilExit()\n        return child.terminationStatus\n    }\n}\n",
+        "ReportManifest.swift": "import Foundation\nstruct ReportManifest: Decodable { let renderer: String }\nstruct ReportAction {\n    static func generate(manifest: Data, serverOwnedInput: URL) throws -> Int32 {\n        guard manifest.count <= 4096 else { throw ReportRenderer.RenderError.invalid }\n        let value = try JSONDecoder().decode(ReportManifest.self, from: manifest)\n        return try ReportRenderer.render(kindFromManifest: value.renderer, ownedInput: serverOwnedInput)\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "command-injection",
+          "cwe": "CWE-78",
+          "path": "ReportRenderer.swift"
+        }
+      ],
+      "rationale": "This does not require a shell: parent components in the renderer ID can select an attacker-owned executable outside the trusted helper directory. Direct argv prevents shell expansion but does not authorize the executable itself.",
+      "remediation_constraints": [
+        "Render an owned report using one of the two published helper IDs and return its exit code.",
+        "Map the two renderer IDs to fixed trusted executable URLs and reject all other IDs before launch.",
+        "Do not accept arbitrary executable paths, lose the selected output format, or claim argument separation alone secures executable selection."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Swift 5.9 language mode; macOS14 Foundation and Security frameworks",
+        "libraries_platform_setup": "Non-sandboxed desktop rendering service. Two supported renderer IDs, pdf and svg, correspond to owned helper executables. An untrusted local theme author can submit a manifest and place an executable in its own filesystem area, but is not authorized to run code as the rendering service. Process accepts the resulting filesystem path without additional policy."
+      },
+      "operation_contract": {
+        "purpose": "Render an owned report using one of the two published helper IDs and return its exit code.",
+        "trust_boundary": "A declarative manifest field selects an executable path with unchecked parent traversal, crossing into service-account code execution.",
+        "legitimate_examples": [
+          {
+            "input": "renderer=pdf",
+            "expected": "Run the bundled pdf helper with the owned input"
+          },
+          {
+            "input": "renderer=svg",
+            "expected": "Run the bundled svg helper with the owned input"
+          }
+        ],
+        "permitted_changes": [
+          "Map the two renderer IDs to fixed trusted executable URLs and reject all other IDs before launch."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not accept arbitrary executable paths, lose the selected output format, or claim argument separation alone secures executable selection."
+        ]
+      },
+      "regression_traps": [
+        "Do not accept arbitrary executable paths, lose the selected output format, or claim argument separation alone secures executable selection."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The attacker must have an executable reachable through the service filesystem; that prerequisite is explicit. Trusted input/report paths avoid conflating this with arbitrary document reads."
+        ]
+      },
+      "derivation": {
+        "group": "report-renderer-manifest-executable-selection",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around render an owned report using one of the two published helper ids and return its exit code. Boundary: A declarative manifest field selects an executable path with unchecked parent traversal, crossing into service-account code execution. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://developer.apple.com/documentation/foundation/process"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

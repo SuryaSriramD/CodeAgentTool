@@ -1,71 +1,25 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
-venv/
-.venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Git
-.git/
-.gitignore
-
-# Logs
-Logs/
-*.log
-online_log/
-
-# Test files
-tests/
-test_*.py
-
-# Documentation
-docs/
-*.md
-*.txt
-!requirements.txt
-
-# Examples and datasets
-Example/
-datasets/
-WareHouse/
-storage/
-
-# Misc
-misc/
-RQs/
-ScriptTest/
-Diff-CodeAgent4.0/
-CompanyConfig/
+*
+!Dockerfile
+!codeagent-scanner/
+!codeagent-scanner/requirements.txt
+!codeagent-scanner/settings.py
+!codeagent-scanner/worker.py
+!codeagent-scanner/run.py
+!codeagent-scanner/cli.py
+!codeagent-scanner/api/**
+!codeagent-scanner/analyzers/**
+!codeagent-scanner/ingestion/**
+!codeagent-scanner/integration/**
+!codeagent-scanner/pipeline/**
+!codeagent-scanner/rules/**
+!codeagent-scanner/dotnet-analyzer/**
+**/bin/**
+**/obj/**
+**/publish/**
+**/__pycache__/**
+**/._*
+**/.DS_Store
+**/.env*
+codeagent-scanner/integration/agent_bridge.py
+codeagent-scanner/integration/camel_bridge.py
+codeagent-scanner/integration/simple_ai_analyzer.py

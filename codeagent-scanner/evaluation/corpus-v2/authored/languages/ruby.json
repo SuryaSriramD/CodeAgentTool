@@ -1,0 +1,967 @@
+{
+  "language": "ruby",
+  "cases": [
+    {
+      "id": "v2-ruby-vulnerable-01",
+      "language": "ruby",
+      "vulnerable": true,
+      "scenario": "rails-event-retention-predicate",
+      "files": {
+        "retention_report.rb": "class RetentionReport\n  def self.count_for(account_id, raw_days)\n    days = raw_days.to_s\n    raise ArgumentError, 'filter too long' if days.bytesize > 80\n    # account_id is supplied by authentication; only the interval is editable.\n    Event.where(account_id: account_id)\n         .where(\"created_at >= CURRENT_TIMESTAMP - INTERVAL '#{days} days'\")\n         .count\n  end\nend\n",
+        "events_controller.rb": "class EventsController < ApplicationController\n  def retained_count\n    render json: { count: RetentionReport.count_for(current_account.id, params[:days]) }\n  end\nend\n",
+        "schema.sql": "CREATE TABLE events(id BIGSERIAL PRIMARY KEY, account_id BIGINT NOT NULL, created_at TIMESTAMPTZ NOT NULL);\nINSERT INTO events(account_id, created_at) VALUES(4, CURRENT_TIMESTAMP - INTERVAL '2 days');\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "retention_report.rb"
+        }
+      ],
+      "rationale": "String interpolation places the day input inside a PostgreSQL interval literal without binding or a strict integer conversion. The surrounding ActiveRecord chain does not sanitize a raw SQL string.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Validate a bounded whole-day count and bind a timestamp cutoff or safely multiply a bound integer by a fixed interval."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "Rails 7.2.2.1, pg 1.5.9, PostgreSQL 16; Event maps events, application timezone UTC; current_account authenticated; evaluation fixes the reference time to avoid boundary ambiguity."
+      },
+      "operation_contract": {
+        "purpose": "Count recent account events using a customer-selected retention window of whole days.",
+        "trust_boundary": "An authenticated account user controls an interval fragment; Rails safely builds the account predicate but receives an unsafe raw SQL condition.",
+        "legitimate_examples": [
+          {
+            "input": "account_id=4; days=7; one event two days old",
+            "expected": "Return count=1."
+          }
+        ],
+        "permitted_changes": [
+          "Validate a bounded whole-day count and bind a timestamp cutoff or safely multiply a bound integer by a fixed interval."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "An Integer() conversion must reject malformed text rather than use to_i, which silently accepts prefixes; preserve day-window semantics and account scoping."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for count recent account events using a customer-selected retention window of whole days. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "rails-event-retention-predicate",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An authenticated account user controls an interval fragment; Rails safely builds the account predicate but receives an unsafe raw SQL condition. The operation is count recent account events using a customer-selected retention window of whole days.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://guides.rubyonrails.org/security.html#sql-injection"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-vulnerable-02",
+      "language": "ruby",
+      "vulnerable": true,
+      "scenario": "calibration-basename-open-dispatch",
+      "files": {
+        "calibration_import.rb": "require 'csv'\nSPOOL_DIRECTORY = '/srv/calibration-imports'.freeze\n\ndef import_calibration_file(name)\n  unless name.instance_of?(String) && name.bytesize.between?(1, 120)\n    raise ArgumentError, 'filename'\n  end\n  if name.include?('/') || name.include?(\"\\0\") || ['.', '..'].include?(name)\n    raise ArgumentError, 'basename required'\n  end\n  # Import jobs run serially; the caller selects one literal staged filename.\n  bytes = Dir.chdir(SPOOL_DIRECTORY) do\n    Kernel.open(name, 'rb') { |stream| stream.read(32_769) }\n  end\n  raise ArgumentError, 'calibration file too large' if bytes.bytesize > 32_768\n  CSV.parse(bytes, headers: true).map(&:to_h)\nend\n",
+        "calibration_request.rb": "require_relative 'calibration_import'\n\ndef preview_calibration(params)\n  # An authenticated operator may inspect the public staged calibration set.\n  { 'readings' => import_calibration_file(params.fetch('filename')) }\nend\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "calibration_import.rb"
+        }
+      ],
+      "rationale": "Kernel.open treats a leading pipe as a command stream, even though the input passes the basename check. The command is launched before CSV parsing, so later malformed-data rejection cannot undo process execution.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Use File.open or another file-only API on the selected basename within the fixed spool, retaining bounded reads and header-keyed CSV output.",
+        "Do not execute the selected name, remove CSV parsing, coerce readings to numbers, or discard legitimate punctuation in filenames."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "Ruby 3.3.6 with csv 3.3.2; one serial worker, no concurrent Dir.chdir use. Root-owned spool contains only authorized regular calibration files with no symlinks; it is immutable while a job runs. Trusted PATH and a five-second worker deadline. Every staged file is valid UTF-8 CSV with unique headers and at most 32 KiB."
+      },
+      "operation_contract": {
+        "purpose": "Parse a literal staged calibration CSV basename into header-keyed reading records.",
+        "trust_boundary": "An authenticated operator selects a filename in a server-owned spool; selecting a file must not authorize launching a subprocess.",
+        "legitimate_examples": [
+          {
+            "input": "filename=probe A.csv; file bytes=sensor,value\\nA,1.25\\n",
+            "expected": {
+              "readings": [
+                {
+                  "sensor": "A",
+                  "value": "1.25"
+                }
+              ]
+            }
+          }
+        ],
+        "permitted_changes": [
+          "Use File.open or another file-only API on the selected basename within the fixed spool, retaining bounded reads and header-keyed CSV output."
+        ],
+        "forbidden_changes": [
+          "Do not execute the selected name, remove CSV parsing, coerce readings to numbers, or discard legitimate punctuation in filenames."
+        ]
+      },
+      "regression_traps": [
+        "POSIX basenames may legitimately contain spaces, pipe characters or punctuation; use file-only opening rather than silently converting those names into shell syntax or banning the documented filename set."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for parse a literal staged calibration csv basename into header-keyed reading records. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The spool is immutable, contains no symlinks, and is wholly authorized for this operator role; a writable spool would require additional containment and race handling.",
+          "CSV data is returned as JSON text only and is never exported into spreadsheet formulas or executed."
+        ]
+      },
+      "derivation": {
+        "group": "calibration-basename-open-dispatch",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An authenticated operator selects a filename in a server-owned spool; selecting a file must not authorize launching a subprocess. The operation is parse a literal staged calibration csv basename into header-keyed reading records.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.ruby-lang.org/en/3.3/Kernel.html#method-i-open",
+          "https://docs.ruby-lang.org/en/3.3/File.html#method-c-open"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      },
+      "authoring_history": [
+        {
+          "event": "replaced_before_static_validation",
+          "previous_scenario": "integration-yaml-legacy-object-restoration",
+          "previous_content_sha256": "f7e9f2cad10105244778e2d5d7cc0d2c2474d054088f9455d811ba8259f54f04",
+          "previous_files": {
+            "integration_import.rb": "require 'psych'\nrequire_relative 'legacy_policy'\n\ndef import_integration_yaml(text)\n  raise ArgumentError, 'file too large' if text.bytesize > 4096\n  value = Psych.unsafe_load(text)\n  raise ArgumentError, 'mapping required' unless value.instance_of?(Hash)\n  raise ArgumentError, 'name required' unless value['name'].instance_of?(String)\n  { 'name' => value['name'], 'enabled' => value.fetch('enabled', false) }\nend\n",
+            "legacy_policy.rb": "# Internal backup support is loaded in the same process as integration import.\nmodule SecurityPolicy\n  SETTINGS = { 'mfa_required' => true }\nend\nclass LegacyPolicyBackup\n  def init_with(coder)\n    SecurityPolicy::SETTINGS['mfa_required'] = coder['mfa_required']\n  end\nend\n"
+          },
+          "previous_derivation_group": "privileged-object-restoration-hooks",
+          "reason": "Retired the privileged-restoration-hook draft due to known shared conception with another Ruby draft and PHP vulnerable-03; this new case changes source, operation, trust boundary and vulnerability mechanism."
+        }
+      ],
+      "authoring_notes": [
+        "Planning slot originally targeted unsafe-deserialization. With coordinator approval it now covers shell-injection to replace a known correlated authoring draft. No rules or scanner outputs were consulted; independent human judgment is still pending."
+      ]
+    },
+    {
+      "id": "v2-ruby-vulnerable-03",
+      "language": "ruby",
+      "vulnerable": true,
+      "scenario": "tar-symlink-parent-extraction",
+      "files": {
+        "bundle_extract.rb": "require 'rubygems/package'\nrequire 'zlib'\nrequire 'stringio'\nrequire 'pathname'\nrequire 'fileutils'\n\ndef extract_document_bundle(compressed, destination)\n  raise ArgumentError, 'archive too large' if compressed.bytesize > 2_097_152\n  count = 0\n  Zlib::GzipReader.wrap(StringIO.new(compressed)) do |gzip|\n    Gem::Package::TarReader.new(gzip) do |archive|\n      archive.each do |entry|\n        count += 1\n        raise ArgumentError, 'entry limits' if count > 100 || entry.header.size > 65_536\n        relative = Pathname.new(entry.full_name).cleanpath\n        if relative.absolute? || relative.each_filename.any? { |part| part == '..' }\n          raise ArgumentError, 'entry path escapes'\n        end\n        target = File.join(destination, relative.to_s)\n        if entry.directory?\n          FileUtils.mkdir_p(target)\n        elsif entry.header.typeflag == '2'\n          FileUtils.mkdir_p(File.dirname(target))\n          File.symlink(entry.header.linkname, target)\n        elsif entry.file?\n          FileUtils.mkdir_p(File.dirname(target))\n          File.binwrite(target, entry.read)\n        else\n          raise ArgumentError, 'unsupported entry type'\n        end\n      end\n    end\n  end\n  count\nend\n",
+        "bundle_job.rb": "require_relative 'bundle_extract'\n\ndef stage_customer_bundle(upload, private_job_directory)\n  # The coordinator allocates a fresh, service-owned directory per import.\n  count = extract_document_bundle(upload, private_job_directory)\n  { 'entries' => count, 'state' => 'staged' }\nend\n"
+      },
+      "expected_findings": [
+        {
+          "family": "path-traversal",
+          "cwe": "CWE-22",
+          "path": "bundle_extract.rb"
+        }
+      ],
+      "rationale": "Lexical entry-name checks do not constrain symlink targets or later resolution through them. An escaping link followed by a regular entry beneath that link makes File.binwrite operate outside the assigned extraction directory.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Validate the effective resolution of every destination and link target within the job root before writes; stage and validate links safely while retaining legitimate internal aliases.",
+        "Do not write through escaping links, discard all bundle contents, flatten nested paths, or execute extracted scripts."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "Ruby 3.3.6 with RubyGems 3.5.22 and zlib 3.1.1 on Linux. Coordinator creates an empty mode-0700 directory and executes one bounded import there; no external process mutates entries. Archive metadata is adversarial, including entry ordering and absolute/relative link targets. Worker enforces a five-second deadline and a 10 MiB total output limit."
+      },
+      "operation_contract": {
+        "purpose": "Extract a bounded document tar.gz bundle into its private job directory, preserving directories and internal symbolic links.",
+        "trust_boundary": "A customer controls archive entries and symlink targets; the service owns the fresh destination and can also write unrelated shared state outside it.",
+        "legitimate_examples": [
+          {
+            "input": "Archive entries: docs/ directory, docs/readme.txt containing Hello, latest symlink to docs",
+            "expected": "Stage all three entries; docs/readme.txt contains Hello and latest resolves to docs inside the job directory."
+          }
+        ],
+        "permitted_changes": [
+          "Validate the effective resolution of every destination and link target within the job root before writes; stage and validate links safely while retaining legitimate internal aliases."
+        ],
+        "forbidden_changes": [
+          "Do not write through escaping links, discard all bundle contents, flatten nested paths, or execute extracted scripts."
+        ]
+      },
+      "regression_traps": [
+        "Removing ../ only from entry names misses the link-target boundary. Internal document aliases are part of the contract, so a fix must preserve valid internal links or explicitly reject only unsafe link behavior before any outside write."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for extract a bounded document tar.gz bundle into its private job directory, preserving directories and internal symbolic links. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "No archive contents are executed or loaded as plugins. The demonstrated flaw is an outside-root write through archive-controlled filesystem resolution.",
+          "Lexical names, symlink targets and entry order are separate validation inputs; the initially empty directory does not make subsequent archive-created links trusted."
+        ]
+      },
+      "derivation": {
+        "group": "tar-symlink-parent-extraction",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A customer controls archive entries and symlink targets; the service owns the fresh destination and can also write unrelated shared state outside it. The operation is extract a bounded document tar.gz bundle into its private job directory, preserving directories and internal symbolic links.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.ruby-lang.org/en/3.3/Gem/Package/TarReader.html",
+          "https://docs.ruby-lang.org/en/3.3/Pathname.html#method-i-cleanpath",
+          "https://docs.ruby-lang.org/en/3.3/File.html#method-c-symlink"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      },
+      "authoring_history": [
+        {
+          "event": "replaced_before_static_validation",
+          "previous_scenario": "shared-cache-marshaled-cart",
+          "previous_content_sha256": "696ea4911457f9d505c7053e6d22c88adefdc7086c3be0bea74c33ed757f6f0a",
+          "previous_files": {
+            "cart_cache.rb": "require 'base64'\nrequire_relative 'promotion_grant'\n\ndef restore_cart(cache, cart_id)\n  encoded = cache.get(\"cart:#{cart_id}\")\n  raise ArgumentError, 'cache record too large' if encoded.bytesize > 8192\n  cart = Marshal.load(Base64.strict_decode64(encoded))\n  unless cart.instance_of?(Array) && cart.all? { |sku| sku.instance_of?(String) }\n    raise ArgumentError, 'cart must be an array of SKUs'\n  end\n  cart\nend\n",
+            "promotion_grant.rb": "# Trusted promotion snapshots use this class; an importer may not grant credit.\nmodule PromotionLedger\n  CREDITS = Hash.new(0)\nend\nclass PromotionGrant\n  def marshal_load(tuple)\n    account, cents = tuple\n    PromotionLedger::CREDITS[account] += cents\n  end\nend\n"
+          },
+          "previous_derivation_group": "privileged-object-restoration-hooks",
+          "reason": "Retired the privileged-restoration-hook draft due to known shared conception with another Ruby draft and PHP vulnerable-03; this new case changes source, operation, trust boundary and vulnerability mechanism."
+        }
+      ],
+      "authoring_notes": [
+        "Planning slot originally targeted unsafe-deserialization. With coordinator approval it now covers path-traversal to replace a known correlated authoring draft. No rules or scanner outputs were consulted; independent human judgment is still pending."
+      ]
+    },
+    {
+      "id": "v2-ruby-vulnerable-04",
+      "language": "ruby",
+      "vulnerable": true,
+      "scenario": "customer-pdf-watermark-process",
+      "files": {
+        "watermark.rb": "require 'open3'\n\ndef watermark_pdf(document_id, label)\n  raise ArgumentError, 'document ID' unless document_id.instance_of?(Integer) && document_id.positive?\n  raise ArgumentError, 'label length' if label.bytesize > 80\n  input = \"/srv/pdfs/#{document_id}.pdf\"\n  # The trusted tool emits the marked PDF on stdout.\n  command = \"/usr/local/bin/pdf-stamp --text #{label} --input #{input}\"\n  bytes, error, status = Open3.capture3(command)\n  raise 'watermark failed' unless status.success?\n  bytes\nend\n\ndef download_watermark(owned_document, params)\n  watermark_pdf(owned_document.id, params.fetch('label'))\nend\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "watermark.rb"
+        }
+      ],
+      "rationale": "Open3.capture3 receives one command string; shell metacharacters in a label cause shell interpretation rather than remaining one text argument.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Call capture3 with the executable and a separate argument array; preserve bytes, error propagation and exact label text."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "Trusted pdf-stamp 1.0 executable accepts --text TEXT --input PATH and writes PDF bytes to stdout; root-owned executable uses a non-executing text renderer. Worker has a five-second external process deadline and output cap."
+      },
+      "operation_contract": {
+        "purpose": "Return a copy of an owned PDF stamped with the customer’s exact plain-text label.",
+        "trust_boundary": "A customer controls label text; the PDF ID and stamping executable are server-owned.",
+        "legitimate_examples": [
+          {
+            "input": "document_id=8; label=Reviewed by Ana",
+            "expected": "Return the PDF with the literal label Reviewed by Ana on each page."
+          }
+        ],
+        "permitted_changes": [
+          "Call capture3 with the executable and a separate argument array; preserve bytes, error propagation and exact label text."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Labels containing spaces, apostrophes or dollar signs are legitimate; rejecting all punctuation instead of separating arguments regresses the stamping feature."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for return a copy of an owned pdf stamped with the customer’s exact plain-text label. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "customer-pdf-watermark-process",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A customer controls label text; the PDF ID and stamping executable are server-owned. The operation is return a copy of an owned pdf stamped with the customer’s exact plain-text label.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.ruby-lang.org/en/3.3/Open3.html#method-c-capture3"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-vulnerable-05",
+      "language": "ruby",
+      "vulnerable": true,
+      "scenario": "csv-column-generated-accessors",
+      "files": {
+        "row_model.rb": "require 'json'\n\ndef project_upload(json_body)\n  request = JSON.parse(json_body)\n  fields = request.fetch('fields')\n  values = request.fetch('values')\n  raise ArgumentError, 'column count' unless fields.size.between?(1, 12) && fields.size == values.size\n  model = Class.new\n  fields.each do |field|\n    raise ArgumentError, 'name length' unless field.instance_of?(String) && field.bytesize <= 40\n    model.class_eval(\"attr_accessor :#{field}\")\n  end\n  row = model.new\n  fields.zip(values).each { |field, value| row.public_send(\"#{field}=\", value) }\n  fields.to_h { |field| [field, row.public_send(field)] }\nend\n"
+      },
+      "expected_findings": [
+        {
+          "family": "dynamic-evaluation",
+          "cwe": "CWE-95",
+          "path": "row_model.rb"
+        }
+      ],
+      "rationale": "class_eval reparses interpolated field text as Ruby code. A size/type check does not constrain the text to an identifier or prevent statements from running during class definition.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Avoid generated Ruby source; validate identifier names and use a Hash or non-evaluating accessor API."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "JSON 2.8.2; at most 12 scalar string values, body size bounded to 8 KiB by ingress. Column names contract is lowercase ASCII identifiers; no requirement to execute user-defined accessors."
+      },
+      "operation_contract": {
+        "purpose": "Create a tabular row with user-selected identifier column names and return the associated values unchanged.",
+        "trust_boundary": "An importer controls column-name text but is authorized only to name fields, not define or execute Ruby methods.",
+        "legitimate_examples": [
+          {
+            "input": "{\"fields\":[\"city\",\"zip\"],\"values\":[\"Oslo\",\"0150\"]}",
+            "expected": {
+              "city": "Oslo",
+              "zip": "0150"
+            }
+          }
+        ],
+        "permitted_changes": [
+          "Avoid generated Ruby source; validate identifier names and use a Hash or non-evaluating accessor API."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Preserve string values and field ordering; quoting input for SQL or HTML does not protect Ruby source. Reject reserved object-method names under a documented schema."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for create a tabular row with user-selected identifier column names and return the associated values unchanged. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "csv-column-generated-accessors",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An importer controls column-name text but is authorized only to name fields, not define or execute Ruby methods. The operation is create a tabular row with user-selected identifier column names and return the associated values unchanged.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.ruby-lang.org/en/3.3/Module.html#method-i-class_eval"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-vulnerable-06",
+      "language": "ruby",
+      "vulnerable": true,
+      "scenario": "smtp-starttls-optional-peer-check",
+      "files": {
+        "smtp_delivery.rb": "require 'net/smtp'\nrequire 'openssl'\n\ndef deliver_receipt(message, recipient, password)\n  raise ArgumentError, 'recipient' unless /\\A[a-z0-9._+-]+@example\\.org\\z/.match?(recipient)\n  context = OpenSSL::SSL::SSLContext.new\n  context.verify_mode = OpenSSL::SSL::VERIFY_NONE\n  smtp = Net::SMTP.new('smtp.example.org', 587)\n  smtp.open_timeout = 3\n  smtp.read_timeout = 3\n  smtp.enable_starttls(context)\n  smtp.start('app.example.org', 'receipt-sender', password, :plain) do |client|\n    client.send_message(message, 'receipts@example.org', recipient)\n  end\n  :delivered\nend\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "smtp_delivery.rb"
+        }
+      ],
+      "rationale": "Mandatory STARTTLS encrypts the transport but VERIFY_NONE disables certificate verification. A TLS impostor can capture the PLAIN authentication exchange and message.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Use an SSLContext with set_params/default peer verification and hostname verification, retaining mandatory STARTTLS."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "net-smtp 0.5.0 and openssl 3.2.0; publicly trusted smtp.example.org certificate; message and password come from trusted receipt/secret code, recipient is already verified for the account."
+      },
+      "operation_contract": {
+        "purpose": "Authenticate and send a receipt email through the configured SMTP server using mandatory STARTTLS.",
+        "trust_boundary": "An active network attacker must not impersonate SMTP and receive the authentication password or receipt.",
+        "legitimate_examples": [
+          {
+            "input": "A verified recipient, receipt MIME body and server-held password",
+            "expected": "Send the receipt only after authenticating the legitimate SMTP TLS peer."
+          }
+        ],
+        "permitted_changes": [
+          "Use an SSLContext with set_params/default peer verification and hostname verification, retaining mandatory STARTTLS."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Changing enable_starttls to opportunistic enable_starttls_auto weakens the transport further; preserve mandatory TLS and valid recipient handling."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for authenticate and send a receipt email through the configured smtp server using mandatory starttls. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "smtp-starttls-optional-peer-check",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An active network attacker must not impersonate SMTP and receive the authentication password or receipt. The operation is authenticate and send a receipt email through the configured smtp server using mandatory starttls.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://github.com/ruby/net-smtp/blob/v0.5.0/lib/net/smtp.rb"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-safe-01",
+      "language": "ruby",
+      "vulnerable": false,
+      "scenario": "rails-escaped-prefix-member-count",
+      "files": {
+        "member_count.rb": "class MemberCount\n  def self.by_literal_prefix(account_id, prefix)\n    raise ArgumentError, 'prefix' unless prefix.instance_of?(String) && prefix.bytesize <= 60\n    escaped = ActiveRecord::Base.sanitize_sql_like(prefix)\n    pattern = escaped + '%'\n    Member.where(account_id: account_id)\n          .where('display_name LIKE ?', pattern)\n          .count\n  end\nend\n",
+        "schema.sql": "CREATE TABLE members(id BIGSERIAL PRIMARY KEY, account_id BIGINT NOT NULL, display_name TEXT NOT NULL);\nINSERT INTO members(account_id, display_name) VALUES(2, '50% Club'), (2, '500 Club');\n"
+      },
+      "expected_findings": [],
+      "rationale": "ActiveRecord binds the LIKE pattern as a value and sanitize_sql_like escapes user wildcard characters. An apostrophe does not become SQL syntax and percent remains literal prefix data.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "Rails 7.2.2.1 with pg 1.5.9/PostgreSQL 16 default LIKE escape semantics, Member maps initialized members table; account ID authenticated."
+      },
+      "operation_contract": {
+        "purpose": "Count account members whose display name begins with a literal customer-entered prefix.",
+        "trust_boundary": "A user supplies search text while the authenticated account ID and SQL structure remain server-controlled.",
+        "legitimate_examples": [
+          {
+            "input": "account_id=2; prefix=50%",
+            "expected": 1
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Removing LIKE escaping does not create SQL injection but broadens the operation; preserve literal percent/underscore semantics as well as account scoping."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for count account members whose display name begins with a literal customer-entered prefix. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "rails-escaped-prefix-member-count",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A user supplies search text while the authenticated account ID and SQL structure remain server-controlled. The operation is count account members whose display name begins with a literal customer-entered prefix.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://api.rubyonrails.org/classes/ActiveRecord/Sanitization/ClassMethods.html#method-i-sanitize_sql_like"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-safe-02",
+      "language": "ruby",
+      "vulnerable": false,
+      "scenario": "psych-primitive-shift-calendar",
+      "files": {
+        "shift_calendar.rb": "require 'psych'\n\ndef shift_names(text)\n  raise ArgumentError, 'calendar too large' if text.bytesize > 4096\n  entries = Psych.safe_load(text, permitted_classes: [], permitted_symbols: [], aliases: false)\n  unless entries.instance_of?(Array) && entries.size <= 20 && entries.all? { |value| value.instance_of?(String) && value.bytesize <= 60 }\n    raise ArgumentError, 'string shifts required'\n  end\n  entries.map { |name| { 'display_name' => name } }\nend\n\ndef preview_shift_upload(body)\n  { 'shifts' => shift_names(body) }\nend\n"
+      },
+      "expected_findings": [],
+      "rationale": "safe_load permits no custom classes or symbols and disables aliases; subsequent exact Array/String checks restrict the result before display.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "Psych 5.1.2; YAML body size bounded before parse, no downstream template evaluation. Names are rendered through escaped Rails views or JSON text."
+      },
+      "operation_contract": {
+        "purpose": "Preview a short YAML list of shift names as display-only calendar entries.",
+        "trust_boundary": "A scheduling editor uploads YAML but cannot instantiate arbitrary Ruby classes or refer to alias graphs.",
+        "legitimate_examples": [
+          {
+            "input": "- Morning\n- \"!ruby/object:Kernel\"",
+            "expected": "Return two literal display-name strings; the quoted tag remains text."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Allowing Date or Symbol globally to silence parse errors is not needed for shift names; preserve strings that resemble YAML object tags when quoted."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for preview a short yaml list of shift names as display-only calendar entries. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "psych-primitive-shift-calendar",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A scheduling editor uploads YAML but cannot instantiate arbitrary Ruby classes or refer to alias graphs. The operation is preview a short yaml list of shift names as display-only calendar entries.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.ruby-lang.org/en/3.3/Psych.html#method-c-safe_load"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-safe-03",
+      "language": "ruby",
+      "vulnerable": false,
+      "scenario": "json-delivery-address-primitive-fields",
+      "files": {
+        "address_import.rb": "require 'json'\n\ndef import_address(raw)\n  raise ArgumentError, 'address size' if raw.bytesize > 2048\n  value = JSON.parse(raw, create_additions: false, max_nesting: 4)\n  raise ArgumentError, 'object required' unless value.instance_of?(Hash)\n  allowed = %w[street city postal]\n  raise ArgumentError, 'unknown address fields' unless value.keys.sort == allowed.sort\n  unless allowed.all? { |key| value[key].instance_of?(String) && value[key].bytesize.between?(1, 120) }\n    raise ArgumentError, 'address text required'\n  end\n  allowed.to_h { |key| [key, value.fetch(key)] }\nend\n"
+      },
+      "expected_findings": [],
+      "rationale": "JSON additions are explicitly disabled and only a Hash of three strings reaches the result. A json_class field is unknown input and rejected.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "json gem 2.8.2; output is used as literal shipping text with markup escaping by the trusted renderer; this is preview data, not a permission or billing address decision."
+      },
+      "operation_contract": {
+        "purpose": "Import three exact address text fields for a shipping-label preview.",
+        "trust_boundary": "An account holder supplies JSON values but has no ability to choose Ruby classes or invoke JSON additions.",
+        "legitimate_examples": [
+          {
+            "input": "{\"street\":\"1 King St\",\"city\":\"York\",\"postal\":\"YO1\"}",
+            "expected": {
+              "street": "1 King St",
+              "city": "York",
+              "postal": "YO1"
+            }
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Using JSON.load with additions enabled would change the object-construction policy; do not drop leading zeros from postal codes."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for import three exact address text fields for a shipping-label preview. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "json-delivery-address-primitive-fields",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An account holder supplies JSON values but has no ability to choose Ruby classes or invoke JSON additions. The operation is import three exact address text fields for a shipping-label preview.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.ruby-lang.org/en/3.3/JSON.html#module-JSON-label-Parsing+JSON"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-safe-04",
+      "language": "ruby",
+      "vulnerable": false,
+      "scenario": "audio-duration-positional-process",
+      "files": {
+        "audio_duration.rb": "require 'open3'\n\ndef audio_duration(owned_recording_id)\n  unless owned_recording_id.instance_of?(Integer) && owned_recording_id.positive?\n    raise ArgumentError, 'recording ID'\n  end\n  file = \"/srv/normalized-audio/#{owned_recording_id}.wav\"\n  output, error, status = Open3.capture3('/usr/bin/soxi', '-D', file)\n  raise 'inspection failed' unless status.success?\n  seconds = Float(output.strip)\n  raise 'invalid duration' unless seconds.finite? && seconds >= 0\n  seconds\nend\n"
+      },
+      "expected_findings": [],
+      "rationale": "Open3 receives distinct executable and argument values, no shell string. The numeric ID produces a fixed absolute .wav path rather than options or protocol syntax.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "SoX 14.4.2 with soxi at /usr/bin/soxi, WAV-only trusted normalized data; external worker deadline 3 seconds and output limit 1 KiB; root-owned storage without symlinks."
+      },
+      "operation_contract": {
+        "purpose": "Read the duration in seconds of a server-normalized, owned audio recording.",
+        "trust_boundary": "The caller provides an authorized positive integer ID; executable, fixed options and stored WAV files are trusted.",
+        "legitimate_examples": [
+          {
+            "input": "recording ID 12 with a 2.5-second WAV",
+            "expected": 2.5
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Do not switch to a single interpolated command string to handle spaces; preserve floating-point seconds and nonzero-exit errors."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for read the duration in seconds of a server-normalized, owned audio recording. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "audio-duration-positional-process",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around The caller provides an authorized positive integer ID; executable, fixed options and stored WAV files are trusted. The operation is read the duration in seconds of a server-normalized, owned audio recording.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.ruby-lang.org/en/3.3/Open3.html#method-c-capture3"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-safe-05",
+      "language": "ruby",
+      "vulnerable": false,
+      "scenario": "explicit-exporter-class-registry",
+      "files": {
+        "export_registry.rb": "require 'json'\nclass JsonSummary\n  def self.render(rows)\n    JSON.generate(rows)\n  end\nend\nclass PlainSummary\n  def self.render(rows)\n    rows.map { |row| row.fetch('label') }.join(\"\\n\")\n  end\nend\nEXPORTERS = { 'json' => JsonSummary, 'plain' => PlainSummary }.freeze\n\ndef evaluate_export(format, rows)\n  exporter = EXPORTERS.fetch(format) { raise ArgumentError, 'unknown format' }\n  exporter.render(rows)\nend\n"
+      },
+      "expected_findings": [],
+      "rationale": "A frozen Hash maps allowed names directly to predeclared classes; no eval, constantize or arbitrary require consumes user text. Unknown names raise an error.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "Rows are bounded to 20 server-produced records with string labels; caller chooses text/plain or application/json appropriately and never renders plain output as raw HTML."
+      },
+      "operation_contract": {
+        "purpose": "Render authorized summary rows in either JSON or plain-text format.",
+        "trust_boundary": "A user selects one of two literal exporter names; classes and row schema are server-owned.",
+        "legitimate_examples": [
+          {
+            "input": "format=plain; rows=[{label: One},{label: Two}]",
+            "expected": "Return One\nTwo."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Replacing fetch with Object.const_get on the format would create an authority boundary; keep Unicode labels and newline formatting unchanged."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for render authorized summary rows in either json or plain-text format. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "explicit-exporter-class-registry",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A user selects one of two literal exporter names; classes and row schema are server-owned. The operation is render authorized summary rows in either json or plain-text format.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.ruby-lang.org/en/3.3/Hash.html#method-i-fetch"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-ruby-safe-06",
+      "language": "ruby",
+      "vulnerable": false,
+      "scenario": "imap-peer-verified-mailbox-count",
+      "files": {
+        "mailbox_count.rb": "require 'net/imap'\nrequire 'openssl'\n\ndef unread_count(username, password)\n  imap = Net::IMAP.new('imap.example.org', port: 993,\n    ssl: { verify_mode: OpenSSL::SSL::VERIFY_PEER,\n           ca_file: '/run/secrets/mail-ca.pem' }, open_timeout: 3)\n  begin\n    imap.login(username, password)\n    imap.select('INBOX')\n    imap.search(['UNSEEN']).length\n  ensure\n    imap.disconnect unless imap.disconnected?\n  end\nend\n"
+      },
+      "expected_findings": [],
+      "rationale": "The SSL connection enables peer verification with the deployed CA; net-imap performs hostname checking under VERIFY_PEER before login. No untrusted hostname or SSL override is supplied.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Ruby 3.3.6",
+        "platform": "Linux x86_64",
+        "setup": "net-imap 0.5.6 and openssl 3.2.0; enterprise CA root file read-only, certificate SAN matches imap.example.org; server responds within worker deadline; username/password trusted secret values."
+      },
+      "operation_contract": {
+        "purpose": "Return the number of unread INBOX messages from the configured IMAP service.",
+        "trust_boundary": "An active network attacker must not obtain server-held mailbox credentials; hostname and CA file are trusted.",
+        "legitimate_examples": [
+          {
+            "input": "Authenticated mailbox with three UNSEEN messages",
+            "expected": 3
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Using VERIFY_NONE because an enterprise certificate is unfamiliar would expose credentials; retain INBOX selection and UNSEEN filtering."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for return the number of unread inbox messages from the configured imap service. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "imap-peer-verified-mailbox-count",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An active network attacker must not obtain server-held mailbox credentials; hostname and CA file are trusted. The operation is return the number of unread inbox messages from the configured imap service.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://github.com/ruby/net-imap/blob/v0.5.6/lib/net/imap.rb"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

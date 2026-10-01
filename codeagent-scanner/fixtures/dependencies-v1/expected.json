@@ -1,0 +1,162 @@
+[
+  {
+    "format": "bun",
+    "filename": "bun.lock",
+    "package": "jquery",
+    "advisory": "CVE-2019-11358",
+    "vulnerable_version": "3.3.1",
+    "patched_version": "3.4.0"
+  },
+  {
+    "format": "cargo",
+    "filename": "Cargo.lock",
+    "package": "openssl",
+    "advisory": "CVE-2023-53159",
+    "vulnerable_version": "0.10.30",
+    "patched_version": "0.10.55"
+  },
+  {
+    "format": "cocoapods",
+    "filename": "Podfile.lock",
+    "package": "_NIODataStructures",
+    "advisory": "CVE-2022-3215",
+    "vulnerable_version": "2.41.0",
+    "patched_version": "2.42.0"
+  },
+  {
+    "format": "composer",
+    "filename": "composer.lock",
+    "package": "guzzlehttp/psr7",
+    "advisory": "CVE-2022-24775",
+    "vulnerable_version": "1.8.3",
+    "patched_version": "2.1.1"
+  },
+  {
+    "format": "conan",
+    "filename": "conan.lock",
+    "package": "pcre",
+    "advisory": "CVE-2020-14155",
+    "vulnerable_version": "8.43",
+    "patched_version": "8.45"
+  },
+  {
+    "format": "deps-json",
+    "filename": "datacollector.deps.json",
+    "package": "Newtonsoft.Json",
+    "advisory": "CVE-2024-21907",
+    "vulnerable_version": "9.0.1",
+    "patched_version": "13.0.1"
+  },
+  {
+    "format": "gemfile",
+    "filename": "Gemfile.lock",
+    "package": "actionpack",
+    "advisory": "CVE-2020-8164",
+    "vulnerable_version": "5.2.3",
+    "patched_version": "5.2.4.3"
+  },
+  {
+    "format": "gomod",
+    "filename": "go.mod",
+    "package": "golang.org/x/crypto",
+    "advisory": "CVE-2020-29652",
+    "vulnerable_version": "v0.0.0-20201002170205-7f63de1d35b0",
+    "patched_version": "v0.0.0-20201216223049-8b5274cf687f"
+  },
+  {
+    "format": "gradle",
+    "filename": "gradle.lockfile",
+    "package": "com.fasterxml.jackson.core:jackson-databind",
+    "advisory": "CVE-2017-15095",
+    "vulnerable_version": "2.9.1",
+    "patched_version": "2.8.11"
+  },
+  {
+    "format": "npm",
+    "filename": "package-lock.json",
+    "package": "jquery",
+    "advisory": "CVE-2019-11358",
+    "vulnerable_version": "3.3.9",
+    "patched_version": "3.4.0"
+  },
+  {
+    "format": "nuget",
+    "filename": "packages.lock.json",
+    "package": "Newtonsoft.Json",
+    "advisory": "CVE-2024-21907",
+    "vulnerable_version": "12.0.3",
+    "patched_version": "13.0.1"
+  },
+  {
+    "format": "packages-config",
+    "filename": "packages.config",
+    "package": "Newtonsoft.Json",
+    "advisory": "CVE-2024-21907",
+    "vulnerable_version": "6.0.4",
+    "patched_version": "13.0.1"
+  },
+  {
+    "format": "pipenv",
+    "filename": "Pipfile.lock",
+    "package": "werkzeug",
+    "advisory": "CVE-2016-10516",
+    "vulnerable_version": "0.11.1",
+    "patched_version": "0.11.11"
+  },
+  {
+    "format": "pnpm",
+    "filename": "pnpm-lock.yaml",
+    "package": "lodash",
+    "advisory": "CVE-2018-16487",
+    "vulnerable_version": "4.17.4",
+    "patched_version": "4.17.11"
+  },
+  {
+    "format": "poetry",
+    "filename": "poetry.lock",
+    "package": "werkzeug",
+    "advisory": "CVE-2019-14322",
+    "vulnerable_version": "0.14",
+    "patched_version": "0.15.5"
+  },
+  {
+    "format": "requirements",
+    "filename": "requirements.txt",
+    "package": "Werkzeug",
+    "advisory": "CVE-2016-10516",
+    "vulnerable_version": "0.11",
+    "patched_version": "0.11.11"
+  },
+  {
+    "format": "sbt",
+    "filename": "build.sbt.lock",
+    "package": "com.fasterxml.jackson.core:jackson-databind",
+    "advisory": "CVE-2017-15095",
+    "vulnerable_version": "2.9.1",
+    "patched_version": "2.8.11"
+  },
+  {
+    "format": "swift",
+    "filename": "Package.resolved",
+    "package": "github.com/apple/swift-nio",
+    "advisory": "CVE-2022-3215",
+    "vulnerable_version": "2.41.0",
+    "patched_version": "2.42.0"
+  },
+  {
+    "format": "uv",
+    "filename": "uv.lock",
+    "package": "werkzeug",
+    "advisory": "CVE-2016-10516",
+    "vulnerable_version": "0.11.1",
+    "patched_version": "0.11.11"
+  },
+  {
+    "format": "yarn",
+    "filename": "yarn.lock",
+    "package": "jquery",
+    "advisory": "CVE-2019-11358",
+    "vulnerable_version": "3.2.1",
+    "patched_version": "3.4.0"
+  }
+]

@@ -1,0 +1,1061 @@
+{
+  "language": "c",
+  "cases": [
+    {
+      "id": "v2-c-vulnerable-01",
+      "language": "c",
+      "vulnerable": true,
+      "scenario": "Length-prefixed sensor identity becomes a fixed-width export row",
+      "files": {
+        "src/sensor_csv.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\nint export_sensor(FILE *csv, const unsigned char *frame, size_t length) {\n    if (length < 2 || frame[0] > length - 1) return -1;\n    size_t name_length = frame[0];\n    char *name = malloc(name_length + 1);\n    if (!name) return -1;\n    memcpy(name, frame + 1, name_length);\n    name[name_length] = '\\0';\n    char row[64];\n    sprintf(row, \"sensor=%s;active=1\\n\", name);\n    int result = fputs(row, csv) == EOF ? -1 : 0;\n    free(name);\n    return result;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "buffer-overflow",
+          "cwe": "CWE-120",
+          "path": "src/sensor_csv.c",
+          "line_start": 12,
+          "line_end": 12
+        }
+      ],
+      "rationale": "A valid frame may contain a 255-byte identity, which overflows the 64-byte stack row during formatting; ingress length validation protects the frame read but not the destination.",
+      "remediation_constraints": [
+        "Preserve full identities up to 255 bytes; streaming or checked dynamic allocation is allowed.",
+        "Keep FILE ownership with the caller and the 0/-1 return convention."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. Ingress excludes NUL, semicolon and newline in device names; frame length is at most 256."
+      },
+      "operation_contract": {
+        "purpose": "Append a complete sensor identity and active flag to the caller-owned export stream.",
+        "trust_boundary": "A gateway accepts a remote device identity of up to 255 non-NUL printable ASCII bytes; the output stream is opened by the service.",
+        "legitimate_examples": [
+          {
+            "input": "Frame with identity pump-7",
+            "expected": "Append sensor=pump-7;active=1 followed by newline and return 0."
+          },
+          {
+            "input": "Identity of 80 ASCII letters",
+            "expected": "Append all 80 letters; a fixed-capacity implementation must report an explicit error rather than corrupt memory."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve full identities up to 255 bytes; streaming or checked dynamic allocation is allowed.",
+          "Keep FILE ownership with the caller and the 0/-1 return convention."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Do not silently truncate long accepted identities.",
+        "Length validation of the source does not establish the row capacity."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Bounded-copy/format overflow; delimiter injection is excluded by the stated ingress grammar.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-sensor-frame-export",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The bug arises from binary ingress length validation feeding a smaller text record; its preservation condition is the complete exported identity. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-vulnerable-02",
+      "language": "c",
+      "vulnerable": true,
+      "scenario": "A scheduled disk-quota probe trusts a tenant mount label",
+      "files": {
+        "src/quota_probe.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\nint quota_probe(FILE *audit, const char *mount_label) {\n    if (strlen(mount_label) > 120) return -1;\n    char command[256];\n    int used = snprintf(command, sizeof command, \"/usr/bin/du -sk -- /srv/tenants/%s\", mount_label);\n    if (used < 0 || (size_t)used >= sizeof command) return -1;\n    int status = system(command);\n    if (fprintf(audit, \"quota-probe status=%d\\n\", status) < 0) return -1;\n    if (fflush(audit) == EOF) return -1;\n    return status;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/quota_probe.c",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "The length check and du option terminator do not stop the shell from interpreting metacharacters in the tenant-controlled label.",
+      "remediation_constraints": [
+        "Resolve authorized tenant identifiers to service-owned directory paths.",
+        "Invoke the trusted executable with separate arguments and preserve wait/exit status reporting."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. GNU du 9.4 is installed at /usr/bin/du; the worker is privileged only for its tenant roots. Labels contain no slash but may contain spaces and shell metacharacters."
+      },
+      "operation_contract": {
+        "purpose": "Run one size probe for an authorized tenant directory and record its completion status.",
+        "trust_boundary": "The scheduler receives a display label from tenant metadata; a separate authorization check grants access to that tenant, but the label is not a filesystem-safe identifier.",
+        "legitimate_examples": [
+          {
+            "input": "Label acme-west",
+            "expected": "Probe /srv/tenants/acme-west once and log completion."
+          },
+          {
+            "input": "Label blue team",
+            "expected": "Treat the space as part of one directory name, not two operands."
+          }
+        ],
+        "permitted_changes": [
+          "Resolve authorized tenant identifiers to service-owned directory paths.",
+          "Invoke the trusted executable with separate arguments and preserve wait/exit status reporting."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Do not replace system with exec in the current worker process.",
+        "-- protects utility option parsing, not shell parsing."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Shell interpretation of tenant-controlled text; callers authorize the tenant separately.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-quota-job-shell",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A persistent tenant metadata field crosses into a privileged scheduled maintenance process and has an observable audit-status contract. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-vulnerable-03",
+      "language": "c",
+      "vulnerable": true,
+      "scenario": "Length-bounded network notice is used as a FILE format",
+      "files": {
+        "src/notice_log.c": "#include <stdio.h>\n#include <string.h>\nint write_notice(FILE *journal, const unsigned char *payload, size_t size) {\n    if (size == 0 || size > 240 || memchr(payload, 0, size)) return -1;\n    char notice[241];\n    memcpy(notice, payload, size);\n    notice[size] = '\\0';\n    if (fputs(\"NOTICE \", journal) == EOF) return -1;\n    if (fprintf(journal, notice) < 0) return -1;\n    if (fputc('\\n', journal) == EOF) return -1;\n    return fflush(journal) == EOF ? -1 : 0;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "format-string",
+          "cwe": "CWE-134",
+          "path": "src/notice_log.c",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "A bounded and terminated network string remains an attacker-controlled printf format. Percent conversions consume nonexistent arguments and can disclose memory or cause undefined behavior.",
+      "remediation_constraints": [
+        "Render the complete payload as data, using a fixed format or a length-aware write.",
+        "Preserve the fixed prefix, line boundary and flush/error convention."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. Ingress rejects CR/LF to maintain one journal line; the FILE is service-owned and valid."
+      },
+      "operation_contract": {
+        "purpose": "Write one literal bounded notice after a fixed journal prefix.",
+        "trust_boundary": "A remote authenticated peer controls the notice payload; it cannot access the journal stream directly.",
+        "legitimate_examples": [
+          {
+            "input": "Payload load 50%",
+            "expected": "Journal contains NOTICE load 50% and one newline."
+          },
+          {
+            "input": "Payload %p %p",
+            "expected": "Journal must contain those literal characters."
+          }
+        ],
+        "permitted_changes": [
+          "Render the complete payload as data, using a fixed format or a length-aware write.",
+          "Preserve the fixed prefix, line boundary and flush/error convention."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Escaping only %n still leaves other format conversions.",
+        "A byte-length limit is not a format-string sanitizer."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Uncontrolled format string; log line injection is excluded by ingress and the payload is a bounded valid byte sequence.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-network-notice-format",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Length-delimited network bytes are copied safely yet remain dangerous when treated as a variadic format, distinct from an unbounded-copy case. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-vulnerable-04",
+      "language": "c",
+      "vulnerable": true,
+      "scenario": "Feature-list assembly undercounts separators across accepted fields",
+      "files": {
+        "src/feature_header.c": "#include <stdio.h>\n#include <string.h>\nint feature_header(FILE *response, const char *const *features, size_t count) {\n    if (count > 8) return -1;\n    char value[64] = \"\";\n    for (size_t i = 0; i < count; ++i) {\n        if (strlen(features[i]) > 12) return -1;\n        if (i) strcat(value, \",\");\n        strcat(value, features[i]);\n    }\n    if (fprintf(response, \"Features: %s\\n\", value) < 0) return -1;\n    return 0;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "buffer-overflow",
+          "cwe": "CWE-120",
+          "path": "src/feature_header.c",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "Per-feature limits allow up to 103 content bytes plus a terminator in a 64-byte aggregate buffer. Independent bounded inputs do not bound their concatenation.",
+      "remediation_constraints": [
+        "Preserve all allowed combinations; use streaming output or checked dynamic sizing.",
+        "Do not remove separators, reorder names or lower the documented feature count."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. All names consist only of ASCII letters and digits; the caller validates the feature allow-list."
+      },
+      "operation_contract": {
+        "purpose": "Emit the ordered, comma-separated list of up to eight selected capability names.",
+        "trust_boundary": "A tenant selects up to eight allow-listed feature names, each at most 12 bytes; the combination is untrusted even though each token is valid.",
+        "legitimate_examples": [
+          {
+            "input": "alpha, beta",
+            "expected": "Emit Features: alpha,beta followed by newline."
+          },
+          {
+            "input": "Eight twelve-character capability names",
+            "expected": "Emit every name in order, with seven commas, without corrupting memory."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve all allowed combinations; use streaming output or checked dynamic sizing.",
+          "Do not remove separators, reorder names or lower the documented feature count."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Checking only each feature length misses the accumulated size.",
+        "strncat takes append length rather than total buffer capacity."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Aggregate string overflow; arbitrary token injection is excluded by a strict allow-list.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-capability-header-aggregation",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Individually valid feature selections combine into an unsafe aggregate; the security boundary is combination cardinality rather than a single long name. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-vulnerable-05",
+      "language": "c",
+      "vulnerable": true,
+      "scenario": "Certificate preview helper interpolates an uploaded file basename",
+      "files": {
+        "src/certificate_preview.c": "#include <stdio.h>\n#include <string.h>\nint certificate_subject(const char *upload_name, char *out, size_t capacity) {\n    if (strlen(upload_name) > 100 || capacity < 2) return -1;\n    char command[256];\n    int n = snprintf(command, sizeof command,\n        \"/usr/bin/openssl x509 -noout -subject -in /srv/incoming/%s\", upload_name);\n    if (n < 0 || (size_t)n >= sizeof command) return -1;\n    FILE *pipe = popen(command, \"r\");\n    if (!pipe) return -1;\n    int read_ok = fgets(out, (int)capacity, pipe) != NULL;\n    int status = pclose(pipe);\n    return read_ok && status == 0 ? 0 : -1;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/certificate_preview.c",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "An upload basename is concatenated into a shell command executed by popen. A short basename can contain command substitution or separators without any slash.",
+      "remediation_constraints": [
+        "Keep caller buffer ownership and terminate output; bounds are 2..4096 bytes.",
+        "Use a non-shell argument API or a trusted certificate parser; always close and reap subprocesses."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. OpenSSL 3.0 is installed at /usr/bin/openssl; capacity is 2..4096; uploaded basenames contain no slash or NUL. Files cannot be replaced during a preview."
+      },
+      "operation_contract": {
+        "purpose": "Read a certificate subject into the caller-owned preview buffer and close/reap the helper.",
+        "trust_boundary": "The upload API assigns a user-selected basename in a private incoming directory; length and slash checks permit shell metacharacters.",
+        "legitimate_examples": [
+          {
+            "input": "client cert.pem",
+            "expected": "Read the subject for that exact basename as one input file."
+          },
+          {
+            "input": "Malformed certificate",
+            "expected": "Return -1 after reaping the helper; no success preview is invented."
+          }
+        ],
+        "permitted_changes": [
+          "Keep caller buffer ownership and terminate output; bounds are 2..4096 bytes.",
+          "Use a non-shell argument API or a trusted certificate parser; always close and reap subprocesses."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Do not return a FILE opened with fopen to a caller that expects popen/pclose ownership.",
+        "Escaping spaces alone does not handle shell command substitution."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Shell injection through a certificate filename; certificate parsing itself is delegated to the trusted installed tool.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-certificate-upload-subprocess",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Uploaded binary files require text extraction with a bounded output buffer and child-process lifetime obligations, independent from maintenance size probes. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-vulnerable-06",
+      "language": "c",
+      "vulnerable": true,
+      "scenario": "A report template passes a customer caption to snprintf as the format",
+      "files": {
+        "src/receipt_caption.c": "#include <stdio.h>\n#include <string.h>\nint receipt_caption(FILE *out, const char *caption, unsigned invoice) {\n    if (strlen(caption) > 96) return -1;\n    char text[128];\n    int required = snprintf(text, sizeof text, caption, invoice);\n    if (required < 0 || (size_t)required >= sizeof text) return -1;\n    if (fputs(\"Caption: \", out) == EOF) return -1;\n    if (fputs(text, out) == EOF) return -1;\n    if (fputc('\\n', out) == EOF) return -1;\n    return 0;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "format-string",
+          "cwe": "CWE-134",
+          "path": "src/receipt_caption.c",
+          "line_start": 6,
+          "line_end": 6
+        }
+      ],
+      "rationale": "A length-bounded caption can demand conversions incompatible with the single unsigned argument. snprintf limits writes to text, but cannot make an untrusted variadic format type-safe.",
+      "remediation_constraints": [
+        "Separate caption data from the fixed invoice-number format.",
+        "Preserve complete captions up to 96 bytes and the numeric invoice identifier."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. Ingress excludes newlines; the existing implementation mistakenly conflates customer captions with templates. The required literal-caption layout is the intended product behavior. The required layout is exactly Caption: <caption> (#<unsigned invoice>) followed by newline."
+      },
+      "operation_contract": {
+        "purpose": "Render customer caption text literally and append the invoice number using a documented service-owned layout.",
+        "trust_boundary": "An invoice customer controls the display caption, not a printf template; invoice is a service-generated unsigned identifier.",
+        "legitimate_examples": [
+          {
+            "input": "Caption Paid in full, invoice 42",
+            "expected": "Output Caption: Paid in full (#42) followed by newline."
+          },
+          {
+            "input": "Caption 100% settled, invoice 9",
+            "expected": "Output Caption: 100% settled (#9) followed by newline."
+          }
+        ],
+        "permitted_changes": [
+          "Separate caption data from the fixed invoice-number format.",
+          "Preserve complete captions up to 96 bytes and the numeric invoice identifier."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A large snprintf destination does not prevent format-type confusion.",
+        "Changing the caption to a constant destroys user content."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Uncontrolled formatting with an existing vararg; buffer length checks are present and should be retained.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-caption-format-type-confusion",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A product template/data mix-up with an existing integer argument tests format type safety rather than only a missing argument in logging. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-safe-01",
+      "language": "c",
+      "vulnerable": false,
+      "scenario": "A hexadecimal device identifier uses a caller-provided exact capacity",
+      "files": {
+        "src/hex_identifier.c": "#include <stddef.h>\nstatic const char digits[] = \"0123456789abcdef\";\nint hex_identifier(const unsigned char *bytes, size_t count, char *out, size_t capacity) {\n    if (count > 32 || capacity < count * 2 + 1) return -1;\n    for (size_t i = 0; i < count; ++i) {\n        out[i * 2] = digits[bytes[i] >> 4];\n        out[i * 2 + 1] = digits[bytes[i] & 15];\n    }\n    out[count * 2] = '\\0';\n    return (int)(count * 2);\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The count is capped before multiplication and the destination capacity includes the terminator; every array index is bounded by those checks.",
+      "remediation_constraints": [
+        "Keep exact lowercase output and reject undersized buffers before any write.",
+        "Preserve the actual-capacity caller contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. Input and output objects do not overlap. The caller-provided capacity equals the writable allocation size."
+      },
+      "operation_contract": {
+        "purpose": "Encode up to 32 binary identifier bytes into lowercase hexadecimal.",
+        "trust_boundary": "A device controls the bytes and count; the caller supplies the actual allocated capacity, never a device-claimed capacity.",
+        "legitimate_examples": [
+          {
+            "input": "Bytes 00 ff, capacity 5",
+            "expected": "Write 00ff and NUL; return 4."
+          },
+          {
+            "input": "Two bytes, capacity 4",
+            "expected": "Return -1 without writing output."
+          }
+        ],
+        "permitted_changes": [
+          "Keep exact lowercase output and reject undersized buffers before any write.",
+          "Preserve the actual-capacity caller contract."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A count-based check without the terminator would allow an off-by-one write.",
+        "Do not relabel arbitrary pointer provenance as safe; only the declared allocated buffer contract applies."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Bounded binary-to-text writes; no shell, SQL, XML or cryptographic use.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-binary-hex-capacity",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This safe encoder handles arbitrary binary octets with arithmetic and destination-ownership checks rather than a repaired text-copy sibling. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-safe-02",
+      "language": "c",
+      "vulnerable": false,
+      "scenario": "A length-prefixed record is copied to a FILE without format interpretation",
+      "files": {
+        "src/relay_record.c": "#include <stdio.h>\n#include <stdint.h>\nint relay_record(FILE *out, const unsigned char *record, size_t size) {\n    if (size < 2) return -1;\n    size_t body = ((size_t)record[0] << 8) | record[1];\n    if (body > 4096 || body != size - 2) return -1;\n    unsigned char prefix[2] = {(unsigned char)(body >> 8), (unsigned char)body};\n    if (fwrite(prefix, 1, sizeof prefix, out) != sizeof prefix) return -1;\n    if (fwrite(record + 2, 1, body, out) != body) return -1;\n    return fflush(out) == EOF ? -1 : 0;\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The frame length is checked against both the available bytes and a maximum, and the payload is relayed with fwrite rather than interpreted as a C string or format.",
+      "remediation_constraints": [
+        "Preserve binary transparency and exact length checks.",
+        "Keep failure reporting on short writes and caller ownership."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. Input size equals the readable record allocation; no concurrent mutation of the buffer."
+      },
+      "operation_contract": {
+        "purpose": "Relay one binary framed record to a caller-owned spool stream.",
+        "trust_boundary": "A remote sensor controls all frame bytes, including NULs and percent signs; the service owns the destination stream.",
+        "legitimate_examples": [
+          {
+            "input": "Header 00 03 and bytes 25 00 ff",
+            "expected": "Relay all five bytes exactly."
+          },
+          {
+            "input": "Header claims eight bytes but only three follow",
+            "expected": "Return -1 without writing."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve binary transparency and exact length checks.",
+          "Keep failure reporting on short writes and caller ownership."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Replacing fwrite with fputs truncates embedded NUL bytes.",
+        "A format-string scanner must distinguish data written by fwrite."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Bounds and formatting for binary relay; authenticated routing and storage durability are outside this function.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-framed-binary-relay",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Binary-transparent framing has no string semantics and supplies a distinct safe control against lexical percent/string warnings. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-safe-03",
+      "language": "c",
+      "vulnerable": false,
+      "scenario": "Database diagnostics are length-limited and formatted by trusted code",
+      "files": {
+        "src/db_diagnostic.c": "#include <stdio.h>\n#include <string.h>\nint db_diagnostic(FILE *out, const char *state, const char *detail) {\n    size_t state_len = strlen(state);\n    if (state_len != 5 || strlen(detail) > 2048) return -1;\n    for (size_t i = 0; i < state_len; ++i) {\n        if (!((state[i] >= '0' && state[i] <= '9') || (state[i] >= 'A' && state[i] <= 'Z'))) return -1;\n    }\n    if (fprintf(out, \"SQLSTATE=%s detail=%s\\n\", state, detail) < 0) return -1;\n    return fflush(out) == EOF ? -1 : 0;\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The diagnostic contains SQL terminology but executes no SQL. All external text is passed as data to a fixed format, with a validated state field.",
+      "remediation_constraints": [
+        "Keep external details as string arguments to a fixed format.",
+        "Retain SQLSTATE validation and support-stream error reporting."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. Detail text has CR/LF removed by the database protocol adapter; support output is visible only to operators and may contain server diagnostic text."
+      },
+      "operation_contract": {
+        "purpose": "Write a bounded database diagnostic to an operator-only support stream.",
+        "trust_boundary": "A remote database controls the SQLSTATE and detail values; the support stream is not parsed as commands or query text.",
+        "legitimate_examples": [
+          {
+            "input": "State 23505, detail duplicate 10%",
+            "expected": "Write both literal fields followed by newline."
+          },
+          {
+            "input": "State containing a newline",
+            "expected": "Return -1 without a diagnostic."
+          }
+        ],
+        "permitted_changes": [
+          "Keep external details as string arguments to a fixed format.",
+          "Retain SQLSTATE validation and support-stream error reporting."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Variable names containing SQL do not imply a query sink.",
+        "Percent signs in a %s argument must remain literal."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Formatting and SQL-injection false-positive control; it is not a database execution API.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-db-error-literal-rendering",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A misleading database context contains diagnostic rendering only and intentionally separates vocabulary from actual query execution. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-safe-04",
+      "language": "c",
+      "vulnerable": false,
+      "scenario": "Append-only event storage checks remaining capacity before mutation",
+      "files": {
+        "src/event_queue.c": "#include <stddef.h>\n#include <string.h>\nstruct event_queue { unsigned char bytes[1024]; size_t used; };\nint enqueue_event(struct event_queue *queue, const unsigned char *event, size_t size) {\n    if (queue->used > sizeof queue->bytes) return -1;\n    if (size > 255 || size + 1 > sizeof queue->bytes - queue->used) return -1;\n    size_t offset = queue->used;\n    queue->bytes[offset] = (unsigned char)size;\n    memcpy(queue->bytes + offset + 1, event, size);\n    queue->used = offset + size + 1;\n    return 0;\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The size is capped before addition and checked by subtraction against remaining storage. The used invariant is validated before pointer arithmetic.",
+      "remediation_constraints": [
+        "Preserve atomic rejection and exact used accounting.",
+        "Maintain source/destination non-overlap and the existing ownership invariant."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. The queue starts with used=0 and is accessed by one thread; event points to at least size bytes and does not overlap queue."
+      },
+      "operation_contract": {
+        "purpose": "Append a byte-length-prefixed event atomically to an in-memory queue.",
+        "trust_boundary": "An external producer supplies arbitrary bytes and a size up to 255; the service exclusively owns the queue state.",
+        "legitimate_examples": [
+          {
+            "input": "Used 1020, event size 3",
+            "expected": "Write the prefix and three bytes; set used to 1024."
+          },
+          {
+            "input": "Used 1020, event size 4",
+            "expected": "Return -1 and leave all state unchanged."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve atomic rejection and exact used accounting.",
+          "Maintain source/destination non-overlap and the existing ownership invariant."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Replacing subtraction with unchecked used + size may overflow for corrupted state.",
+        "The header byte consumes capacity too."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Buffer-capacity arithmetic and bounded memcpy.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-event-ring-append-invariant",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This safe case concerns persistent queue state, remaining capacity, and mutation atomicity rather than one-shot string encoding. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-safe-05",
+      "language": "c",
+      "vulnerable": false,
+      "scenario": "An upload byte counter compares an explicit limit without command execution",
+      "files": {
+        "src/upload_count.c": "#include <stdio.h>\n#include <stdint.h>\nint count_upload(FILE *input, size_t limit, size_t *accepted) {\n    unsigned char block[4096];\n    size_t total = 0;\n    for (;;) {\n        size_t got = fread(block, 1, sizeof block, input);\n        if (got > limit - total) return -1;\n        total += got;\n        if (got < sizeof block) {\n            if (ferror(input)) return -1;\n            *accepted = total;\n            return 0;\n        }\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Each read is bounded by the local array and total never exceeds limit, so the subtraction stays defined. The byte counter performs no external process or data interpretation.",
+      "remediation_constraints": [
+        "Retain bounded reads, checked accumulation and input-error handling.",
+        "Do not treat binary NUL as end of input."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. The input is finite or subject to a caller I/O deadline; accepted is a valid caller-owned size_t object and limit is at most 64 MiB."
+      },
+      "operation_contract": {
+        "purpose": "Consume a stream and return its exact length if it does not exceed a caller policy limit.",
+        "trust_boundary": "An untrusted upload controls stream contents and length; a trusted caller selects limit.",
+        "legitimate_examples": [
+          {
+            "input": "Five-byte stream, limit 8",
+            "expected": "Return 0 and set accepted=5."
+          },
+          {
+            "input": "Nine-byte stream, limit 8",
+            "expected": "Return -1 without publishing an accepted length."
+          }
+        ],
+        "permitted_changes": [
+          "Retain bounded reads, checked accumulation and input-error handling.",
+          "Do not treat binary NUL as end of input."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Reporting the partial total as success after exceeding the limit breaks the contract.",
+        "Source bytes are not a format string or process command."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Bounded streaming byte counting; blocking and authorization are handled by the ingress.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-stream-limit-counting",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This is a streaming limit enforcement operation with no text conversion, distinct from aggregate-buffer and record-format cases. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-c-safe-06",
+      "language": "c",
+      "vulnerable": false,
+      "scenario": "An operator-selected compression mode maps to fixed argv entries",
+      "files": {
+        "src/compress_job.c": "#include <spawn.h>\n#include <sys/wait.h>\n#include <errno.h>\n#include <string.h>\nextern char **environ;\nint compress_job(const char *mode) {\n    const char *level = strcmp(mode, \"fast\") == 0 ? \"-1\" : strcmp(mode, \"dense\") == 0 ? \"-9\" : NULL;\n    if (!level) return -1;\n    char *argv[] = {\"gzip\", (char *)level, \"--\", \"/srv/jobs/current.dat\", NULL};\n    pid_t child;\n    if (posix_spawn(&child, \"/usr/bin/gzip\", NULL, NULL, argv, environ) != 0) return -1;\n    int status;\n    while (waitpid(child, &status, 0) < 0) if (errno != EINTR) return -1;\n    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Only two fixed arguments can be selected, the executable and input path are trusted, and posix_spawn does not invoke a shell. The parent reaps the child and returns an exit code.",
+      "remediation_constraints": [
+        "Keep exact allow-list mapping, separate argv entries and child reaping.",
+        "Preserve the parent worker process and exit-code semantics."
+      ],
+      "runtime_assumptions": {
+        "runtime": "ISO C17; POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-supplied pointers are non-null and point to valid objects; text inputs are NUL terminated. Input bounds specifically stated in each contract are enforced by the described ingress. GNU gzip 1.12 is installed at /usr/bin/gzip; a sanitized environment is supplied by the service; no attacker can modify current.dat or its directory during execution."
+      },
+      "operation_contract": {
+        "purpose": "Compress the current service-owned spool file at one of two approved levels.",
+        "trust_boundary": "A scheduler caller chooses a public mode label but cannot choose a command, path, or arbitrary options.",
+        "legitimate_examples": [
+          {
+            "input": "Mode fast",
+            "expected": "Start gzip -1 on the fixed current.dat file and return its exit code."
+          },
+          {
+            "input": "Mode fast;id",
+            "expected": "Reject with -1 without launching anything."
+          }
+        ],
+        "permitted_changes": [
+          "Keep exact allow-list mapping, separate argv entries and child reaping.",
+          "Preserve the parent worker process and exit-code semantics."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Changing posix_spawn to system would introduce a shell boundary.",
+        "Do not treat an arbitrary argument string as an allowed compression level."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Process construction with fixed command and allow-listed data; compression content security is out of scope.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "c-fixed-compression-dispatch",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A safe process launch derives its only variable option from a closed business-mode mapping and preserves child lifecycle explicitly. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/popen.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

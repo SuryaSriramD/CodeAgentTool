@@ -1,0 +1,977 @@
+{
+  "reviewer_kind": "ai",
+  "languages": [
+    "python",
+    "javascript",
+    "typescript",
+    "ruby",
+    "php"
+  ],
+  "cases": [
+    {
+      "case_id": "python-catalog-filter-vulnerable",
+      "content_sha256": "4206b88813f68f49303101f2b60833610ad98393d630e6b6b537b1b977fecc9e",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.py:4-5 carries the Flask query value directly into a quoted SQLite SQL expression; no binding or escaping occurs. CWE-89 fits if products exists. db.py:1-2 explicitly opens a fresh in-memory database but never initializes that table, so reachability of a successful query needs a declared setup contract.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "MISSING_DATABASE_INITIALIZATION",
+          "message": "db.py:2 opens a fresh :memory: database and no supplied file creates products; app.py:5 therefore does not demonstrate the described successful lookup as written.",
+          "recommendation": "Document fixture setup and expected schema/data, or include initialization in a new corpus version; do not count startup errors as security success.",
+          "references": [
+            "https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders"
+          ]
+        }
+      ],
+      "assumptions": [
+        "A Flask request context invokes search().",
+        "The same connection has an initialized products(name) table before search(), and remains on an allowed SQLite thread."
+      ],
+      "independence_group": "python:catalog-filter"
+    },
+    {
+      "case_id": "python-catalog-filter-safe",
+      "content_sha256": "c106016ff6b8426a3862dfffce57117722441a94985f7e929a818eac2fcba90d",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.py:4-5 passes name as the single bound value of a ? placeholder, preserving quotes and Unicode as data. This is the correct SQLite API. db.py:1-2 creates an empty in-memory database, so the example still requires a declared products-table initialization step to represent a functioning lookup.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "MISSING_DATABASE_INITIALIZATION",
+          "message": "db.py:2 opens a fresh :memory: database and no supplied file creates products; app.py:5 therefore does not demonstrate the described successful lookup as written.",
+          "recommendation": "Document fixture setup and expected schema/data, or include initialization in a new corpus version; do not count startup errors as security success.",
+          "references": [
+            "https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders"
+          ]
+        }
+      ],
+      "assumptions": [
+        "A Flask request context invokes search().",
+        "The same connection has an initialized products(name) table before search(), and remains on an allowed SQLite thread."
+      ],
+      "independence_group": "python:catalog-filter"
+    },
+    {
+      "case_id": "python-export-file-vulnerable",
+      "content_sha256": "cd6f8a6688d841501734b928f465ee0139ad1159f83a7c2d9e14261d7ca7f0f0",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.py:4 joins an untrusted Flask query value to /srv/exports and reads it directly. Parent traversal, and an absolute path overriding the root, reach files outside the intended tree; CWE-22 is appropriate.",
+      "issues": [],
+      "assumptions": [
+        "Python 3.9+ supplies Path.is_relative_to().",
+        "The directory and ancestor symlinks cannot be modified by an attacker between resolve() and read_bytes(); the check is not an atomic defense against a hostile filesystem.",
+        "Flask invokes download() with attacker-controlled file text."
+      ],
+      "independence_group": "python:export-file"
+    },
+    {
+      "case_id": "python-export-file-safe",
+      "content_sha256": "e3585c99e9c7b4f9ed4ef7aa1dd3b348e50d78680f9a26eb93c3cdaf59cd71d1",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.py:4-8 resolves root and target before checking path ancestry, rejecting both parent traversal and existing symlinks that resolve outside the root while retaining nested export paths. Path.is_relative_to alone would be lexical, but resolution precedes it here.",
+      "issues": [],
+      "assumptions": [
+        "Python 3.9+ supplies Path.is_relative_to().",
+        "The directory and ancestor symlinks cannot be modified by an attacker between resolve() and read_bytes(); the check is not an atomic defense against a hostile filesystem.",
+        "Flask invokes download() with attacker-controlled file text."
+      ],
+      "independence_group": "python:export-file"
+    },
+    {
+      "case_id": "python-image-proxy-vulnerable",
+      "content_sha256": "28f62361e1830f4f1e010b76de073d2a2e36b6000cde4b563047fe37c9878e0b",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.py:4 gives an attacker the entire requests URL, including scheme, host, port and path. A server-side call can reach internal HTTP services; CWE-918 fits. Default redirects add a second uncontrolled destination path.",
+      "issues": [],
+      "assumptions": [
+        "The function runs on a server with network access.",
+        "Configured asset hosts, DNS and proxy settings are trusted and are not rebound or replaced by the caller.",
+        "The intended public API may use asset identifiers instead of arbitrary URL strings; that restriction is explicitly accepted by the remediation constraint."
+      ],
+      "independence_group": "python:image-proxy"
+    },
+    {
+      "case_id": "python-image-proxy-safe",
+      "content_sha256": "46fa206443555cdde7ac27192ee60183559bfede5c172b69cddd849e8ca6f772",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.py:3-5 limits selection to two configured HTTPS URLs and disables redirects. Unknown asset IDs fail during dictionary lookup before a request is made. No user URL enters the transport.",
+      "issues": [],
+      "assumptions": [
+        "The function runs on a server with network access.",
+        "Configured asset hosts, DNS and proxy settings are trusted and are not rebound or replaced by the caller.",
+        "The intended public API may use asset identifiers instead of arbitrary URL strings; that restriction is explicitly accepted by the remediation constraint."
+      ],
+      "independence_group": "python:image-proxy"
+    },
+    {
+      "case_id": "python-archive-command-vulnerable",
+      "content_sha256": "c0e80572e753c7677efdf819a9f3df2c75138c8ba20b6d2bfe40d63cc8902f3c",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.py:4 concatenates the request archive into a shell command and sets shell=True. Shell metacharacters are interpreted before tar receives arguments, so CWE-78 is directly supported.",
+      "issues": [],
+      "assumptions": [
+        "The server uses a trusted tar supporting --list and --file and a trusted PATH.",
+        "The benchmark targets shell/option interpretation, not archive authorization or tar remote-archive policy; if only local archives are allowed, the corpus must separately specify that requirement.",
+        "Flask provides one string archive argument."
+      ],
+      "independence_group": "python:archive-command"
+    },
+    {
+      "case_id": "python-archive-command-safe",
+      "content_sha256": "8c8aef96d07e4f728666f8fa995b2233c3384bf0ea15552201bf8a2edeb0db99",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.py:4 supplies a fixed executable and argument vector with shell=False; the request value is the mandatory operand of --file rather than a separate option. Shell punctuation is passed as archive text, and tar listing remains the operation.",
+      "issues": [],
+      "assumptions": [
+        "The server uses a trusted tar supporting --list and --file and a trusted PATH.",
+        "The benchmark targets shell/option interpretation, not archive authorization or tar remote-archive policy; if only local archives are allowed, the corpus must separately specify that requirement.",
+        "Flask provides one string archive argument."
+      ],
+      "independence_group": "python:archive-command"
+    },
+    {
+      "case_id": "python-signed-state-name-vulnerable",
+      "content_sha256": "b2e9d6165ee163e625990ac95880defc7bdd0d9b12a2dcc7345567551641f130",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.py:4-5 reads raw request bytes and sends them to pickle.loads without authenticating a signature. The variable name signed_state has no protective effect; attacker-controlled pickle instructions can invoke object reconstruction behavior. CWE-502 is appropriate.",
+      "issues": [],
+      "assumptions": [
+        "The request body is untrusted and the handler is reachable.",
+        "The explicitly requested migration to JSON is allowed at the wire-format boundary; existing pickle clients/state require an independently specified migration if backward compatibility is required.",
+        "Request/body resource limits are supplied outside this deserialization-specific example."
+      ],
+      "independence_group": "python:signed-state-name"
+    },
+    {
+      "case_id": "python-signed-state-name-safe",
+      "content_sha256": "903ed8614b723ae391baf6e46008f918b0744af2204ae6d6cbac256b43234b68",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.py:4-8 parses bytes with json.loads, does not install object hooks, and requires a dict. No pickle or arbitrary class construction remains; this meets the specified data-only mapping constraint.",
+      "issues": [],
+      "assumptions": [
+        "The request body is untrusted and the handler is reachable.",
+        "The explicitly requested migration to JSON is allowed at the wire-format boundary; existing pickle clients/state require an independently specified migration if backward compatibility is required.",
+        "Request/body resource limits are supplied outside this deserialization-specific example."
+      ],
+      "independence_group": "python:signed-state-name"
+    },
+    {
+      "case_id": "python-outbound-certificates-vulnerable",
+      "content_sha256": "d221ff00f398aca9cb93b5764f8a6f1eeba21599588e5f452579e917eccdf3c5",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.py:3 explicitly sets verify=False for an HTTPS request, bypassing certificate and hostname authentication. A fixed destination does not prevent an on-path attacker from impersonating it; CWE-295 fits.",
+      "issues": [],
+      "assumptions": [
+        "Requests is used without an adapter that overrides TLS verification.",
+        "The CA bundle exists and is trusted; the example path assumes a Linux distribution providing that bundle.",
+        "An on-path attacker is in scope; control of the fixed hostname is not required."
+      ],
+      "independence_group": "python:outbound-certificates"
+    },
+    {
+      "case_id": "python-outbound-certificates-safe",
+      "content_sha256": "79dd6f83056ba52040d79f7e80fd5aa809383ed47fcd283462efb1931a6bdd3f",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.py:3 supplies a CA bundle path through verify, which enables trust-chain and hostname validation rather than disabling it. The configured trust-root behavior matches the remediation constraint.",
+      "issues": [],
+      "assumptions": [
+        "Requests is used without an adapter that overrides TLS verification.",
+        "The CA bundle exists and is trusted; the example path assumes a Linux distribution providing that bundle.",
+        "An on-path attacker is in scope; control of the fixed hostname is not required."
+      ],
+      "independence_group": "python:outbound-certificates"
+    },
+    {
+      "case_id": "javascript-log-command-vulnerable",
+      "content_sha256": "a44bfd3876ba4a943fbb93290449886da8579918e32deb3bdab3d72f6b384c29",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.js:2 concatenates req.query.term into execSync, which invokes a shell. A term containing shell syntax changes the command; CWE-78 fits directly.",
+      "issues": [],
+      "assumptions": [
+        "A Node.js server invokes handle() with one string query term.",
+        "A trusted GNU/BSD grep supporting -- is on trusted PATH.",
+        "Regular-expression search is intentional; the case targets shell injection rather than regex resource consumption."
+      ],
+      "independence_group": "javascript:log-command"
+    },
+    {
+      "case_id": "javascript-log-command-safe",
+      "content_sha256": "112ce1671d2a529d8f5e4cf7e129a505df72a7ad6e39411560c3c57b5e695a68",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.js:2 uses execFileSync with a fixed grep executable, a separate term argument and -- before user data. The shell is not invoked by default and leading-dash terms cannot select grep options. The fixed log file remains the searched file.",
+      "issues": [],
+      "assumptions": [
+        "A Node.js server invokes handle() with one string query term.",
+        "A trusted GNU/BSD grep supporting -- is on trusted PATH.",
+        "Regular-expression search is intentional; the case targets shell injection rather than regex resource consumption."
+      ],
+      "independence_group": "javascript:log-command"
+    },
+    {
+      "case_id": "javascript-template-load-vulnerable",
+      "content_sha256": "cdd6a9f09314264c8386cd7959dfeea2cfa46cb20c6d6ab7f659aeb97285a728",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.js:2 appends req.params.name to a fixed directory string before readFileSync. Decoded ../ segments escape that directory, supporting CWE-22; the route must allow a value containing traversal segments.",
+      "issues": [],
+      "assumptions": [
+        "The runtime supports Object.hasOwn and the supplied code executes server-side.",
+        "The vulnerable route supplies a string containing decoded traversal, rather than a router that excludes every slash/traversal spelling.",
+        "The fixed template paths and filesystem are trusted; restricting the public API to listed identifiers is authorized."
+      ],
+      "independence_group": "javascript:template-load"
+    },
+    {
+      "case_id": "javascript-template-load-safe",
+      "content_sha256": "289115f3c913e0b27d1c6606a4027a3e55bddc8270b52d80de978c6c06ef7c49",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.js:2-3 resolves only own properties of a fixed template map. Object.hasOwn prevents inherited names such as constructor from being accepted, and no caller-controlled path is concatenated into the filesystem operation.",
+      "issues": [],
+      "assumptions": [
+        "The runtime supports Object.hasOwn and the supplied code executes server-side.",
+        "The vulnerable route supplies a string containing decoded traversal, rather than a router that excludes every slash/traversal spelling.",
+        "The fixed template paths and filesystem are trusted; restricting the public API to listed identifiers is authorized."
+      ],
+      "independence_group": "javascript:template-load"
+    },
+    {
+      "case_id": "javascript-webhook-preview-vulnerable",
+      "content_sha256": "57febf93f7f060cb7d96c5fae6e65b98cce8d66b3afab4a928a0af3f64b2155b",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.js:1 performs server-side fetch on req.body.url with no destination restriction. Internal addresses and redirect targets are reachable; CWE-918 fits under the server-side execution assumption.",
+      "issues": [],
+      "assumptions": [
+        "This is a Node.js server with global fetch, not browser-only code.",
+        "Configured host/DNS/proxy settings are trusted.",
+        "The intended safe API accepts a public target ID and may reject arbitrary user URLs."
+      ],
+      "independence_group": "javascript:webhook-preview"
+    },
+    {
+      "case_id": "javascript-webhook-preview-safe",
+      "content_sha256": "d50ebb71a5ac25baf886d6165e1404961b7dbdd99935b1416b0b895ab5c31fe3",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.js:1 selects an own property from a fixed HTTPS destination map and sets redirect:error. Unknown identifiers fail before fetch and HTTP redirects are rejected, so the caller cannot select an internal destination through this code.",
+      "issues": [],
+      "assumptions": [
+        "This is a Node.js server with global fetch, not browser-only code.",
+        "Configured host/DNS/proxy settings are trusted.",
+        "The intended safe API accepts a public target ID and may reject arbitrary user URLs."
+      ],
+      "independence_group": "javascript:webhook-preview"
+    },
+    {
+      "case_id": "javascript-calculator-vulnerable",
+      "content_sha256": "4c0df99f048d58ea6afccd1d2b9836e20932d862bc679e4cc08a85e4ab569381",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed vulnerable CWE-95 label is supported. The legitimate behavior required of a repair is underspecified in this case; this is a review-contract concern, not evidence that the scoring implementation uses a wrong reference fix.",
+      "rationale": "app.js:1 evaluates req.body.expression as JavaScript, supporting CWE-95. This case asks for explicit numeric conversion while preserving supported numeric computation, but does not say whether legitimate inputs include arithmetic expressions such as 1+2 or only number literals. That case-local ambiguity can lead independent proposal reviewers to disagree about rejecting ordinary expressions.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "LEGITIMATE_OPERATION_UNDERSPECIFIED",
+          "message": "app.js:1 accepts general JavaScript expressions, while this case's remediation constraints require numeric conversion without defining the permitted numeric grammar or input/output examples. A fix that rejects 1+2 may be valid for a number-only contract or a regression for an arithmetic calculator.",
+          "recommendation": "Specify legitimate input syntax, intended operations, rejection behavior and representative input/output examples in this case's remediation contract. Preserve rejection of executable source. Version revised metadata and obtain human approval before freezing; do not use the paired safe case as an unstated gold fix.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The request field is an attacker-controlled string.",
+        "The intended numeric grammar and operation have not been specified."
+      ],
+      "independence_group": "javascript:calculator"
+    },
+    {
+      "case_id": "javascript-calculator-safe",
+      "content_sha256": "e9719ed81dff33eeaa52a40a0c88cf7c1827cc566b830537d515f92cae3bb28f",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe security label is supported when assessed independently. A behavior difference from a separate vulnerable case does not make this label wrong.",
+      "rationale": "app.js:1 uses Number, checks finiteness and doubles the parsed number. It does not execute the input as JavaScript; the safe security label is supported. Its behavior differs from the vulnerable scenario, but benchmark.py evaluates each case independently and never treats this source as a reference fix for that other case.",
+      "issues": [],
+      "assumptions": [
+        "The request field is an attacker-controlled string.",
+        "This independent safe case computes twice a finite Number conversion; it is not a gold remediation for the vulnerable calculator."
+      ],
+      "independence_group": "javascript:calculator"
+    },
+    {
+      "case_id": "javascript-account-lookup-vulnerable",
+      "content_sha256": "c3ef1a5e47556f280ffb27b4832435606f00ef37ed19521e9054335e9366fcfb",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.js:1 concatenates caller email into a quoted SQL literal; a real SQL driver receives attacker-controlled syntax and CWE-89 fits. The db parameter is untyped and unconfigured, leaving placeholder syntax, return shape and the valid remediation API undecided.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "DATABASE_DRIVER_UNSPECIFIED",
+          "message": "app.js:1 calls a generic db.query; the paired ?-placeholder solution is not valid or equally safe for every possible driver.",
+          "recommendation": "Declare a specific driver/version, SQL mode, query-input type and result contract so that reviewers can evaluate actual parameter binding.",
+          "references": [
+            "https://github.com/mysqljs/mysql#escaping-query-values",
+            "https://node-postgres.com/features/queries#parameterized-query"
+          ]
+        }
+      ],
+      "assumptions": [
+        "lookup() is called with attacker-controlled email and a real database client.",
+        "The accounts table and id/email columns exist."
+      ],
+      "independence_group": "javascript:account-lookup"
+    },
+    {
+      "case_id": "javascript-account-lookup-safe",
+      "content_sha256": "f1364945f7c60505bb02c9677f149350478c58f183da8ff5f67efb11cb2483d7",
+      "verdict": "needs_clarification",
+      "label_assessment": "Safe only under a specified driver and scalar-input contract; the unconditional empty expected_findings label is not established by the supplied source.",
+      "rationale": "app.js:1 passes req.query.email as a ? replacement, which can safely represent a scalar string in a declared compatible driver. It is not universally a prepared statement: mysqljs query performs client-side escaping by value shape, and an object such as {email:1} can expand the predicate to email=`email`=1. No scalar check or specific driver is present.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "SQL_SAFE_LABEL_DEPENDS_ON_DRIVER_AND_INPUT_SHAPE",
+          "message": "app.js:1 forwards unvalidated req.query.email to a generic ? substitution API. For mysqljs-compatible formatting, object-shaped input is expanded as SQL assignments instead of a single bound scalar; the official driver explicitly requires shape validation.",
+          "recommendation": "Name the exact driver and require a scalar string or use a real prepared/execute API with documented parameter semantics. Include nested-query input as a counterexample in the revised corpus.",
+          "references": [
+            "https://github.com/mysqljs/mysql#escaping-query-values"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The safe label currently depends on an unstated database driver and a guarantee that email is a scalar string.",
+        "The endpoint uses a query parser whose structured-value behavior must be pinned."
+      ],
+      "independence_group": "javascript:account-lookup"
+    },
+    {
+      "case_id": "javascript-payment-client-vulnerable",
+      "content_sha256": "aab9911825b401f9fb3823300e52b1c09a09607c02597e944ed5e3d79b0d8fc6",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.js:2-3 constructs and exports an HTTPS agent with rejectUnauthorized:false. This is a real insecure TLS configuration matching CWE-295, although no request using the exported agent is supplied.",
+      "issues": [],
+      "assumptions": [
+        "A consuming HTTPS request uses the exported agent without overriding its verification settings.",
+        "This is a structural configuration case; it does not establish an observed exploitable request path.",
+        "The Node.js trust store and configured request hostname are trusted."
+      ],
+      "independence_group": "javascript:payment-client"
+    },
+    {
+      "case_id": "javascript-payment-client-safe",
+      "content_sha256": "6330621fb6bc3626f6753ab57e124b1ef10c5b8932ea371e8003f20f984d2e17",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.js:2-3 exports an HTTPS agent with rejectUnauthorized:true and no custom identity-check override. The demonstrated certificate-verification configuration is safe.",
+      "issues": [],
+      "assumptions": [
+        "A consuming HTTPS request uses the exported agent without overriding its verification settings.",
+        "This is a structural configuration case; it does not establish an observed exploitable request path.",
+        "The Node.js trust store and configured request hostname are trusted."
+      ],
+      "independence_group": "javascript:payment-client"
+    },
+    {
+      "case_id": "typescript-backup-process-vulnerable",
+      "content_sha256": "bbd3d1816488c4fa2ab9b78caf8425b4ea5552c3f62983c5170908d98d186246",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.ts:2 interpolates destination into child_process.exec, whose shell interpretation supports CWE-78.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "UNSPECIFIED_EXECUTABLE_CONTRACT",
+          "message": "app.ts:2 invokes a fictional/unspecified backup-tool, so the corpus does not establish whether -- is accepted or which input preserves backup behavior.",
+          "recommendation": "Document the trusted utility contract and representative valid destination/output, or use an actual pinned utility with those semantics.",
+          "references": [
+            "https://nodejs.org/api/child_process.html#child_processexecfilefile-args-options-callback"
+          ]
+        }
+      ],
+      "assumptions": [
+        "A Node.js application invokes backup() with an untrusted string destination.",
+        "backup-tool is intended to be a trusted installed executable with a declared command-line interface."
+      ],
+      "independence_group": "typescript:backup-process"
+    },
+    {
+      "case_id": "typescript-backup-process-safe",
+      "content_sha256": "354754d22e7829e9f90ae4ffb7f1aa2a9648f4b5900a1ebf6a2ec47fe2ead99a",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.ts:2 uses execFile with a separate destination and --, removing shell interpretation. Whether -- protects options and still performs a backup depends on the undefined backup-tool interface.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "UNSPECIFIED_EXECUTABLE_CONTRACT",
+          "message": "app.ts:2 invokes a fictional/unspecified backup-tool, so the corpus does not establish whether -- is accepted or which input preserves backup behavior.",
+          "recommendation": "Document the trusted utility contract and representative valid destination/output, or use an actual pinned utility with those semantics.",
+          "references": [
+            "https://nodejs.org/api/child_process.html#child_processexecfilefile-args-options-callback"
+          ]
+        }
+      ],
+      "assumptions": [
+        "A Node.js application invokes backup() with an untrusted string destination.",
+        "backup-tool is intended to be a trusted installed executable with a declared command-line interface."
+      ],
+      "independence_group": "typescript:backup-process"
+    },
+    {
+      "case_id": "typescript-document-load-vulnerable",
+      "content_sha256": "5ee56c3d58023993730d0cb0c5814c0aeff00ca48ff3769bae79c8d10e6bd7ad",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.ts:2 interpolates req.query.path directly into a path below /srv/docs. Relative parent components are normalized by the filesystem and can reach other readable files; CWE-22 fits.",
+      "issues": [],
+      "assumptions": [
+        "A Node.js server supplies an untrusted string path.",
+        "The TypeScript module configuration supports the node:fs default import and a trusted filesystem."
+      ],
+      "independence_group": "typescript:document-load"
+    },
+    {
+      "case_id": "typescript-document-load-safe",
+      "content_sha256": "6e527914bed97473d34a968098f4fb9c51f24d5255d5fe22da291ef926846a9c",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.ts:2-3 uses a fixed document map, so ordinary string IDs cannot construct an arbitrary file path. However, the truthiness check also admits inherited values such as constructor; in an ordinary unmodified prototype these are wrong-typed values that cause readFileSync to reject, not demonstrated traversal.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "INHERITED_LOOKUP_NOT_EXPLICIT_ALLOWLIST",
+          "message": "app.ts:3 uses docs[key] and a truthiness check rather than an own-property check. Inherited names reach the filesystem API and violate the claimed explicit rejection contract, but no traversal exploit is established here.",
+          "recommendation": "Use Object.hasOwn or a null-prototype/Map lookup and validate the input as a string, making the counterexample unambiguous.",
+          "references": [
+            "https://tc39.es/ecma262/multipage/ordinary-and-exotic-objects-behaviours.html#sec-ordinaryget"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Object.prototype is not polluted by another component.",
+        "The fixed files and filesystem are trusted.",
+        "Node rejects inherited function/object values as invalid filesystem path types."
+      ],
+      "independence_group": "typescript:document-load"
+    },
+    {
+      "case_id": "typescript-feed-preview-vulnerable",
+      "content_sha256": "05244b4f37ec10ec4caa7e87cc144582d6e192b98f510256b4406ffe8e8e31d8",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.ts:2 passes the entire caller URL to axios.get, allowing an untrusted requester to select server-side destinations. No address restriction or redirect policy is present; CWE-918 fits in Node.",
+      "issues": [],
+      "assumptions": [
+        "This is server-side Axios using its Node HTTP adapter.",
+        "The caller controls req.query.url and the server can reach a sensitive internal network destination."
+      ],
+      "independence_group": "typescript:feed-preview"
+    },
+    {
+      "case_id": "typescript-feed-preview-safe",
+      "content_sha256": "3e87072299485e772ba8ec9e96cf8ffdfcbdc68cd6581e58e6cfaa15b465cb28",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.ts:2-3 selects a configured HTTPS feed and sets maxRedirects:0, which disables redirects for Axios in Node. The remaining plain-object lookup can produce inherited wrong-typed values; it does not show an attacker-chosen URL without a separate prototype mutation.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "INHERITED_LOOKUP_NOT_EXPLICIT_ALLOWLIST",
+          "message": "app.ts:3 accepts any truthy feeds[key], including inherited non-URL values. The ordinary consequence is a URL/type error, not a demonstrated SSRF bypass.",
+          "recommendation": "Use Object.hasOwn or Map and a string input check; record Node HTTP adapter semantics for maxRedirects.",
+          "references": [
+            "https://tc39.es/ecma262/multipage/ordinary-and-exotic-objects-behaviours.html#sec-ordinaryget",
+            "https://axios.rest/pages/advanced/request-config#maxredirects-node-js-only"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Axios uses the Node HTTP adapter; maxRedirects is a Node option and must not be assumed to control browser redirects.",
+        "Object.prototype, the fixed host, DNS, proxy settings and global Axios defaults are trusted.",
+        "The authorized API uses a feed ID instead of an arbitrary URL."
+      ],
+      "independence_group": "typescript:feed-preview"
+    },
+    {
+      "case_id": "typescript-formula-parser-vulnerable",
+      "content_sha256": "7db75ab11c3a2c6bd86c844c1f0b3f55b11cda2bcc0930486663978b4d194bc0",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed vulnerable CWE-95 label is supported. The legitimate behavior required of a repair is underspecified in this case; this is a review-contract concern, not evidence that the scoring implementation uses a wrong reference fix.",
+      "rationale": "app.ts:1 constructs and executes a Function from the supplied text, supporting CWE-95. The same case asks for numeric conversion while preserving supported numeric computation, but does not define whether a formula such as 1+2 must remain supported. The missing legitimate-input boundary is relevant to human review of proposals for this case itself.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "LEGITIMATE_OPERATION_UNDERSPECIFIED",
+          "message": "app.ts:1 evaluates expressions while the remediation constraint asks for explicit numeric conversion. It does not specify accepted formula syntax, whether expression evaluation is a required feature, or examples of legitimate outputs.",
+          "recommendation": "Specify legitimate input syntax, intended operations, rejection behavior and representative input/output examples in this case's remediation contract. Preserve rejection of executable source. Version revised metadata and obtain human approval before freezing; do not use the paired safe case as an unstated gold fix.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The string argument crosses an untrusted-input boundary.",
+        "The acceptable formula grammar and arithmetic operation are currently unspecified."
+      ],
+      "independence_group": "typescript:formula-parser"
+    },
+    {
+      "case_id": "typescript-formula-parser-safe",
+      "content_sha256": "27c55c39e5a48cc65f043fa0e919b076f38b4fe807e6d5eb0ccc6d2642a98e28",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe security label is supported when assessed independently. A behavior difference from a separate vulnerable case does not make this label wrong.",
+      "rationale": "app.ts:1 converts input to a finite number and adds one, without constructing executable code. The safe security label is supported. Adding one differs from the vulnerable case, but the runner does not supply this safe case to reviewers as that case's expected fix.",
+      "issues": [],
+      "assumptions": [
+        "The string argument is untrusted.",
+        "This independent safe case adds one to a finite numeric input; it is not a gold remediation for the vulnerable formula parser."
+      ],
+      "independence_group": "typescript:formula-parser"
+    },
+    {
+      "case_id": "typescript-invoice-lookup-vulnerable",
+      "content_sha256": "ddcb0a268d1a17fb2121d5d232872d40ed1a7cb3dccd7df1a8928bcbbeb7c5b3",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.ts:1 inserts reference into a quoted SQL template with no binding, supporting CWE-89 when the caller is untrusted.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DATABASE_DRIVER_UNSPECIFIED",
+          "message": "app.ts:1 uses db:any while the safe counterpart requires the node-postgres-style $1 API.",
+          "recommendation": "Declare the concrete client and version so a valid fix cannot be rejected or a nonfunctional placeholder accepted.",
+          "references": [
+            "https://node-postgres.com/features/queries#parameterized-query"
+          ]
+        }
+      ],
+      "assumptions": [
+        "reference is untrusted even though TypeScript annotates it as string.",
+        "The intended database client is node-postgres or another explicitly declared $1-binding API, and invoices(total,ref) exists."
+      ],
+      "independence_group": "typescript:invoice-lookup"
+    },
+    {
+      "case_id": "typescript-invoice-lookup-safe",
+      "content_sha256": "422282a2a7033f62de1a9a891242c6394855c0800f4d2b96eda48eb13e80f403",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.ts:1 uses a $1 parameter and separate values, which is valid and safe for node-postgres. db:any does not establish that this is the actual driver; MySQL-style clients do not use that placeholder contract.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DATABASE_DRIVER_UNSPECIFIED",
+          "message": "app.ts:1 uses db:any while the safe counterpart requires the node-postgres-style $1 API.",
+          "recommendation": "Declare the concrete client and version so a valid fix cannot be rejected or a nonfunctional placeholder accepted.",
+          "references": [
+            "https://node-postgres.com/features/queries#parameterized-query"
+          ]
+        }
+      ],
+      "assumptions": [
+        "reference is untrusted even though TypeScript annotates it as string.",
+        "The intended database client is node-postgres or another explicitly declared $1-binding API, and invoices(total,ref) exists."
+      ],
+      "independence_group": "typescript:invoice-lookup"
+    },
+    {
+      "case_id": "typescript-metadata-client-vulnerable",
+      "content_sha256": "c74a21f8e8d3fca91d446ffc2d39451ed89b6aac45dca2af8fc6bca9b946ca5c",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.ts:2 exports an HTTPS agent with certificate verification disabled. CWE-295 fits a structural TLS misconfiguration; there is no request call demonstrating use.",
+      "issues": [],
+      "assumptions": [
+        "The Node.js TypeScript module setup supports the default HTTPS import.",
+        "A consumer uses this exported agent for HTTPS without overriding its options.",
+        "This is a structural configuration scenario, closely analogous to javascript-payment-client."
+      ],
+      "independence_group": "typescript:metadata-client"
+    },
+    {
+      "case_id": "typescript-metadata-client-safe",
+      "content_sha256": "22cd98b81ccb66e023ea9bfe1d575d1a05bedb5831c58ac7883fd353a9eedb1f",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.ts:2 exports an HTTPS agent with rejection of unauthorized certificates enabled. No hostname-check bypass is present in the supplied code.",
+      "issues": [],
+      "assumptions": [
+        "The Node.js TypeScript module setup supports the default HTTPS import.",
+        "A consumer uses this exported agent for HTTPS without overriding its options.",
+        "This is a structural configuration scenario, closely analogous to javascript-payment-client."
+      ],
+      "independence_group": "typescript:metadata-client"
+    },
+    {
+      "case_id": "ruby-record-filter-vulnerable",
+      "content_sha256": "f22a073127cc8837ef41ef867545eb88dc40e55c1c2e3bde9f28b754e45fd9c5",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.rb:3 interpolates request email into an ActiveRecord SQL condition string. A quote in the value becomes SQL syntax, so CWE-89 fits once the relation is evaluated.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is incorporated into a Rails controller where params is defined and User is an ActiveRecord model.",
+        "The controller/relation is actually evaluated by the request path; ActiveRecord relations are lazy.",
+        "email is a string; array-valued filters are not claimed to preserve exact single-email semantics."
+      ],
+      "independence_group": "ruby:record-filter"
+    },
+    {
+      "case_id": "ruby-record-filter-safe",
+      "content_sha256": "b952ca29a13ab3d41b466242a4b388c8b7c2ba65fe1af07c5498635aca0cbde9",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.rb:3 passes a hash condition to ActiveRecord, keeping the email as a value rather than SQL source. A string value preserves exact email matching and quoted characters.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is incorporated into a Rails controller where params is defined and User is an ActiveRecord model.",
+        "The controller/relation is actually evaluated by the request path; ActiveRecord relations are lazy.",
+        "email is a string; array-valued filters are not claimed to preserve exact single-email semantics."
+      ],
+      "independence_group": "ruby:record-filter"
+    },
+    {
+      "case_id": "ruby-session-marshal-vulnerable",
+      "content_sha256": "6c2a4f67648d9d114046d590a9fef2cb6d0f3b9db5e67c59ec96b12067f3e5bb",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.rb:2 directly unmarshals the caller body, permitting reconstruction of arbitrary loaded Ruby classes. CWE-502 fits; the exact code-execution effect depends on classes available in the host process.",
+      "issues": [],
+      "assumptions": [
+        "body contains untrusted serialized input.",
+        "The accepted remediation explicitly permits a JSON wire-format migration; old Marshal clients are outside the demonstrated input contract.",
+        "Overall input-size limits are supplied by the application."
+      ],
+      "independence_group": "ruby:session-marshal"
+    },
+    {
+      "case_id": "ruby-session-marshal-safe",
+      "content_sha256": "bc4b93f4e08d422a70dca63eebab5a73ee8227f49bf4bf655604d67da3854e9c",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.rb:3-5 calls JSON.parse and enforces Hash, preventing arbitrary class selection. No create-additions option is enabled. The requested data-only object format is implemented.",
+      "issues": [],
+      "assumptions": [
+        "body contains untrusted serialized input.",
+        "The accepted remediation explicitly permits a JSON wire-format migration; old Marshal clients are outside the demonstrated input contract.",
+        "Overall input-size limits are supplied by the application."
+      ],
+      "independence_group": "ruby:session-marshal"
+    },
+    {
+      "case_id": "ruby-profile-yaml-vulnerable",
+      "content_sha256": "cac5606da833902c5785c3214eb3dc0c37c2bf388cb7f871e8fb060f131b7c12",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.rb:3 invokes YAML.unsafe_load on the supplied body. This permits arbitrary class deserialization and object construction, supporting CWE-502 under the untrusted-body assumption.",
+      "issues": [],
+      "assumptions": [
+        "Ruby loads a Psych version exposing these keyword options.",
+        "body is untrusted profile YAML; arbitrary application objects are not a legitimate required profile type.",
+        "Primitive YAML input remains an allowed profile representation."
+      ],
+      "independence_group": "ruby:profile-yaml"
+    },
+    {
+      "case_id": "ruby-profile-yaml-safe",
+      "content_sha256": "cdec92f8c89f701eabfa7b9704646e6d668ddcc722c7b4e26dbff238d34e38d3",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.rb:3 uses safe_load with empty permitted class/symbol lists and aliases:false. Only permitted primitive data is constructed and alias references are rejected; the stated counterexample is supported.",
+      "issues": [],
+      "assumptions": [
+        "Ruby loads a Psych version exposing these keyword options.",
+        "body is untrusted profile YAML; arbitrary application objects are not a legitimate required profile type.",
+        "Primitive YAML input remains an allowed profile representation."
+      ],
+      "independence_group": "ruby:profile-yaml"
+    },
+    {
+      "case_id": "ruby-hostname-command-vulnerable",
+      "content_sha256": "ed528725ba16ae94aa0ab0dd078074f4e28830d2be0245a86252528000ffce41",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.rb:2 passes one interpolated string to system. A user name containing shell metacharacters triggers shell interpretation; CWE-78 fits. The same input surface also requires command-option handling in a fix.",
+      "issues": [],
+      "assumptions": [
+        "The Ruby process runs on a platform with trusted getent available.",
+        "name is an untrusted hostname string and the lookup is invoked."
+      ],
+      "independence_group": "ruby:hostname-command"
+    },
+    {
+      "case_id": "ruby-hostname-command-safe",
+      "content_sha256": "4ca061cb54e34fb443881419b68fd0d9e1d60b8d7e2031a95dd6ec06b4ae1868",
+      "verdict": "revise",
+      "label_assessment": "The proposed safe label is supported against CWE-78 specifically, but the empty all-findings expectation is incomplete because attacker-controlled command options remain (CWE-88).",
+      "rationale": "app.rb:2 uses Ruby multi-argument system, so shell metacharacters are passed literally. GNU getent still parses options using argp_parse with default flags: a supplied name such as --help or --service=files can select an option rather than remain a hosts key. This is argument injection, not shell injection.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "UNTERMINATED_COMMAND_OPTIONS",
+          "message": "app.rb:2 fixes shell interpretation but gives an untrusted string to getent without ending option parsing. The all-safe label omits the remaining option-control behavior.",
+          "recommendation": "Pass an option terminator before the hostname according to the pinned getent contract and include a leading-dash counterexample; alternatively constrain input to a validated hostname grammar.",
+          "references": [
+            "https://ruby-doc.org/3.4/Kernel.html#method-i-system",
+            "https://raw.githubusercontent.com/bminor/glibc/master/nss/getent.c"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The utility is GNU/glibc getent with ordinary GNU option parsing.",
+        "name is an arbitrary caller-controlled string, including values beginning with a dash."
+      ],
+      "independence_group": "ruby:hostname-command"
+    },
+    {
+      "case_id": "ruby-stored-expression-vulnerable",
+      "content_sha256": "f1e60f26b5c9ef45d8128209bb06c71414a1491ae3be993554eb1813cabc63de",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed vulnerable CWE-95 label is supported. The legitimate behavior required of a repair is underspecified in this case; this is a review-contract concern, not evidence that the scoring implementation uses a wrong reference fix.",
+      "rationale": "app.rb:2 evaluates untrusted expression text as Ruby source, supporting CWE-95. The instruction to use numeric parsing for the intended numeric operation leaves the allowed expression grammar and output contract unstated. Human reviewers need that case-local distinction to decide whether a proposed restricted parser preserves legitimate use.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "LEGITIMATE_OPERATION_UNDERSPECIFIED",
+          "message": "app.rb:2 accepts arbitrary Ruby expression syntax, but the remediation constraints do not define the intended numeric operation or which nonliteral arithmetic expressions are legitimate. A reviewer cannot infer the required safe grammar from the unrelated safe-case implementation.",
+          "recommendation": "Specify legitimate input syntax, intended operations, rejection behavior and representative input/output examples in this case's remediation contract. Preserve rejection of executable source. Version revised metadata and obtain human approval before freezing; do not use the paired safe case as an unstated gold fix.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "expression is attacker-controlled text.",
+        "The intended numeric operation and accepted syntax have not been stated."
+      ],
+      "independence_group": "ruby:stored-expression"
+    },
+    {
+      "case_id": "ruby-stored-expression-safe",
+      "content_sha256": "d62153af431e1eacc005f88239ed5919fc8fdb1679996cb47c9eb942f3479083",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe security label is supported when assessed independently. A behavior difference from a separate vulnerable case does not make this label wrong.",
+      "rationale": "app.rb:2 parses with Float and multiplies by two, without evaluating Ruby source. This supports the safe security label. The distinct output contract does not itself invalidate this independently evaluated safe case or demonstrate a scoring defect.",
+      "issues": [],
+      "assumptions": [
+        "expression is caller-controlled text.",
+        "This independent safe case doubles a Float conversion; it is not a gold remediation for the vulnerable stored-expression case."
+      ],
+      "independence_group": "ruby:stored-expression"
+    },
+    {
+      "case_id": "ruby-certificate-mode-vulnerable",
+      "content_sha256": "12be47ee79f654533d3581d88af074a9933fc5e3ca3646f86d7ae9ba48a7829b",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.rb:3-6 enables TLS then sets VERIFY_NONE before returning the Net::HTTP client. This disables server certificate authentication and fits CWE-295 as a structural client configuration.",
+      "issues": [],
+      "assumptions": [
+        "The supported Ruby/OpenSSL version uses standard Net::HTTP TLS and hostname-verification defaults.",
+        "The returned client is used for an HTTPS request without later insecure modification.",
+        "This demonstrates client configuration rather than an actual HTTP operation."
+      ],
+      "independence_group": "ruby:certificate-mode"
+    },
+    {
+      "case_id": "ruby-certificate-mode-safe",
+      "content_sha256": "19efc679e384da17850faf26fca267387b2d2d479f7340212396c48f21356af6",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.rb:3-6 enables TLS and retains VERIFY_PEER. Modern Net::HTTP retains its default hostname verification; the supplied code does not override it.",
+      "issues": [],
+      "assumptions": [
+        "The supported Ruby/OpenSSL version uses standard Net::HTTP TLS and hostname-verification defaults.",
+        "The returned client is used for an HTTPS request without later insecure modification.",
+        "This demonstrates client configuration rather than an actual HTTP operation."
+      ],
+      "independence_group": "ruby:certificate-mode"
+    },
+    {
+      "case_id": "php-member-filter-vulnerable",
+      "content_sha256": "e3ef8ae00115a8caf02ca17f4784961c42a880e5a762ea0b66a2a8a5448215f7",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.php:2 concatenates $_GET[name] into a quoted mysqli SQL string. A caller-controlled quote can alter query structure, supporting CWE-89.",
+      "issues": [],
+      "assumptions": [
+        "The mysqli connection is valid and users(id,name) exists.",
+        "The safe variant requires mysqlnd for mysqli_stmt_get_result, as documented by PHP; that runtime dependency should be pinned.",
+        "The request name is a scalar string and intended query errors are handled by the hosting application."
+      ],
+      "independence_group": "php:member-filter"
+    },
+    {
+      "case_id": "php-member-filter-safe",
+      "content_sha256": "33bb25cdcf98d3160779404921fd5d042536b018462b29bb91e34d438fa32efc",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.php:2 prepares a fixed query, binds the value with string type, executes, and retrieves a mysqli_result. This separates SQL from the input and preserves the SELECT result abstraction.",
+      "issues": [],
+      "assumptions": [
+        "The mysqli connection is valid and users(id,name) exists.",
+        "The safe variant requires mysqlnd for mysqli_stmt_get_result, as documented by PHP; that runtime dependency should be pinned.",
+        "The request name is a scalar string and intended query errors are handled by the hosting application."
+      ],
+      "independence_group": "php:member-filter"
+    },
+    {
+      "case_id": "php-download-path-vulnerable",
+      "content_sha256": "ffa920cbdc0e6c919375f4c0b9ad94c23fcd19eb0fd6c36b0c81acec535a898d",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.php:2 concatenates $_GET[name] below /srv/downloads and reads it. Relative parent segments can escape the root, supporting CWE-22.",
+      "issues": [],
+      "assumptions": [
+        "The intended public download API may be restricted to the configured manual identifier.",
+        "Configured file paths and filesystem permissions are trusted.",
+        "The request key is scalar; invalid array-valued parameters are rejected by the PHP call contract rather than treated as paths."
+      ],
+      "independence_group": "php:download-path"
+    },
+    {
+      "case_id": "php-download-path-safe",
+      "content_sha256": "7806bd24567266b5ba7e6f8abd0123d62efca8a91d4bfc56433b4c827ce33a55",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.php:2 maps only a present allowlisted identifier to a fixed filename, rejects unknown keys before reading, and never combines caller bytes with a filesystem path.",
+      "issues": [],
+      "assumptions": [
+        "The intended public download API may be restricted to the configured manual identifier.",
+        "Configured file paths and filesystem permissions are trusted.",
+        "The request key is scalar; invalid array-valued parameters are rejected by the PHP call contract rather than treated as paths."
+      ],
+      "independence_group": "php:download-path"
+    },
+    {
+      "case_id": "php-remember-cookie-vulnerable",
+      "content_sha256": "9b0c80e4024294e4a0b8dcdb17948fcfbb98c92d76c1e83121a97df9f12ea35d",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.php:2 unserializes raw cookie data with no class restriction or authenticity check. Attacker-chosen objects can invoke deserialization hooks when corresponding classes exist; CWE-502 fits.",
+      "issues": [],
+      "assumptions": [
+        "The PHP runtime supports JSON_THROW_ON_ERROR (PHP 7.3+).",
+        "The cookie is untrusted; application authentication/authorization does not trust restored privilege claims solely because parsing is safe.",
+        "The specified remediation authorizes JSON migration; the host catches JSON exceptions and enforces an overall cookie-size limit."
+      ],
+      "independence_group": "php:remember-cookie"
+    },
+    {
+      "case_id": "php-remember-cookie-safe",
+      "content_sha256": "981a994c9640ead872473a20a34797d705ab83fa0a9436265c74471bf524c2c0",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.php:2 uses JSON decoding into arrays, caps nesting at 32 and requests exceptions on malformed JSON. No arbitrary PHP object instantiation remains. The constraint does not require a top-level mapping, so accepting JSON scalars is not itself a mismatch.",
+      "issues": [],
+      "assumptions": [
+        "The PHP runtime supports JSON_THROW_ON_ERROR (PHP 7.3+).",
+        "The cookie is untrusted; application authentication/authorization does not trust restored privilege claims solely because parsing is safe.",
+        "The specified remediation authorizes JSON migration; the host catches JSON exceptions and enforces an overall cookie-size limit."
+      ],
+      "independence_group": "php:remember-cookie"
+    },
+    {
+      "case_id": "php-diagnostics-vulnerable",
+      "content_sha256": "3ede5461f79d01274957c8be020ee86142d7b4f9c07380f77e388ca504246a5c",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.php:2 appends an untrusted host to shell_exec. Shell punctuation can alter the command, so CWE-78 fits.",
+      "issues": [],
+      "assumptions": [
+        "The server uses a POSIX shell and a Linux/compatible ping supporting -c and --; these are not portable Windows semantics.",
+        "The locale and trusted executable path are controlled by the service.",
+        "Arbitrary ICMP destination selection is the intended diagnostic capability, not a promise that this routine restricts network reachability."
+      ],
+      "independence_group": "php:diagnostics"
+    },
+    {
+      "case_id": "php-diagnostics-safe",
+      "content_sha256": "11e5a0bc7e607b7f4121c163b2b7c208dabb428c1e742b451d51705ab2b2b855",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.php:2 places -- before one escapeshellarg-quoted host. Under a POSIX shell and a ping accepting --, the host is a single argument and cannot select options or inject shell syntax.",
+      "issues": [],
+      "assumptions": [
+        "The server uses a POSIX shell and a Linux/compatible ping supporting -c and --; these are not portable Windows semantics.",
+        "The locale and trusted executable path are controlled by the service.",
+        "Arbitrary ICMP destination selection is the intended diagnostic capability, not a promise that this routine restricts network reachability."
+      ],
+      "independence_group": "php:diagnostics"
+    },
+    {
+      "case_id": "php-dynamic-plugin-vulnerable",
+      "content_sha256": "345d8478500fa5e322a6aba61aa51b8664f4af00b8b1e115b6e92ed8c6c41151",
+      "verdict": "needs_clarification",
+      "label_assessment": "The proposed vulnerable CWE-95 label is supported. The legitimate behavior required of a repair is underspecified in this case; this is a review-contract concern, not evidence that the scoring implementation uses a wrong reference fix.",
+      "rationale": "app.php:2 evaluates supplied PHP code and returns its result, supporting CWE-95. This case asks for the intended string transformation without identifying that transformation, permitted operations, or normal input/output examples. The vulnerability label is sound; the legitimate replacement behavior needs definition within this case before proposals can be reviewed consistently.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "LEGITIMATE_OPERATION_UNDERSPECIFIED",
+          "message": "app.php:2 exposes PHP evaluation, while the remediation constraint says to provide the intended string transformation without naming it. No case-local example establishes whether uppercase conversion, a selected plugin operation, or another transformation is required.",
+          "recommendation": "Specify legitimate input syntax, intended operations, rejection behavior and representative input/output examples in this case's remediation contract. Preserve rejection of executable source. Version revised metadata and obtain human approval before freezing; do not use the paired safe case as an unstated gold fix.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "source is attacker-controlled.",
+        "The proposed intended string transformation has not been defined in the vulnerable program."
+      ],
+      "independence_group": "php:dynamic-plugin"
+    },
+    {
+      "case_id": "php-dynamic-plugin-safe",
+      "content_sha256": "0d17938d2c1393e4a57591398d11a1999def9f16b8a1f1a79a488a73c3614c56",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe security label is supported when assessed independently. A behavior difference from a separate vulnerable case does not make this label wrong.",
+      "rationale": "app.php:2 applies strtoupper to the supplied string and never executes PHP source. The safe security label is supported. It is a separate uppercase-transform example, not a behavior-preserving gold fix for the eval scenario; the benchmark does not use it as one.",
+      "issues": [],
+      "assumptions": [
+        "source is caller-controlled text.",
+        "The operation of this independent safe case is strtoupper string conversion; it is not a gold remediation for the vulnerable plugin evaluator."
+      ],
+      "independence_group": "php:dynamic-plugin"
+    },
+    {
+      "case_id": "php-account-query-pdo-vulnerable",
+      "content_sha256": "edad7174d0f6712518c4b104728d55a879cf30645d0cbf669ba471f898b2a629",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label and expected family/CWE are supported under the stated assumptions.",
+      "rationale": "app.php:2 concatenates account directly into a numeric SQL expression. If the caller controls that string, it can introduce operators or additional SQL syntax; CWE-89 fits without requiring stacked statements.",
+      "issues": [],
+      "assumptions": [
+        "account is caller-controlled text, not an already validated integer supplied by a trusted layer.",
+        "A real PDO driver supports ? placeholders and the accounts(id,balance) schema.",
+        "PDO driver encoding and any emulation settings are correctly configured for the supported deployment."
+      ],
+      "independence_group": "php:account-query-pdo"
+    },
+    {
+      "case_id": "php-account-query-pdo-safe",
+      "content_sha256": "7a0fab2b68fbf88e1ee61bfe3fd685fce48827c31fa1034ac45ec420dc31ddb4",
+      "verdict": "supported",
+      "label_assessment": "The proposed safe label is supported for the demonstrated target security property under the stated assumptions.",
+      "rationale": "app.php:2 prepares a fixed statement, supplies account as a positional parameter and returns the executed statement, preserving the PDOStatement-style result. Account data is not concatenated into SQL.",
+      "issues": [],
+      "assumptions": [
+        "account is caller-controlled text, not an already validated integer supplied by a trusted layer.",
+        "A real PDO driver supports ? placeholders and the accounts(id,balance) schema.",
+        "PDO driver encoding and any emulation settings are correctly configured for the supported deployment."
+      ],
+      "independence_group": "php:account-query-pdo"
+    }
+  ]
+}

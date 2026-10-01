@@ -1,0 +1,954 @@
+{
+  "reviewer_kind": "ai",
+  "reviewer": "CodeAgent systems-language technical review",
+  "review_date": "2026-09-25",
+  "languages": [
+    "go",
+    "c",
+    "cpp",
+    "bash"
+  ],
+  "corpus_version": "heldout-1.0.0-candidate",
+  "corpus_file_sha256": "f04ead225f76197128a356ee83111e17ea8485ba884661ec447c0c8d9306f378",
+  "scope_notes": [
+    "Source/metadata inspection and selected primary-document verification only; no corpus execution, builds, model benchmark or scanner-profile tuning.",
+    "Each case is independently submitted by the benchmark. A safe sibling is not an automatic expected fix. Cross-pair API differences are annotated as migration concerns, not false safe labels.",
+    "Local verdicts do not establish case independence or human approval. The corpus-wide release blockers apply to every case."
+  ],
+  "cases": [
+    {
+      "case_id": "go-order-query-vulnerable",
+      "content_sha256": "1e162f40ede1f3310ee6f660c3bc00696a942b54b5f548b6e368ff268f517075",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.go:3 concatenates customer into SQL literal syntax before db.Query; quote-breaking input supports CWE-89.",
+      "issues": [],
+      "assumptions": [
+        "customer is untrusted; the database connection and orders table are initialized by trusted code."
+      ],
+      "independence_group": "go-order-query"
+    },
+    {
+      "case_id": "go-order-query-safe",
+      "content_sha256": "f77c19bd88a6c13a319119ec6fd83f16d7267b14985e07fb4972901f52d13433",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.go:3 separates customer from the query text using a positional argument. This is injection-safe with a compatible driver, but the generic database/sql type does not establish that $1 is its placeholder syntax.",
+      "issues": [
+        {
+          "code": "DATABASE_DRIVER_UNSPECIFIED",
+          "message": "app.go:3 uses PostgreSQL-style $1 through the driver-neutral database/sql interface.",
+          "recommendation": "Declare the driver/database and schema; preserve the same database in the positive and negative cases.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [
+            "https://go.dev/doc/database/sql-injection"
+          ],
+          "severity": "major",
+          "source_file": "app.go"
+        }
+      ],
+      "assumptions": [
+        "customer is untrusted; the database connection and orders table are initialized by trusted code."
+      ],
+      "independence_group": "go-order-query"
+    },
+    {
+      "case_id": "go-custom-transport-vulnerable",
+      "content_sha256": "ce6058eb4f6de90e053c36e6d288b28f06df5a4c3ce74802d3d38b36fb5bb6ba",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.go:3 constructs a TLS client configuration that skips the default certificate-chain and hostname checks; no replacement verifier is supplied. CWE-295 fits this unsafe configuration.",
+      "issues": [],
+      "assumptions": [
+        "This config is attached to an outbound TLS client/HTTP transport without later mutation; it is not an unused config or server-only setting.",
+        "Trusted root configuration and server-name selection follow normal client behavior."
+      ],
+      "independence_group": "go-client-tls-verification"
+    },
+    {
+      "case_id": "go-custom-transport-safe",
+      "content_sha256": "b7b8ed3786ae324cf711b69cc4a4a8a841b77a3a4b70ecd63206ab39b35afb80",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.go:3 leaves certificate verification enabled and sets TLS 1.2 as the minimum. No permissive callback appears.",
+      "issues": [],
+      "assumptions": [
+        "This config is attached to an outbound TLS client/HTTP transport without later mutation; it is not an unused config or server-only setting.",
+        "Trusted root configuration and server-name selection follow normal client behavior."
+      ],
+      "independence_group": "go-client-tls-verification"
+    },
+    {
+      "case_id": "go-url-fetcher-vulnerable",
+      "content_sha256": "0f0fa57bbd6d6e4fbd34ea12e2b175af138c55fb24bc0ad81c78e80c393ce4e6",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.go:3 sends the request-selected url to http.Get, allowing the requester to choose an outbound destination. CWE-918 fits a server that can reach resources unavailable to that requester.",
+      "issues": [
+        {
+          "code": "ALLOWED_REQUEST_CONTRACT_UNSPECIFIED",
+          "message": "app.go:3 accepts url, while the rubric requires a configured destination without specifying legitimate URLs or selector behavior.",
+          "recommendation": "State the allowed destination/input and expected response contract so a reviewer can distinguish security restrictions from deleting supported behavior.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.go"
+        }
+      ],
+      "assumptions": [
+        "The vulnerable helper runs in a server-side request context with privileged network reachability.",
+        "The safe destination, proxy settings, DNS administration and trust roots are controlled by the operator."
+      ],
+      "independence_group": "go-url-fetcher"
+    },
+    {
+      "case_id": "go-url-fetcher-safe",
+      "content_sha256": "933e75d7c3d10d387e95294517e8843081adbe7b231e9cb78d2c2e016188c0bf",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.go:3 accepts only a news selector, chooses a fixed HTTPS destination, and prevents redirect following. No caller-supplied URL reaches the client.",
+      "issues": [
+        {
+          "code": "COUNTERPART_IS_NOT_A_DROP_IN_FIX",
+          "message": "app.go:3 uses feed=news; the separate vulnerable example accepts url. This does not invalidate the standalone safe label.",
+          "recommendation": "Document the independent input contract; do not treat this sibling as an automatically behavior-preserving remediation.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [],
+          "severity": "minor",
+          "source_file": "app.go"
+        }
+      ],
+      "assumptions": [
+        "The vulnerable helper runs in a server-side request context with privileged network reachability.",
+        "The safe destination, proxy settings, DNS administration and trust roots are controlled by the operator."
+      ],
+      "independence_group": "go-url-fetcher"
+    },
+    {
+      "case_id": "go-diagnostic-command-vulnerable",
+      "content_sha256": "af601c9d9d0e3a1e7854db5a6703707bd5cf25a500a3870e3c1ed5a0d46e4b46",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.go:3 concatenates name into sh -c source. The shell interprets metacharacters, supporting CWE-78.",
+      "issues": [],
+      "assumptions": [
+        "name is untrusted and the intended operation looks up one username.",
+        "A trusted GNU-compatible id executable supporting -- is resolved through a trusted PATH."
+      ],
+      "independence_group": "go-diagnostic-command"
+    },
+    {
+      "case_id": "go-diagnostic-command-safe",
+      "content_sha256": "777188587952c275e6f790b049acf0e2311c32c3edaac5dcbd952841ceebded1",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.go:3 invokes id directly and passes -- before the username; name is data in one argument and cannot introduce shell syntax.",
+      "issues": [],
+      "assumptions": [
+        "name is untrusted and the intended operation looks up one username.",
+        "A trusted GNU-compatible id executable supporting -- is resolved through a trusted PATH."
+      ],
+      "independence_group": "go-diagnostic-command"
+    },
+    {
+      "case_id": "go-artifact-reader-vulnerable",
+      "content_sha256": "5486b33d2316a3ab3b0e22de017977f3c27c8f9e34ead290643f880c4cdeb5dd",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.go:3 prefixes an untrusted name with /srv/artifacts/ but does not constrain parent segments. A readable file outside that directory can be selected.",
+      "issues": [
+        {
+          "code": "PUBLIC_ARTIFACT_CONTRACT_UNSPECIFIED",
+          "message": "app.go:3 and the constraints do not enumerate the legitimate artifact IDs or current path-to-ID mapping.",
+          "recommendation": "Specify the allowed artifact set and compatibility requirements for the proposed public-ID interface.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [],
+          "severity": "minor",
+          "source_file": "app.go"
+        }
+      ],
+      "assumptions": [
+        "Only public artifacts are authorized; the vulnerable parameter crosses that access boundary.",
+        "The allowlist, artifact file and its parent directories are not writable by the requester."
+      ],
+      "independence_group": "go-artifact-reader"
+    },
+    {
+      "case_id": "go-artifact-reader-safe",
+      "content_sha256": "9b280ff86df54d27396abb204fe6f381a14a9b551e17cfaea587994a38e8e653",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.go:3 maps the sole public ID summary to a fixed path and rejects unknown keys. Caller text cannot form traversal segments in the opened pathname.",
+      "issues": [
+        {
+          "code": "COUNTERPART_IS_NOT_A_DROP_IN_FIX",
+          "message": "app.go:3 maps summary to summary.txt, whereas the vulnerable sibling treats name as a relative filename.",
+          "recommendation": "Record this standalone safe API contract; require explicit caller migration if this design is proposed as a fix to the sibling.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [],
+          "severity": "minor",
+          "source_file": "app.go"
+        }
+      ],
+      "assumptions": [
+        "Only public artifacts are authorized; the vulnerable parameter crosses that access boundary.",
+        "The allowlist, artifact file and its parent directories are not writable by the requester."
+      ],
+      "independence_group": "go-artifact-reader"
+    },
+    {
+      "case_id": "go-checksum-authentication-vulnerable",
+      "content_sha256": "af1c595202bf676e0dc79028c1d938c6f50bb3d0639a3cd4892525c68621113e",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.go:3 uses MD5, a collision-broken digest, but the source contains no comparison, authenticated reference or security-sensitive consumer. A weak-algorithm observation is supported; exploitability is conditional.",
+      "issues": [
+        {
+          "code": "SECURITY_PURPOSE_UNSPECIFIED",
+          "message": "app.go:3 computes and returns a digest; the security dependency that makes collisions consequential is not supplied.",
+          "recommendation": "State whether this is collision-resistant content verification against a trusted reference, authentication, or a nonsecurity checksum; include the consumer and permitted migration.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [
+            "https://pkg.go.dev/crypto/md5"
+          ],
+          "severity": "major",
+          "source_file": "app.go"
+        }
+      ],
+      "assumptions": [
+        "No caller or expected-digest storage is supplied.",
+        "Digest changes necessarily change output bytes; approved compatibility may include migrating digest consumers and stored values."
+      ],
+      "independence_group": "go-checksum-authentication"
+    },
+    {
+      "case_id": "go-checksum-authentication-safe",
+      "content_sha256": "79c3561efd454f080b8f90fa74d3892ba857513e2b7323d7a31b9266701fe71a",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.go:3 uses SHA-256 and the correct 32-byte return size. This removes the MD5 weakness, but an unkeyed digest is not by itself message authentication despite the scenario name.",
+      "issues": [
+        {
+          "code": "AUTHENTICATION_CONTRACT_UNSPECIFIED",
+          "message": "app.go:3 is an unkeyed SHA-256 helper. Its safety claim must not imply authenticity without a trusted reference or keyed/signature construction.",
+          "recommendation": "Define the intended verification property and caller protocol; keep a weak-digest negative label scoped to that property.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.go"
+        }
+      ],
+      "assumptions": [
+        "No caller or expected-digest storage is supplied.",
+        "Digest changes necessarily change output bytes; approved compatibility may include migrating digest consumers and stored values."
+      ],
+      "independence_group": "go-checksum-authentication"
+    },
+    {
+      "case_id": "c-audit-format-vulnerable",
+      "content_sha256": "822abcc3e5e8cde1098ee79117e29f0eb337eeb172b7f35ed53f497af431dc46",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.c:2 passes the caller string as the printf format; conversions are interpreted without matching arguments. CWE-134 is appropriate.",
+      "issues": [],
+      "assumptions": [
+        "message is an untrusted, valid NUL-terminated string; the application intends literal text output."
+      ],
+      "independence_group": "c-cpp-stdio-untrusted-format"
+    },
+    {
+      "case_id": "c-audit-format-safe",
+      "content_sha256": "c4ebb2b0f5ee16644eb28f34601bb8af86796bfc00dae3cc9ada68e9b52d13bc",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.c:2 uses the constant %s format and treats all caller percent signs as data.",
+      "issues": [],
+      "assumptions": [
+        "message is an untrusted, valid NUL-terminated string; the application intends literal text output."
+      ],
+      "independence_group": "c-cpp-stdio-untrusted-format"
+    },
+    {
+      "case_id": "c-archive-shell-vulnerable",
+      "content_sha256": "e5656c00a84f99853b9ce46603ba5a830af0691bf1a185fe4b89dea10ba14829",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.c:3 places name in the command interpreted by system; snprintf bounds the command buffer but does not prevent shell injection.",
+      "issues": [
+        {
+          "code": "PROCESS_LIFECYCLE_CONTRACT_UNSPECIFIED",
+          "message": "app.c:3 waits via system and returns a wait status; the corpus supplies no caller that establishes the required return/lifecycle behavior.",
+          "recommendation": "Make preservation of caller lifetime and exit-status semantics explicit when accepting a direct process fix. A child process with argv and wait is one design to evaluate.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [
+            "https://pubs.opengroup.org/onlinepubs/007904875/functions/exec.html",
+            "https://pubs.opengroup.org/onlinepubs/009696799/functions/popen.html"
+          ],
+          "severity": "minor",
+          "source_file": "app.c"
+        }
+      ],
+      "assumptions": [
+        "The archive filename is untrusted, but the executable and local archive access policy are trusted.",
+        "The safe snippet targets a GNU-compatible tar at /usr/bin/tar."
+      ],
+      "independence_group": "c-archive-shell"
+    },
+    {
+      "case_id": "c-archive-shell-safe",
+      "content_sha256": "f6ed03caec7921e1cbc203ebe2a4809b00453caf72222b99ceb23c2e2666c722",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.c:2 passes the archive name as a separate execl argument. Shell syntax is not evaluated. Successful exec replaces the caller process, which must be intentional for this standalone example.",
+      "issues": [
+        {
+          "code": "EXEC_REPLACES_PROCESS",
+          "message": "app.c:2 has no successful return from execl. It is a shell-safe independent example, not a drop-in replacement for the system-based sibling.",
+          "recommendation": "Declare that replacing the current process is intended, or provide a child-process caller if this is meant to model a returning helper.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [
+            "https://pubs.opengroup.org/onlinepubs/007904875/functions/exec.html"
+          ],
+          "severity": "major",
+          "source_file": "app.c"
+        }
+      ],
+      "assumptions": [
+        "The archive filename is untrusted, but the executable and local archive access policy are trusted.",
+        "The safe snippet targets a GNU-compatible tar at /usr/bin/tar."
+      ],
+      "independence_group": "c-archive-shell"
+    },
+    {
+      "case_id": "c-bounded-copy-vulnerable",
+      "content_sha256": "628289d9209d2d80fd72ef2676b5523ff30a65a7dba489f44fd5aa90bd3b6ff0",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.c:2 copies arbitrary-length input into out[16] without a bound, supporting CWE-120 for sufficiently long input. The local buffer is never consumed.",
+      "issues": [
+        {
+          "code": "NO_OBSERVABLE_OPERATION",
+          "message": "app.c:2 discards the local copy; there is no observable application behavior against which to assess a behavior-preserving fix.",
+          "recommendation": "Add a realistic consumer and state whether overlength input must be rejected, preserved dynamically, or intentionally truncated.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.c"
+        }
+      ],
+      "assumptions": [
+        "value is a valid NUL-terminated string with caller-controlled length."
+      ],
+      "independence_group": "c-cpp-fixed-buffer-copy"
+    },
+    {
+      "case_id": "c-bounded-copy-safe",
+      "content_sha256": "61e21c07bf91e29c2b7376352a4440f4dad378c9198724f5485995f53a0012b3",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.c:2 bounds writes to 16 bytes and terminates the result. Inputs longer than 15 bytes are silently truncated, and the result is never observed.",
+      "issues": [
+        {
+          "code": "TRUNCATION_POLICY_UNSPECIFIED",
+          "message": "app.c:2 discards both the bounded copy and snprintf return value. The code is bounded, but useful output and truncation policy are absent.",
+          "recommendation": "Give the independent case an observable result and explicit overlength behavior; do not infer full data preservation from bounded writes.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.c"
+        }
+      ],
+      "assumptions": [
+        "value is a valid NUL-terminated string with caller-controlled length."
+      ],
+      "independence_group": "c-cpp-fixed-buffer-copy"
+    },
+    {
+      "case_id": "c-stream-format-vulnerable",
+      "content_sha256": "203b48e4d055989416efa7cd50676a2702beb0e03b846faefbd9bc9941c4dd31",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.c:2 uses value as fprintf format text; an untrusted caller can introduce conversions. CWE-134 fits.",
+      "issues": [],
+      "assumptions": [
+        "log is a valid trusted FILE stream; value is an untrusted valid NUL-terminated string intended for literal rendering."
+      ],
+      "independence_group": "c-cpp-stdio-untrusted-format"
+    },
+    {
+      "case_id": "c-stream-format-safe",
+      "content_sha256": "8ca96eb45a4950dafc1ebd01b8ffe7a91a587f90a9d6d37744f814c71f7b620e",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.c:2 writes value through fputs, which does not interpret printf conversions.",
+      "issues": [],
+      "assumptions": [
+        "log is a valid trusted FILE stream; value is an untrusted valid NUL-terminated string intended for literal rendering."
+      ],
+      "independence_group": "c-cpp-stdio-untrusted-format"
+    },
+    {
+      "case_id": "c-popen-pipeline-vulnerable",
+      "content_sha256": "7d95b1c77b372d62c3912eb6d352a14d748ef04f22aa5603bcc45df934baf05e",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.c:2 inserts value into a cat command parsed by popen through a shell. The command buffer bound does not prevent CWE-78.",
+      "issues": [
+        {
+          "code": "STREAM_OWNERSHIP_CONTEXT_MISSING",
+          "message": "app.c:2 returns a popen stream whose caller should use pclose. A proposed fopen substitution requires a caller cleanup change.",
+          "recommendation": "Supply the stream consumer/cleanup contract in the revised case so reviewers can assess any direct-file remediation without missing ownership regressions.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [
+            "https://pubs.opengroup.org/onlinepubs/009696799/functions/popen.html"
+          ],
+          "severity": "major",
+          "source_file": "app.c"
+        }
+      ],
+      "assumptions": [
+        "The application is authorized to read the requested path; this case targets command interpretation, not an unspecified path-access boundary.",
+        "Callers manage the returned stream with the matching API."
+      ],
+      "independence_group": "c-popen-pipeline"
+    },
+    {
+      "case_id": "c-popen-pipeline-safe",
+      "content_sha256": "6d057d49e3165db6b3e341c65a38bf5d5ebc5091afa4b8da9bd2680b4241a4f8",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.c:2 uses fopen directly. It opens a literal path without a shell, supporting the negative shell-injection label.",
+      "issues": [
+        {
+          "code": "COUNTERPART_CLEANUP_DIFFERS",
+          "message": "app.c:2 returns an ordinary file stream, unlike the independently scanned popen sibling.",
+          "recommendation": "Document fclose ownership; do not accept this as a sibling remediation without reviewing consumers and pclose-to-fclose migration.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [
+            "https://pubs.opengroup.org/onlinepubs/009696799/functions/popen.html"
+          ],
+          "severity": "minor",
+          "source_file": "app.c"
+        }
+      ],
+      "assumptions": [
+        "The application is authorized to read the requested path; this case targets command interpretation, not an unspecified path-access boundary.",
+        "Callers manage the returned stream with the matching API."
+      ],
+      "independence_group": "c-popen-pipeline"
+    },
+    {
+      "case_id": "c-formatted-copy-vulnerable",
+      "content_sha256": "700f6bafc85dfab372f7893a0ca14b49e2d6695ddc4feae1e1c5e9dd26ae4f78",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.c:2 adds prefix: and unbounded caller text into b[24]; sufficiently long input overflows the local buffer. The format itself is constant, so CWE-120 is the relevant label.",
+      "issues": [
+        {
+          "code": "NO_OBSERVABLE_OPERATION",
+          "message": "app.c:2 computes a local label that is never returned or consumed.",
+          "recommendation": "Provide a real label consumer and define size limits/error behavior before judging preserved functionality.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.c"
+        }
+      ],
+      "assumptions": [
+        "value is a valid untrusted NUL-terminated string; snprintf has conforming C99/POSIX behavior."
+      ],
+      "independence_group": "c-cpp-fixed-buffer-copy"
+    },
+    {
+      "case_id": "c-formatted-copy-safe",
+      "content_sha256": "c4f5931d8cc8363139df8772105706846c761230d2bf952e671deb8c339a8f3f",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.c:2 bounds the prefix and text to b capacity, eliminating that overwrite. It discards truncation information and the computed string.",
+      "issues": [
+        {
+          "code": "TRUNCATION_POLICY_UNSPECIFIED",
+          "message": "app.c:2 silently truncates long labels and never consumes the output.",
+          "recommendation": "Specify whether truncation is acceptable and expose the relevant output/error behavior in the case.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.c"
+        }
+      ],
+      "assumptions": [
+        "value is a valid untrusted NUL-terminated string; snprintf has conforming C99/POSIX behavior."
+      ],
+      "independence_group": "c-cpp-fixed-buffer-copy"
+    },
+    {
+      "case_id": "cpp-diagnostic-format-vulnerable",
+      "content_sha256": "f9ca171b7b32a519e3f4b8f79aa04d50a5f120049e6fe81af36528d0a7c18f44",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.cpp:2 forwards message into the fprintf format position. Namespace qualification does not change the uncontrolled-format semantics.",
+      "issues": [],
+      "assumptions": [
+        "message is untrusted and valid NUL-terminated text, intended for literal diagnostic output."
+      ],
+      "independence_group": "c-cpp-stdio-untrusted-format"
+    },
+    {
+      "case_id": "cpp-diagnostic-format-safe",
+      "content_sha256": "e9a327b83eabeb891e2a89346e4a27ebe57961505686bdb34db0504f32c12699",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.cpp:2 uses a fixed %s conversion, so percent sequences in message are printed as data.",
+      "issues": [],
+      "assumptions": [
+        "message is untrusted and valid NUL-terminated text, intended for literal diagnostic output."
+      ],
+      "independence_group": "c-cpp-stdio-untrusted-format"
+    },
+    {
+      "case_id": "cpp-cleanup-shell-vulnerable",
+      "content_sha256": "ac77d062b31b2118ace9d3aa804625a4792969c89cc6e7fcfaeb4528ea6e0d9c",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.cpp:3 sends rm plus caller-controlled name through std::system; shell metacharacters can alter execution.",
+      "issues": [
+        {
+          "code": "DELETE_API_CONTRACT_UNSPECIFIED",
+          "message": "app.cpp:3 returns a system wait status and invokes rm without directory removal options.",
+          "recommendation": "Specify allowed object types and return/error expectations before accepting a direct filesystem replacement.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [],
+          "severity": "minor",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "The caller may remove the selected path; executable lookup and the surrounding process environment are trusted."
+      ],
+      "independence_group": "cpp-cleanup-shell"
+    },
+    {
+      "case_id": "cpp-cleanup-shell-safe",
+      "content_sha256": "245b489f03fd7941807190790522b42ceadd7c5d5f42052f5df2d7570ab70441",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.cpp:3 invokes std::remove directly on the literal pathname without shell interpretation.",
+      "issues": [
+        {
+          "code": "COUNTERPART_DELETE_SEMANTICS_DIFFER",
+          "message": "app.cpp:3 uses remove with its own return/error convention and can remove an empty directory; the rm-based sibling has different semantics.",
+          "recommendation": "Treat this as a separate negative case; document file-only policy and caller changes if used as a remediation design.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [],
+          "severity": "minor",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "The caller may remove the selected path; executable lookup and the surrounding process environment are trusted."
+      ],
+      "independence_group": "cpp-cleanup-shell"
+    },
+    {
+      "case_id": "cpp-name-copy-vulnerable",
+      "content_sha256": "fdcd2853b5eb0c8911f314dbac07653f6d6e0752e40fbfea7b6063b56732ae38",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.cpp:2 copies caller text into out[32] with no bound. CWE-120 fits long input, but the copied name is never used.",
+      "issues": [
+        {
+          "code": "NO_OBSERVABLE_OPERATION",
+          "message": "app.cpp:2 discards the only copied value, making legitimate functionality unclear for proposal review.",
+          "recommendation": "Add a real consumer/result contract and define any allowed API migration.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "input is a valid untrusted NUL-terminated string.",
+        "Ordinary allocation failure is outside this targeted buffer-overflow label."
+      ],
+      "independence_group": "c-cpp-fixed-buffer-copy"
+    },
+    {
+      "case_id": "cpp-name-copy-safe",
+      "content_sha256": "3af35cc51c651465ef62a139eb70fb4f1cdf47f86bf692e267e9c6f5a591e7f9",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.cpp:2 constructs a dynamically sized string and returns it; there is no fixed destination overflow.",
+      "issues": [
+        {
+          "code": "COUNTERPART_API_DIFFERS",
+          "message": "app.cpp:2 returns std::string, while the sibling has a void signature. This is a valid standalone safer API, not automatic caller compatibility.",
+          "recommendation": "Review declarations and callers if a proposed fix adopts this return type.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "minor",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "input is a valid untrusted NUL-terminated string.",
+        "Ordinary allocation failure is outside this targeted buffer-overflow label."
+      ],
+      "independence_group": "c-cpp-fixed-buffer-copy"
+    },
+    {
+      "case_id": "cpp-buffer-format-vulnerable",
+      "content_sha256": "64e0b1cf2813217becb23bdb63ed878d2209f8c483ee32a290b4a16b69648f26",
+      "verdict": "revise",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.cpp:2 has both caller-controlled format interpretation and no destination capacity. CWE-134 is valid but the supplied expected findings omit the separate unbounded-write concern.",
+      "issues": [
+        {
+          "code": "EXPECTED_FINDINGS_INCOMPLETE",
+          "message": "app.cpp:2 uses unbounded sprintf with an unknown destination capacity; fixing only the format leaves a potential overwrite.",
+          "recommendation": "Add the relevant buffer-overflow expected finding or explicitly document multi-weakness scope, and include caller capacity context.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.cpp"
+        },
+        {
+          "code": "FULL_TEXT_CAPACITY_CONTRACT",
+          "message": "app.cpp:2 has no way to determine destination capacity while the constraints require full rendering.",
+          "recommendation": "Define dynamic output, safe rejection, or another approved capacity contract so a reviewer can assess fixes consistently.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "out is writable and value is valid untrusted NUL-terminated text.",
+        "For the negative label, n must not exceed the actual out allocation and pointers must obey snprintf preconditions."
+      ],
+      "independence_group": "c-cpp-stdio-buffer-format"
+    },
+    {
+      "case_id": "cpp-buffer-format-safe",
+      "content_sha256": "8e072ec04044df507a5c5f9d93ca3f5265967a997c26bacc22d284508224dc4b",
+      "verdict": "revise",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.cpp:3 fixes the format and bounds the write when n is accurate. However, it can truncate input while the case constraints demand rendering the entire supplied text.",
+      "issues": [
+        {
+          "code": "SAFE_CODE_CONTRADICTS_FULL_TEXT_CONSTRAINT",
+          "message": "app.cpp:3 ignores snprintf return value; input exceeding n-1 is truncated, contradicting the explicit full-text requirement.",
+          "recommendation": "Specify a sufficient-capacity precondition with caller evidence, expose and handle truncation, or revise the approved behavior contract.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [],
+          "severity": "major",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "out is writable and value is valid untrusted NUL-terminated text.",
+        "For the negative label, n must not exceed the actual out allocation and pointers must obey snprintf preconditions."
+      ],
+      "independence_group": "c-cpp-stdio-buffer-format"
+    },
+    {
+      "case_id": "cpp-query-pipeline-vulnerable",
+      "content_sha256": "07ab3319d90eda1e6ea81648e5ed697e42eabf9cf60a0d5ee38929ed43c80d76",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.cpp:3 concatenates host into a ping command consumed by popen; untrusted metacharacters are shell source, supporting CWE-78.",
+      "issues": [
+        {
+          "code": "PIPE_CONSUMER_CONTEXT_MISSING",
+          "message": "app.cpp:3 returns FILE* from popen; the corpus omits readers, cleanup and required subprocess exit handling.",
+          "recommendation": "Include a bounded consumer contract; assess direct-argv proposals for preservation of stream output and parent lifetime.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [
+            "https://pubs.opengroup.org/onlinepubs/009696799/functions/popen.html"
+          ],
+          "severity": "minor",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "host is untrusted; the original function is intended to expose one ping operation to a stream consumer.",
+        "The safe snippet requires a trusted /bin/ping implementation accepting the shown arguments including --."
+      ],
+      "independence_group": "cpp-query-pipeline"
+    },
+    {
+      "case_id": "cpp-query-pipeline-safe",
+      "content_sha256": "08388d58dae5fa51ab774dfc2d91078056610c7c95c0dcac02d8688bc6796a15",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.cpp:3 passes host as one argument to execl, avoiding shell parsing. The program becomes ping on success; no output stream is returned.",
+      "issues": [
+        {
+          "code": "EXEC_AND_OUTPUT_CONTRACT_UNSPECIFIED",
+          "message": "app.cpp:3 returns int only on failure and replaces the process on success. The separate sibling returns FILE*; they are not interchangeable.",
+          "recommendation": "Declare an intentionally process-replacing negative example, or supply pipe/child/wait context for a returning API. Do not use this independent safe case as a gold fix.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [
+            "https://pubs.opengroup.org/onlinepubs/007904875/functions/exec.html"
+          ],
+          "severity": "major",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "host is untrusted; the original function is intended to expose one ping operation to a stream consumer.",
+        "The safe snippet requires a trusted /bin/ping implementation accepting the shown arguments including --."
+      ],
+      "independence_group": "cpp-query-pipeline"
+    },
+    {
+      "case_id": "cpp-joined-buffer-vulnerable",
+      "content_sha256": "c975d4eedd684e7491186d239f8f17d7d1107fca37fc74a793365274ff162b14",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.cpp:2 appends untrusted text with strcat without receiving or checking out capacity. A sufficiently long append supports CWE-120.",
+      "issues": [
+        {
+          "code": "MUTATION_CONTRACT_CONTEXT",
+          "message": "app.cpp:2 mutates caller storage. A remediation that returns a new value must update consumers rather than silently lose the mutation.",
+          "recommendation": "Include a caller or state that mutation/return-contract migration must be reviewed.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "minor",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "The vulnerable out initially contains a terminated string but has insufficient spare capacity for some attacker-controlled inputs.",
+        "String inputs are valid and ordinary memory-allocation failure is outside the target label."
+      ],
+      "independence_group": "c-cpp-fixed-buffer-concatenation"
+    },
+    {
+      "case_id": "cpp-joined-buffer-safe",
+      "content_sha256": "eead61f11b301044a73210fce9e4ce6d5b6b6b2cd738f6cbffc8a5b1f3b292c0",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.cpp:2 returns a newly concatenated dynamically sized std::string; it has no fixed-capacity append.",
+      "issues": [
+        {
+          "code": "COUNTERPART_MUTATION_DIFFERS",
+          "message": "app.cpp:2 takes out by value and returns the result. It does not mutate the caller as the separate strcat sibling does.",
+          "recommendation": "Keep the standalone negative label; do not use this code as a drop-in remediation without caller changes.",
+          "start_line": 2,
+          "end_line": 2,
+          "references": [],
+          "severity": "minor",
+          "source_file": "app.cpp"
+        }
+      ],
+      "assumptions": [
+        "The vulnerable out initially contains a terminated string but has insufficient spare capacity for some attacker-controlled inputs.",
+        "String inputs are valid and ordinary memory-allocation failure is outside the target label."
+      ],
+      "independence_group": "c-cpp-fixed-buffer-concatenation"
+    },
+    {
+      "case_id": "bash-user-expression-vulnerable",
+      "content_sha256": "5c0133dff261390af2421c0cf4f30ffa36386d6ecaa90a1119b2e0d1ca609426",
+      "verdict": "needs_clarification",
+      "label_assessment": "The targeted mechanism is assessed below; the case contract or ground-truth scope needs clarification/revision before approval.",
+      "rationale": "app.sh:4 evaluates caller text as a shell program. CWE-95 is supported only if a less-trusted caller crosses a boundary where such execution is not the authorized purpose.",
+      "issues": [
+        {
+          "code": "LEGITIMATE_OPERATION_UNSPECIFIED",
+          "message": "app.sh:4 evaluates arbitrary shell text, but the rubric simultaneously asks for no evaluation and preservation of the demonstrated operation. No permitted expression grammar or expected outputs are supplied.",
+          "recommendation": "Define the legitimate operation/trust boundary and behavior-preserving alternatives; do not use the independent printf sibling as an automatic gold fix.",
+          "start_line": 4,
+          "end_line": 4,
+          "references": [
+            "https://www.gnu.org/s/bash/manual/bash.html"
+          ],
+          "severity": "major",
+          "source_file": "app.sh"
+        }
+      ],
+      "assumptions": [
+        "The intended vulnerable application boundary must be defined; a script deliberately running its owner's commands is not automatically a privilege violation.",
+        "The safe snippet's own operation is literal display, not an arithmetic interpreter."
+      ],
+      "independence_group": "bash-user-expression"
+    },
+    {
+      "case_id": "bash-user-expression-safe",
+      "content_sha256": "ad79485988184017b99d2b08422af4c26dc93aed97e5f7d75aea72f69511e4c4",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.sh:4 prints expression as literal data with a constant format. It does not execute the string, so its independent negative evaluation label is supported.",
+      "issues": [],
+      "assumptions": [
+        "The intended vulnerable application boundary must be defined; a script deliberately running its owner's commands is not automatically a privilege violation.",
+        "The safe snippet's own operation is literal display, not an arithmetic interpreter."
+      ],
+      "independence_group": "bash-user-expression"
+    },
+    {
+      "case_id": "bash-curl-certificates-vulnerable",
+      "content_sha256": "d23adc750dc52bc1ef9ffdf9cd693b813f5a1fabc57a978035cfc5a04a28a34d",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.sh:3 explicitly disables curl certificate verification for an HTTPS transfer; CWE-295 is supported.",
+      "issues": [],
+      "assumptions": [
+        "The curl binary/configuration are trusted and the attacker can influence network traffic.",
+        "The safe case targets a system with the stated readable, trusted PEM CA bundle."
+      ],
+      "independence_group": "bash-http-client-certificate-validation"
+    },
+    {
+      "case_id": "bash-curl-certificates-safe",
+      "content_sha256": "38567682544bf0b366eb0eb6910c5d4c6a3b9af3246273e8e1a1ad38a12c38c0",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.sh:3 retains failure handling and selects a CA bundle without --insecure. Peer verification remains enabled.",
+      "issues": [],
+      "assumptions": [
+        "The curl binary/configuration are trusted and the attacker can influence network traffic.",
+        "The safe case targets a system with the stated readable, trusted PEM CA bundle."
+      ],
+      "independence_group": "bash-http-client-certificate-validation"
+    },
+    {
+      "case_id": "bash-variable-indirection-vulnerable",
+      "content_sha256": "1b13742a2c67e397d8ea7fe3670207ed07dfdd39491d4809593701362ab29d80",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.sh:4 interpolates an unchecked variable-name argument into eval source. Text outside a permitted identifier can alter the generated shell program.",
+      "issues": [],
+      "assumptions": [
+        "Only HOME and USER are intended public values; untrusted callers select the name, not the shell execution environment.",
+        "Both permitted variables are set, or nounset failure is an accepted input/environment error."
+      ],
+      "independence_group": "bash-variable-indirection"
+    },
+    {
+      "case_id": "bash-variable-indirection-safe",
+      "content_sha256": "35964157a4926389364ca2c75eef8268f79635ce39a34a32054bd47f6f0c6351",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.sh:3 restricts the name to HOME or USER before native indirect expansion and prints via a constant format. The requester cannot choose shell syntax or other variables.",
+      "issues": [],
+      "assumptions": [
+        "Only HOME and USER are intended public values; untrusted callers select the name, not the shell execution environment.",
+        "Both permitted variables are set, or nounset failure is an accepted input/environment error."
+      ],
+      "independence_group": "bash-variable-indirection"
+    },
+    {
+      "case_id": "bash-wget-certificates-vulnerable",
+      "content_sha256": "27060cf5792952208109a72e7f6e0605ca388d164ecda3c5137eb91d9916481f",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.sh:3 explicitly bypasses certificate checks during HTTPS download, supporting CWE-295.",
+      "issues": [],
+      "assumptions": [
+        "Trusted GNU Wget configuration retains its default certificate verification; destination and output location are operator controlled."
+      ],
+      "independence_group": "bash-http-client-certificate-validation"
+    },
+    {
+      "case_id": "bash-wget-certificates-safe",
+      "content_sha256": "f221eab0e296172f8b43d599db5ad79662bd80f642485fb60e35af7cdbd63009",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.sh:3 removes the bypass, leaving certificate checks enabled for the initial HTTPS transfer. The added --https-only option is for recursive link following, not evidence of a universal redirect policy.",
+      "issues": [
+        {
+          "code": "HTTPS_ONLY_SCOPE",
+          "message": "app.sh:3 uses --https-only without recursive mode. It does not add the broad protocol restriction its name may suggest.",
+          "recommendation": "Keep the certificate-validation negative label scoped to HTTPS; explicitly define and enforce redirect policy if end-to-end HTTPS-only behavior is required.",
+          "start_line": 3,
+          "end_line": 3,
+          "references": [
+            "https://www.gnu.org/software/wget/manual/wget.html"
+          ],
+          "severity": "minor",
+          "source_file": "app.sh"
+        }
+      ],
+      "assumptions": [
+        "Trusted GNU Wget configuration retains its default certificate verification; destination and output location are operator controlled."
+      ],
+      "independence_group": "bash-http-client-certificate-validation"
+    },
+    {
+      "case_id": "bash-nested-shell-vulnerable",
+      "content_sha256": "2cfb163dc16139fa845c1763c003b760dd36203fdc5f3d4d856cdcc3d9d2e67c",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.sh:4 interpolates name into the source passed to another Bash process; quoting around the outer argument does not prevent the inner shell interpreting it.",
+      "issues": [],
+      "assumptions": [
+        "The caller supplies an untrusted pathname; stat through a trusted PATH is GNU-compatible and accepts --.",
+        "The application is permitted to obtain metadata for the requested path."
+      ],
+      "independence_group": "bash-nested-shell"
+    },
+    {
+      "case_id": "bash-nested-shell-safe",
+      "content_sha256": "81a4edde66550e01fa002b0b6ad72de271d42cb7ba61bfe3a62e35a3cad38431",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.sh:4 directly invokes stat with a quoted single argument and --, preventing shell and option interpretation of the path.",
+      "issues": [],
+      "assumptions": [
+        "The caller supplies an untrusted pathname; stat through a trusted PATH is GNU-compatible and accepts --.",
+        "The application is permitted to obtain metadata for the requested path."
+      ],
+      "independence_group": "bash-nested-shell"
+    },
+    {
+      "case_id": "bash-format-argument-vulnerable",
+      "content_sha256": "304583118bbc16f6903130edeb24ac88550d2cb4a651e478ff606c743b9ec7f6",
+      "verdict": "supported",
+      "label_assessment": "The proposed vulnerable label is supported under the stated assumptions.",
+      "rationale": "app.sh:3 uses the caller string as Bash printf format. It can change escape/conversion interpretation; this supports CWE-134 without claiming C-style memory corruption or arbitrary shell execution.",
+      "issues": [],
+      "assumptions": [
+        "The application intends to display untrusted text literally; Bash built-in printf semantics apply."
+      ],
+      "independence_group": "bash-builtin-untrusted-format"
+    },
+    {
+      "case_id": "bash-format-argument-safe",
+      "content_sha256": "05e0d8a74b44b61ccf69d4a721492a00cacd199d46769e23d4dd1bf7d8f337f9",
+      "verdict": "supported",
+      "label_assessment": "The safe label is supported for the targeted vulnerability family under the stated assumptions.",
+      "rationale": "app.sh:3 uses the fixed %s format, preserving caller percent and backslash characters as literal data.",
+      "issues": [],
+      "assumptions": [
+        "The application intends to display untrusted text literally; Bash built-in printf semantics apply."
+      ],
+      "independence_group": "bash-builtin-untrusted-format"
+    }
+  ]
+}

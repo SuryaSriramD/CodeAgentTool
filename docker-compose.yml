@@ -1,121 +1,158 @@
-version: "3.8"
+name: codeagent
+
+x-runtime: &runtime
+  image: codeagent-api:local
+  build:
+    context: ./codeagent-scanner
+    target: api
+  init: true
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=256m,uid=10001,gid=10001
+  volumes:
+    - runtime-data:/data
+    - source-snapshots:/data/snapshots
+  extra_hosts:
+    - host.docker.internal:host-gateway
+  environment:
+    STORAGE_BASE: /data
+    SCANNER_URL: http://scanner:8090
+    WORKSPACE_PASSWORD: ${WORKSPACE_PASSWORD:-}
+    SESSION_SECRET: ${SESSION_SECRET:-}
+    TEAM_MODE: ${TEAM_MODE:-false}
+    COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000,http://127.0.0.1:3000}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    AI_PROVIDER: ${AI_PROVIDER:-ollama}
+    AI_MODEL: ${AI_MODEL:-}
+    MAX_CONCURRENT_JOBS: ${MAX_CONCURRENT_JOBS:-2}
+    MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-52428800}
+    MAX_EXPANDED_SIZE: ${MAX_EXPANDED_SIZE:-524288000}
+    MAX_FILES_PER_JOB: ${MAX_FILES_PER_JOB:-10000}
+    JOB_RETENTION_DAYS: ${JOB_RETENTION_DAYS:-7}
+    REPORT_RETENTION_DAYS: ${REPORT_RETENTION_DAYS:-30}
 
 services:
-  # Backend API Service
-  backend:
+  # One-shot provisioner has internet access; the scanner does not.
+  advisory-db:
+    image: codeagent-scanner:local
     build:
       context: ./codeagent-scanner
-      dockerfile: Dockerfile
-    container_name: codeagent-scanner-backend
-    ports:
-      - "8000:8080" # Host:Container - Frontend connects to localhost:8000
+      target: scanner
+    user: "10001:10001"
+    command: [trivy, image, --download-db-only, --cache-dir, /var/cache/trivy, --no-progress]
     environment:
-      # Server Configuration
-      - HOST=0.0.0.0
-      - PORT=8080
-      - WORKERS=1
-
-      # CORS Configuration
-      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000
-
-      # Storage Configuration
-      - STORAGE_BASE=/app/storage
-      - MAX_UPLOAD_SIZE=52428800
-      - MAX_CONCURRENT_JOBS=2
-
-      # Analyzer Configuration
-      - DEFAULT_TIMEOUT_SEC=600
-      - MAX_FILES_PER_JOB=10000
-      - DEFAULT_ANALYZERS=bandit,semgrep,depcheck
-
-      # AI Integration (Optional - set your API key)
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - AI_MODEL=GPT_4O_MINI
-      - ENABLE_AI_ANALYSIS=${ENABLE_AI_ANALYSIS:-false}
-      - AI_ANALYSIS_MIN_SEVERITY=high
-      - MAX_CONCURRENT_AI_REVIEWS=1
-      - AI_ANALYSIS_TIMEOUT_SEC=300
-
-      # Logging
-      - LOG_LEVEL=INFO
-
-      # Rate Limiting
-      - RATE_LIMIT_PER_MINUTE=60
-      - MAX_JOBS_PER_API_KEY=2
-
-      # Cleanup
-      - JOB_RETENTION_DAYS=7
-      - REPORT_RETENTION_DAYS=30
-
+      TRIVY_CACHE_DIR: /var/cache/trivy
     volumes:
-      # Persist storage data
-      - ./codeagent-scanner/storage:/app/storage
-      # Mount source code for development (optional - comment out for production)
-      - ./codeagent-scanner/api:/app/api
-      - ./codeagent-scanner/analyzers:/app/analyzers
-      - ./codeagent-scanner/pipeline:/app/pipeline
-      - ./codeagent-scanner/integration:/app/integration
-      # Mount CAMEL configurations for live updates
-      - ./codeagent-scanner/CompanyConfig:/app/CompanyConfig
+      - advisory-cache:/var/cache/trivy
+    networks: [egress]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
 
-    networks:
-      - codeagent-network
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    restart: unless-stopped
-
-  # Frontend UI Service
-  frontend:
+  scanner:
+    image: codeagent-scanner:local
     build:
-      context: ./codeagent-scanner-ui
-      dockerfile: Dockerfile
-    container_name: codeagent-scanner-frontend
-    ports:
-      - "3000:3000" # Host:Container
+      context: ./codeagent-scanner
+      target: scanner
+    init: true
+    restart: unless-stopped
     environment:
-      # API Configuration
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      SNAPSHOT_ROOT: /data/snapshots
+      TRIVY_CACHE_DIR: /var/cache/trivy
+      SEMGREP_SEND_METRICS: "off"
+      SEMGREP_ENABLE_VERSION_CHECK: "0"
+    volumes:
+      - source-snapshots:/data/snapshots:ro
+      - advisory-cache:/var/cache/trivy:ro
+    tmpfs:
+      - /tmp:rw,nosuid,size=1g,uid=10001,gid=10001
+      - /home/codeagent:rw,nosuid,size=128m,uid=10001,gid=10001
+    networks: [scanner-internal]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 3g
+    cpus: 2
+    depends_on:
+      advisory-db:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-      # Node Environment
-      - NODE_ENV=production
-      - NEXT_TELEMETRY_DISABLED=1
+  backend:
+    <<: *runtime
+    command: [python, -m, uvicorn, "api.app:app", --host, 0.0.0.0, --port, "8080"]
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8080"
+    networks: [app, egress, scanner-internal]
+    depends_on:
+      scanner:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
+  worker:
+    <<: *runtime
+    command: [python, -m, worker]
+    networks: [egress, scanner-internal]
+    stop_grace_period: 45s
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import sqlite3,time; c=sqlite3.connect('file:/data/codeagent.sqlite3?mode=ro',uri=True); assert c.execute('SELECT 1 FROM workers WHERE heartbeat>? LIMIT 1',(time.time()-45,)).fetchone()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
-    networks:
-      - codeagent-network
-
+  frontend:
+    build:
+      context: ./codeagent-scanner-ui
+    image: codeagent-ui:local
+    init: true
     restart: unless-stopped
-
-  # Optional: Add a reverse proxy (Nginx) for production
-  # nginx:
-  #   image: nginx:alpine
-  #   container_name: codeagent-nginx
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
-  #     - ./certs:/etc/nginx/certs:ro
-  #   depends_on:
-  #     - backend
-  #     - frontend
-  #   networks:
-  #     - codeagent-network
-  #   restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      API_URL: http://backend:8080
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000,http://127.0.0.1:3000}
+    ports:
+      - "127.0.0.1:${UI_PORT:-3000}:3000"
+    networks: [app]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      backend:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
 
 networks:
-  codeagent-network:
-    driver: bridge
+  app:
+  egress:
+  scanner-internal:
+    internal: true
 
 volumes:
-  storage-data:
-    driver: local
+  runtime-data:
+  source-snapshots:
+  advisory-cache:

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "description": "Small synthetic classification fixtures. These isolated examples do not establish production security quality or executable patch correctness.",
+  "cases": [
+    {"id": "python-sql-concat", "language": "Python", "file": "app.py", "vulnerable": true, "rule": "sql-injection", "source": "def lookup(db, user_id):\n    return db.execute('SELECT * FROM users WHERE id = ' + user_id)\n"},
+    {"id": "python-sql-bound", "language": "Python", "file": "app.py", "vulnerable": false, "rule": "sql-injection", "source": "def lookup(db, user_id):\n    return db.execute('SELECT * FROM users WHERE id = ?', (user_id,))\n"},
+    {"id": "javascript-eval", "language": "JavaScript", "file": "app.js", "vulnerable": true, "rule": "code-injection", "source": "function parseUserInput(userInput) { return eval(userInput); }\n"},
+    {"id": "javascript-json", "language": "JavaScript", "file": "app.js", "vulnerable": false, "rule": "code-injection", "source": "function parseUserInput(userInput) { return JSON.parse(userInput); }\n"},
+    {"id": "go-sql-concat", "language": "Go", "file": "app.go", "vulnerable": true, "rule": "sql-injection", "source": "func lookup(db *sql.DB, userID string) (*sql.Rows, error) {\n    return db.Query(\"SELECT * FROM users WHERE id = \" + userID)\n}\n"},
+    {"id": "go-sql-bound", "language": "Go", "file": "app.go", "vulnerable": false, "rule": "sql-injection", "source": "func lookup(db *sql.DB, userID string) (*sql.Rows, error) {\n    return db.Query(\"SELECT * FROM users WHERE id = ?\", userID)\n}\n"}
+  ]
+}

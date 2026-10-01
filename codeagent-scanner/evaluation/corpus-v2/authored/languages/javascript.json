@@ -1,0 +1,938 @@
+{
+  "language": "javascript",
+  "cases": [
+    {
+      "id": "v2-javascript-vulnerable-01",
+      "language": "javascript",
+      "vulnerable": true,
+      "scenario": "dns-support-diagnostic-command",
+      "files": {
+        "dns-route.js": "const express = require('express');\nconst { exec } = require('node:child_process');\nconst { promisify } = require('node:util');\nconst run = promisify(exec);\nconst app = express();\napp.get('/support/txt', async (req, res, next) => {\n  try {\n    const domain = String(req.query.domain || '');\n    if (domain.length > 253) return res.sendStatus(400);\n    const { stdout } = await run('/usr/bin/dig +short TXT ' + domain,\n      { timeout: 2500, maxBuffer: 65536 });\n    res.type('text/plain').send(stdout);\n  } catch (err) { next(err); }\n});\nmodule.exports = app;\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "dns-route.js"
+        }
+      ],
+      "rationale": "child_process.exec invokes a shell; the domain enters the shell command without separation or DNS-name validation.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Use a direct executable argument list and validate/normalize a DNS hostname before invoking dig."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "Express 4.21.2; BIND dig 9.18 at /usr/bin/dig; support authentication and rate limits are deployment middleware, output bounded by maxBuffer."
+      },
+      "operation_contract": {
+        "purpose": "Show DNS TXT answers for a domain supplied by an authenticated support user.",
+        "trust_boundary": "A support-account holder controls the domain string while the service owns the executable and host privileges.",
+        "legitimate_examples": [
+          {
+            "input": "domain=example.org",
+            "expected": "Return dig TXT answer text, including quoted spaces, for example.org."
+          }
+        ],
+        "permitted_changes": [
+          "Use a direct executable argument list and validate/normalize a DNS hostname before invoking dig."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "The fix must preserve TXT answers and support valid internationalized domains through a defined IDNA conversion; shell quoting alone must not allow dig option injection."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for show dns txt answers for a domain supplied by an authenticated support user. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "dns-support-diagnostic-command",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A support-account holder controls the domain string while the service owns the executable and host privileges. The operation is show dns txt answers for a domain supplied by an authenticated support user.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/child_process.html#child_processexeccommand-options-callback"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-vulnerable-02",
+      "language": "javascript",
+      "vulnerable": true,
+      "scenario": "published-theme-css-file",
+      "files": {
+        "theme-files.js": "const fs = require('node:fs/promises');\nconst path = require('node:path');\nasync function stylesheet(theme, asset) {\n  const directory = path.join('/srv/themes', theme.storageId);\n  const candidate = path.normalize(path.join(directory, asset));\n  // Normalization alone does not confine the file to the published theme.\n  return fs.readFile(candidate, 'utf8');\n}\nasync function route(req, res, next) {\n  try {\n    const text = await stylesheet(req.publishedTheme, String(req.query.asset));\n    res.type('text/plain').send(text);\n  } catch (err) { next(err); }\n}\nmodule.exports = { route, stylesheet };\n"
+      },
+      "expected_findings": [
+        {
+          "family": "path-traversal",
+          "cwe": "CWE-22",
+          "path": "theme-files.js"
+        }
+      ],
+      "rationale": "path.normalize collapses parent components but does not enforce the resulting path beneath the authorized theme; a relative escape can read sibling files.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Enforce canonical directory containment and preserve per-theme authorization and nested assets."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "Express 4.21.2 route mounting supplies a root-owned theme record whose storageId is alphanumeric. Theme deployment is immutable during reads, paths are Linux. CSS is served as text/plain in this preview endpoint."
+      },
+      "operation_contract": {
+        "purpose": "Serve a named stylesheet from the already-authorized published theme, including nested vendor CSS.",
+        "trust_boundary": "The server selects a published theme object; a visitor controls the asset path beneath it.",
+        "legitimate_examples": [
+          {
+            "input": "theme.storageId=t17; asset=vendor/reset.css",
+            "expected": "Text from /srv/themes/t17/vendor/reset.css."
+          }
+        ],
+        "permitted_changes": [
+          "Enforce canonical directory containment and preserve per-theme authorization and nested assets."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Do not mistake a normalized absolute string for an authorization check; legitimate vendor subdirectories must continue to work."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for serve a named stylesheet from the already-authorized published theme, including nested vendor css. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "published-theme-css-file",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around The server selects a published theme object; a visitor controls the asset path beneath it. The operation is serve a named stylesheet from the already-authorized published theme, including nested vendor css.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/path.html#pathnormalizepath"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-vulnerable-03",
+      "language": "javascript",
+      "vulnerable": true,
+      "scenario": "customer-health-probe-redirect",
+      "files": {
+        "probe.js": "async function probeRegistration(body) {\n  const endpoint = new URL(body.endpoint);\n  if (endpoint.protocol !== 'https:') throw new Error('HTTPS required');\n  const response = await fetch(endpoint, {\n    signal: AbortSignal.timeout(3000), redirect: 'follow'\n  });\n  await response.body?.cancel();\n  return { endpoint: endpoint.toString(), healthy: response.status < 500 };\n}\nasync function route(req, res, next) {\n  try { res.json(await probeRegistration(req.body)); }\n  catch (error) { next(error); }\n}\nmodule.exports = { route, probeRegistration };\n"
+      },
+      "expected_findings": [
+        {
+          "family": "ssrf",
+          "cwe": "CWE-918",
+          "path": "probe.js"
+        }
+      ],
+      "rationale": "HTTPS-only parsing does not establish public reachability. Direct private destinations and redirects into private services remain reachable from the privileged probe.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Keep public HTTPS probes with bounded deadline; reject private/reserved destinations and redirects that leave the approved policy."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "Node built-in fetch/Undici from Node 22.14; internal service uses a trusted certificate; requests limited to one per customer per minute by trusted middleware. Body is canceled, not rendered."
+      },
+      "operation_contract": {
+        "purpose": "Check whether a customer-registered public HTTPS service responds without a server error.",
+        "trust_boundary": "A customer supplies an endpoint; the probe runs inside a network that also reaches private HTTPS services.",
+        "legitimate_examples": [
+          {
+            "input": "endpoint=https://status.example.org/ready",
+            "expected": "Return the original endpoint and healthy=true for HTTP 204."
+          }
+        ],
+        "permitted_changes": [
+          "Keep public HTTPS probes with bounded deadline; reject private/reserved destinations and redirects that leave the approved policy."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "A fix must inspect redirect destinations and connection addresses, not merely ban the literal string localhost or require a URL suffix."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for check whether a customer-registered public https service responds without a server error. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "customer-health-probe-redirect",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A customer supplies an endpoint; the probe runs inside a network that also reaches private HTTPS services. The operation is check whether a customer-registered public https service responds without a server error.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/globals.html#fetch"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-vulnerable-04",
+      "language": "javascript",
+      "vulnerable": true,
+      "scenario": "stored-notification-interpolation-source",
+      "files": {
+        "notification.js": "function renderNotification(template, recipient) {\n  if (template.length > 500 || recipient.length > 80) throw new Error('too long');\n  // Editors may write ordinary text and ${recipient}; never arbitrary JS.\n  const render = new Function('recipient', 'return `' + template + '`;');\n  return render(recipient);\n}\nasync function deliverSavedNotification(notificationId, recipient, store, mailer) {\n  const saved = await store.get(notificationId);\n  const text = renderNotification(saved.editorText, recipient);\n  await mailer.sendPlainText(recipient, text);\n  return { delivered: true, text };\n}\nmodule.exports = { renderNotification, deliverSavedNotification };\n"
+      },
+      "expected_findings": [
+        {
+          "family": "dynamic-evaluation",
+          "cwe": "CWE-95",
+          "path": "notification.js"
+        }
+      ],
+      "rationale": "Stored text becomes JavaScript template-literal source in a new Function. Template expressions and closing backticks can execute code with the worker process privileges.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Implement literal ${recipient} substitution without code evaluation; reject unsupported placeholder syntax or treat it as literal documented text."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "The store is trusted to enforce notification ownership but intentionally preserves editor text verbatim. mailer accepts a trusted account identifier, not raw email headers. recipient is supplied by the server account directory."
+      },
+      "operation_contract": {
+        "purpose": "Render editor-authored plain-text notifications with only the literal recipient placeholder, then deliver them.",
+        "trust_boundary": "An editor can save notification text but is not permitted to execute JavaScript in the delivery worker.",
+        "legitimate_examples": [
+          {
+            "input": "editorText=Hello ${recipient}!; recipient=Pat",
+            "expected": "Deliver plain text Hello Pat! to the trusted recipient identity."
+          }
+        ],
+        "permitted_changes": [
+          "Implement literal ${recipient} substitution without code evaluation; reject unsupported placeholder syntax or treat it as literal documented text."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "A replacement that prints ${recipient} unchanged or applies HTML escaping instead of placeholder expansion violates the plain-text operation."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for render editor-authored plain-text notifications with only the literal recipient placeholder, then deliver them. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "stored-notification-interpolation-source",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An editor can save notification text but is not permitted to execute JavaScript in the delivery worker. The operation is render editor-authored plain-text notifications with only the literal recipient placeholder, then deliver them.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://tc39.es/ecma262/#sec-function-constructor"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-vulnerable-05",
+      "language": "javascript",
+      "vulnerable": true,
+      "scenario": "warehouse-batch-code-selection",
+      "files": {
+        "batch-query.js": "async function selectBatch(pool, body) {\n  if (!Array.isArray(body.codes) || body.codes.length > 20 ||\n      body.codes.some(code => typeof code !== 'string' || code.length > 60)) {\n    throw new Error('codes must be a bounded string list');\n  }\n  if (body.codes.length === 0) return [];\n  const values = body.codes.map(code => \"'\" + code + \"'\").join(',');\n  const [rows] = await pool.query('SELECT code, units FROM stock WHERE code IN (' + values + ') ORDER BY code');\n  return rows;\n}\nmodule.exports = { selectBatch };\n",
+        "schema.sql": "CREATE TABLE stock(code VARCHAR(60) PRIMARY KEY, units INTEGER NOT NULL, internal_cost DECIMAL(8,2));\nINSERT INTO stock VALUES ('A-20', 7, 29.50), ('B-10', 3, 88.10);\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "batch-query.js"
+        }
+      ],
+      "rationale": "Wrapping each code in quotes does not bind or escape it. An element can alter the IN expression and the rest of the SELECT even with multipleStatements disabled.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Build only the placeholder count dynamically and bind each string value with mysql2 execute."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "mysql2 3.12.0 promise pool; MySQL 8.4, multipleStatements=false and utf8mb4; trusted schema.sql initialization and read-only service DB account."
+      },
+      "operation_contract": {
+        "purpose": "Return stock quantities for a bounded set of exact warehouse codes, ordered by code.",
+        "trust_boundary": "A partner submits a JSON list of stock codes; only code and units are authorized output columns.",
+        "legitimate_examples": [
+          {
+            "input": {
+              "codes": [
+                "B-10",
+                "A-20"
+              ]
+            },
+            "expected": [
+              {
+                "code": "A-20",
+                "units": 7
+              },
+              {
+                "code": "B-10",
+                "units": 3
+              }
+            ]
+          }
+        ],
+        "permitted_changes": [
+          "Build only the placeholder count dynamically and bind each string value with mysql2 execute."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "A single ? bound to an array is driver-dependent; use an explicit placeholder per element and preserve the empty-list result."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for return stock quantities for a bounded set of exact warehouse codes, ordered by code. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "warehouse-batch-code-selection",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A partner submits a JSON list of stock codes; only code and units are authorized output columns. The operation is return stock quantities for a bounded set of exact warehouse codes, ordered by code.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://sidorares.github.io/node-mysql2/docs/examples/queries/prepared-statements"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-vulnerable-06",
+      "language": "javascript",
+      "vulnerable": true,
+      "scenario": "wss-notification-bridge-peer-trust",
+      "files": {
+        "bridge.js": "const WebSocket = require('ws');\nfunction firstNotification(accountToken) {\n  return new Promise((resolve, reject) => {\n    const socket = new WebSocket('wss://events.example.net/account', {\n      rejectUnauthorized: false,\n      headers: { Authorization: 'Bearer ' + accountToken },\n      handshakeTimeout: 3000, maxPayload: 16384\n    });\n    socket.once('error', reject);\n    socket.once('message', data => {\n      socket.close();\n      resolve(JSON.parse(data.toString('utf8')));\n    });\n  });\n}\nmodule.exports = { firstNotification };\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "bridge.js"
+        }
+      ],
+      "rationale": "rejectUnauthorized=false disables certificate rejection for the secure WebSocket connection; an impostor can capture the token and forge account notifications.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Enable peer verification and configure the enterprise CA explicitly if needed."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "ws 8.18.0, enterprise certificate authority at /run/secrets/events-ca.pem; service emits its first message within three seconds. Caller enforces a total-operation deadline and handles rejected promises."
+      },
+      "operation_contract": {
+        "purpose": "Return the first account notification from a TLS-protected WebSocket service using a server-held token.",
+        "trust_boundary": "The network is adversarial; service hostname and token are trusted but the peer certificate must authenticate the destination.",
+        "legitimate_examples": [
+          {
+            "input": "Trusted account token and a valid notification {\"type\":\"ready\"}",
+            "expected": "Return the notification object only from the authenticated events service."
+          }
+        ],
+        "permitted_changes": [
+          "Enable peer verification and configure the enterprise CA explicitly if needed."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Switching to ws:// or deleting the Authorization header breaks the contract; trust the deployed CA while retaining WSS and token authentication."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for return the first account notification from a tls-protected websocket service using a server-held token. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "wss-notification-bridge-peer-trust",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around The network is adversarial; service hostname and token are trusted but the peer certificate must authenticate the destination. The operation is return the first account notification from a tls-protected websocket service using a server-held token.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://github.com/websockets/ws/blob/8.18.0/doc/ws.md#new-websocketaddress-protocols-options",
+          "https://nodejs.org/api/tls.html#tlsconnectoptions-callback"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-safe-01",
+      "language": "javascript",
+      "vulnerable": false,
+      "scenario": "server-generated-png-dimensions",
+      "files": {
+        "dimensions.js": "const { execFile } = require('node:child_process');\nconst { promisify } = require('node:util');\nconst run = promisify(execFile);\nasync function dimensions(assetId) {\n  if (typeof assetId !== 'string' || assetId.length !== 32 || !/^[a-f0-9]{32}$/.test(assetId)) throw new Error('asset ID');\n  const filename = '/srv/rendered/' + assetId + '.png';\n  const { stdout } = await run('/usr/bin/identify', ['-format', '%w %h', filename],\n    { shell: false, timeout: 2000, maxBuffer: 1024 });\n  const match = /^(\\d+) (\\d+)$/.exec(stdout);\n  if (!match) throw new Error('invalid dimensions');\n  return { width: Number(match[1]), height: Number(match[2]) };\n}\nmodule.exports = { dimensions };\n"
+      },
+      "expected_findings": [],
+      "rationale": "The executable is fixed, shell=false, and the validated identifier forms an absolute filename that cannot be an option or an ImageMagick protocol specifier.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "ImageMagick 7.1.1 with PNG-only policy, root-owned binary; trusted renderer supplies bounded valid PNG files; authorization middleware verifies ownership before this function."
+      },
+      "operation_contract": {
+        "purpose": "Read pixel dimensions of a server-generated PNG selected by its opaque asset ID.",
+        "trust_boundary": "A user selects an owned 32-hex asset ID; file bytes are produced by a trusted renderer, not raw user image uploads.",
+        "legitimate_examples": [
+          {
+            "input": "assetId=0123456789abcdef0123456789abcdef for a 640x480 PNG",
+            "expected": {
+              "width": 640,
+              "height": 480
+            }
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Do not replace execFile with a shell command or relax IDs into arbitrary filenames, URL protocols or coder specifications."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for read pixel dimensions of a server-generated png selected by its opaque asset id. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "server-generated-png-dimensions",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A user selects an owned 32-hex asset ID; file bytes are produced by a trusted renderer, not raw user image uploads. The operation is read pixel dimensions of a server-generated png selected by its opaque asset id.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/child_process.html#child_processexecfilefile-args-options-callback"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-safe-02",
+      "language": "javascript",
+      "vulnerable": false,
+      "scenario": "content-addressed-public-blob-read",
+      "files": {
+        "blob-store.js": "const fs = require('node:fs/promises');\nasync function fetchPublicBlob(digest) {\n  if (typeof digest !== 'string' || digest.length !== 64 || !/^[a-f0-9]{64}$/.test(digest)) {\n    throw new Error('canonical SHA-256 digest required');\n  }\n  const path = '/srv/public-blobs/' + digest.slice(0, 2) + '/' + digest.slice(2);\n  const buffer = await fs.readFile(path);\n  return { digest, bytes: buffer };\n}\nasync function route(req, res, next) {\n  try { res.type('application/octet-stream').send((await fetchPublicBlob(req.params.digest)).bytes); }\n  catch (error) { next(error); }\n}\nmodule.exports = { fetchPublicBlob, route };\n"
+      },
+      "expected_findings": [],
+      "rationale": "An exact hex grammar fixes both path components and forbids separators, dot segments and absolute paths. The read-only public store has no attacker-created symlinks or private entries.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "Store populated by trusted publishing service; root-owned immutable entries without symlinks; all blobs public and at most 1 MiB. Exact digest length plus regex excludes JavaScript end-anchor newline behavior."
+      },
+      "operation_contract": {
+        "purpose": "Retrieve an immutable public blob by its canonical SHA-256 address.",
+        "trust_boundary": "A visitor controls only a canonical lowercase digest, not any filesystem path component or storage entry.",
+        "legitimate_examples": [
+          {
+            "input": "digest=64 lowercase hex digits of a published blob",
+            "expected": "Return exactly that public blob’s bytes."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Using a prefix-only hex regex would let a trailing slash or newline escape the intended identifier grammar; retain full-string validation."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for retrieve an immutable public blob by its canonical sha-256 address. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "content-addressed-public-blob-read",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A visitor controls only a canonical lowercase digest, not any filesystem path component or storage entry. The operation is retrieve an immutable public blob by its canonical sha-256 address.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/fs.html#fspromisesreadfilepath-options"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-safe-03",
+      "language": "javascript",
+      "vulnerable": false,
+      "scenario": "offline-link-inspection-card",
+      "files": {
+        "link-card.js": "function fetchLinkPreview(input) {\n  // This editor preview is deliberately offline: it computes URL metadata.\n  if (typeof input !== 'string' || input.length > 2048) throw new Error('link');\n  const parsed = new URL(input);\n  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('web links only');\n  return { host: parsed.hostname, path: parsed.pathname,\n    encryptedScheme: parsed.protocol === 'https:' };\n}\nfunction route(req, res) {\n  res.json(fetchLinkPreview(req.body.url));\n}\nmodule.exports = { fetchLinkPreview, route };\n"
+      },
+      "expected_findings": [],
+      "rationale": "Despite the function name fetchLinkPreview, the code only uses the URL parser. No network request or background fetch is scheduled, including for private-address strings.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "Express 4.21.2 supplies bounded JSON body and renders JSON as data. The client displays text nodes; no raw HTML injection or downstream fetch consumer exists."
+      },
+      "operation_contract": {
+        "purpose": "Display host, path and scheme metadata for a pasted web link without contacting it.",
+        "trust_boundary": "An editor supplies arbitrary URL text which is parsed into JSON display fields, never sent to a network client.",
+        "legitimate_examples": [
+          {
+            "input": "url=http://127.0.0.1/admin",
+            "expected": {
+              "host": "127.0.0.1",
+              "path": "/admin",
+              "encryptedScheme": false
+            }
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Adding an automatic title-fetch request would change this intentionally offline operation and introduce a new security boundary."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for display host, path and scheme metadata for a pasted web link without contacting it. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "offline-link-inspection-card",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An editor supplies arbitrary URL text which is parsed into JSON display fields, never sent to a network client. The operation is display host, path and scheme metadata for a pasted web link without contacting it.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/url.html#the-whatwg-url-api"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-safe-04",
+      "language": "javascript",
+      "vulnerable": false,
+      "scenario": "literal-code-sample-html-view",
+      "files": {
+        "code-view.js": "const ESCAPES = new Map([['&', '&amp;'], ['<', '&lt;'], ['>', '&gt;'],\n  ['\"', '&quot;'], [\"'\", '&#39;']]);\nfunction evaluateSnippetForDisplay(source) {\n  if (typeof source !== 'string' || source.length > 4096) throw new Error('snippet');\n  const escaped = source.replace(/[&<>\"']/g, character => ESCAPES.get(character));\n  return '<pre><code>' + escaped + '</code></pre>';\n}\nfunction route(req, res) {\n  res.type('text/html').send(evaluateSnippetForDisplay(req.body.source));\n}\nmodule.exports = { evaluateSnippetForDisplay, route };\n"
+      },
+      "expected_findings": [],
+      "rationale": "The evaluation-sounding name does not execute code. Every HTML metacharacter is escaped and the only consumer is a static code element.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "Express 4.21.2; response is displayed as HTML exactly once, with no second templating pass or client-side execution of code text."
+      },
+      "operation_contract": {
+        "purpose": "Render a submitted program excerpt as literal code inside an HTML preformatted block.",
+        "trust_boundary": "A student submits program text, including eval-like syntax, but has no authority to execute it on the server or browser.",
+        "legitimate_examples": [
+          {
+            "input": "source=<script>eval(\"x\")</script>",
+            "expected": "Display the exact characters as code text, with markup escaped."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Stripping script tags changes the displayed source; decoding entities after escaping would reintroduce markup."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for render a submitted program excerpt as literal code inside an html preformatted block. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "literal-code-sample-html-view",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A student submits program text, including eval-like syntax, but has no authority to execute it on the server or browser. The operation is render a submitted program excerpt as literal code inside an html preformatted block.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://tc39.es/ecma262/#sec-string.prototype.replace"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-safe-05",
+      "language": "javascript",
+      "vulnerable": false,
+      "scenario": "validated-integer-stock-threshold",
+      "files": {
+        "inventory-count.js": "async function lowStockCount(pool, rawThreshold) {\n  const threshold = Number(rawThreshold);\n  if (!Number.isSafeInteger(threshold) || threshold < 0 || threshold > 1000) {\n    throw new Error('threshold must be an integer in 0..1000');\n  }\n  // Only a checked numeric value, never the original string, becomes SQL.\n  const [rows] = await pool.query('SELECT COUNT(*) AS count FROM inventory WHERE units < ' + threshold);\n  return Number(rows[0].count);\n}\nmodule.exports = { lowStockCount };\n",
+        "schema.sql": "CREATE TABLE inventory(id INTEGER PRIMARY KEY, units INTEGER NOT NULL);\nINSERT INTO inventory VALUES(1, 3), (2, 12), (3, 0);\n"
+      },
+      "expected_findings": [],
+      "rationale": "Only a Number that is a finite safe integer in 0..1000 is concatenated. Its decimal string representation cannot contain SQL syntax; the original untrusted text never reaches query.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "mysql2 3.12.0; MySQL 8.4; fixed initialized schema.sql; aggregate uses a read-only account and has no tenant-private inventory."
+      },
+      "operation_contract": {
+        "purpose": "Count public inventory rows below a bounded integer quantity threshold.",
+        "trust_boundary": "A visitor supplies threshold text; the raw string is converted to a safe integer and range-checked before SQL construction.",
+        "legitimate_examples": [
+          {
+            "input": "rawThreshold=10",
+            "expected": 2
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "A fix that validates threshold but interpolates rawThreshold would defeat the current safety property; NaN and Infinity must remain rejected."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for count public inventory rows below a bounded integer quantity threshold. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "validated-integer-stock-threshold",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A visitor supplies threshold text; the raw string is converted to a safe integer and range-checked before SQL construction. The operation is count public inventory rows below a bounded integer quantity threshold.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://tc39.es/ecma262/#sec-number.issafeinteger",
+          "https://dev.mysql.com/doc/refman/8.4/en/select.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-javascript-safe-06",
+      "language": "javascript",
+      "vulnerable": false,
+      "scenario": "verified-https-release-events",
+      "files": {
+        "release-event.js": "const https = require('node:https');\nfunction latestReleaseEvent() {\n  return new Promise((resolve, reject) => {\n    const request = https.get('https://releases.example.org/event', {\n      rejectUnauthorized: true, timeout: 3000\n    }, response => {\n      let body = '';\n      response.setEncoding('utf8');\n      response.on('data', chunk => {\n        body += chunk;\n        if (body.length > 8192) response.destroy(new Error('event too large'));\n      });\n      response.on('error', reject);\n      response.on('end', () => {\n        if (response.statusCode !== 200) return reject(new Error('event unavailable'));\n        try { resolve(JSON.parse(body)); } catch (error) { reject(error); }\n      });\n    });\n    request.on('timeout', () => request.destroy(new Error('deadline')));\n    request.on('error', reject);\n  });\n}\nmodule.exports = { latestReleaseEvent };\n"
+      },
+      "expected_findings": [],
+      "rationale": "Explicit certificate rejection is enabled and Node HTTPS applies its default hostname check. Status redirects are rejected rather than followed; errors do not produce a fabricated event.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Node.js 22.14.0, CommonJS",
+        "platform": "Linux x86_64",
+        "setup": "Default Node HTTPS agent and trust roots; NODE_TLS_REJECT_UNAUTHORIZED is not set to 0; no monkey-patched TLS callbacks; endpoint has a publicly trusted matching certificate."
+      },
+      "operation_contract": {
+        "purpose": "Read one bounded JSON release event from a public HTTPS service.",
+        "trust_boundary": "The network may be intercepted; the hostname, Node trust roots and process environment are deployment-owned.",
+        "legitimate_examples": [
+          {
+            "input": "Valid peer certificate and HTTP 200 body {\"tag\":\"v7\"}",
+            "expected": {
+              "tag": "v7"
+            }
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Replacing checkServerIdentity with an empty callback would silently defeat hostname checks even if rejectUnauthorized stays true."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for read one bounded json release event from a public https service. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "verified-https-release-events",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around The network may be intercepted; the hostname, Node trust roots and process environment are deployment-owned. The operation is read one bounded json release event from a public https service.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/https.html#httpsgeturl-options-callback"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

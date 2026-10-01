@@ -1,0 +1,1160 @@
+{
+  "language": "fsharp",
+  "cases": [
+    {
+      "id": "v2-fsharp-vulnerable-01",
+      "language": "fsharp",
+      "vulnerable": true,
+      "scenario": "SKU lookup lets a decoded route segment alter a SQL literal",
+      "files": {
+        "src/PriceLookup.fs": "module PriceLookup\nopen System\nopen Microsoft.Data.SqlClient\nlet price (connection: SqlConnection) (sku: string) =\n    if sku.Length > 64 then invalidArg \"sku\" \"too long\"\n    use command = connection.CreateCommand()\n    command.CommandText <- \"SELECT UnitPrice FROM Prices WHERE Sku='\" + sku + \"'\"\n    let value = command.ExecuteScalar()\n    if isNull value || value = box DBNull.Value then\n        None\n    else\n        Some (Convert.ToDecimal(value))\n",
+        "src/PriceRoute.fs": "module PriceRoute\nopen System\nopen Microsoft.Data.SqlClient\nlet handle (connection: SqlConnection) (encodedSegment: string) =\n    let sku = Uri.UnescapeDataString encodedSegment\n    PriceLookup.price connection sku\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "src/PriceLookup.fs",
+          "line_start": 7,
+          "line_end": 7
+        }
+      ],
+      "rationale": "The route adapter decodes percent escapes into the SKU and the lookup inserts the result into SQL. URL decoding does not make an apostrophe safe for a SQL string literal.",
+      "remediation_constraints": [
+        "Bind the decoded SKU as an NVARCHAR parameter and preserve absent-result handling.",
+        "Keep exactly one URL-decoding pass at the route boundary."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. Microsoft.Data.SqlClient 5.2.2; SQL Server 2022; Sku is unique NVARCHAR(64), UnitPrice DECIMAL(12,2); compile PriceLookup.fs before PriceRoute.fs."
+      },
+      "operation_contract": {
+        "purpose": "Return the price of the exact decoded SKU or None if absent.",
+        "trust_boundary": "A public route segment is decoded by the included adapter; it remains untrusted when passed into database lookup.",
+        "legitimate_examples": [
+          {
+            "input": "Encoded SKU O%27RING",
+            "expected": "Look up the literal SKU O'RING."
+          },
+          {
+            "input": "Unknown decoded SKU",
+            "expected": "Return None without selecting another product."
+          }
+        ],
+        "permitted_changes": [
+          "Bind the decoded SKU as an NVARCHAR parameter and preserve absent-result handling.",
+          "Keep exactly one URL-decoding pass at the route boundary."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Escaping before URL decoding fails to constrain the final SQL value.",
+        "Double decoding changes legitimate percent-containing SKUs."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "SQL injection through a visible decoding handoff.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-route-decode-sku-query",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A source-visible route decoding step feeds an option-returning lookup, with exact encoding and absence behavior as remediation constraints. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-vulnerable-02",
+      "language": "fsharp",
+      "vulnerable": true,
+      "scenario": "A queued media job turns a human track title into shell code",
+      "files": {
+        "src/TrackMetadata.fs": "module TrackMetadata\nopen System\nopen System.Diagnostics\nlet writeTitle (title: string) =\n    if title.Length > 100 then invalidArg \"title\" \"too long\"\n    let start = ProcessStartInfo(\"/bin/sh\")\n    start.UseShellExecute <- false\n    start.ArgumentList.Add \"-c\"\n    start.ArgumentList.Add (\"/usr/bin/ffmpeg -y -i /srv/jobs/input.wav -metadata title='\" + title + \"' /srv/jobs/output.wav\")\n    use child = Process.Start start\n    if isNull child then failwith \"spawn failed\"\n    child.WaitForExit()\n    if child.ExitCode <> 0 then failwith \"metadata write failed\"\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/TrackMetadata.fs",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "Apostrophes in the title terminate shell quoting. The fixed executable and paths do not prevent the metadata value from changing the shell program.",
+      "remediation_constraints": [
+        "Start ffmpeg directly with one metadata argument and fixed input/output paths.",
+        "Preserve audio processing, metadata content and nonzero-exit failure handling."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. FFmpeg 6.1 is installed at /usr/bin/ffmpeg; a caller owns stable input/output files, bounds stderr and imposes a deadline; title contains no NUL."
+      },
+      "operation_contract": {
+        "purpose": "Write a literal track title into a service-owned audio conversion output.",
+        "trust_boundary": "A user supplies a title; input/output paths and the transcode operation are fixed by the queue worker.",
+        "legitimate_examples": [
+          {
+            "input": "Title Bird's Song",
+            "expected": "Store the apostrophe literally in title metadata."
+          },
+          {
+            "input": "Title containing $ and semicolon",
+            "expected": "Treat all characters as metadata, without launching additional commands."
+          }
+        ],
+        "permitted_changes": [
+          "Start ffmpeg directly with one metadata argument and fixed input/output paths.",
+          "Preserve audio processing, metadata content and nonzero-exit failure handling."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Single quotes are not safe when the value itself contains apostrophes.",
+        "Dropping title metadata removes the intended operation."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Shell injection in an explicit media metadata operation; decoder internals are outside this source case.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-audio-metadata-shell-quote",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The input is metadata, not a filename or command selector; a correct repair must preserve literal media metadata through a trusted tool. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-vulnerable-03",
+      "language": "fsharp",
+      "vulnerable": true,
+      "scenario": "A content-addressed legal archive relies on SHA-1 as collision resistance",
+      "files": {
+        "src/ArchiveIdentity.fs": "module ArchiveIdentity\nopen System\nopen System.Security.Cryptography\nopen System.Collections.Generic\nlet remember (index: IDictionary<string, byte[]>) (document: byte[]) =\n    if document.Length > 1048576 then invalidArg \"document\" \"too large\"\n    use digest = SHA1.Create()\n    let identity = Convert.ToHexString(digest.ComputeHash document)\n    if index.ContainsKey identity then\n        identity\n    else\n        index.Add(identity, Array.copy document)\n        identity\n"
+      },
+      "expected_findings": [
+        {
+          "family": "weak-cryptography",
+          "cwe": "CWE-328",
+          "path": "src/ArchiveIdentity.fs",
+          "line_start": 7,
+          "line_end": 7
+        }
+      ],
+      "rationale": "The archive treats a SHA-1 collision as document identity and skips storage when an existing digest matches. Collision resistance is a security property here, not merely an incidental checksum.",
+      "remediation_constraints": [
+        "Use a collision-resistant versioned digest and compare stored bytes before treating a hit as identical.",
+        "Document index migration; retain existing document accessibility."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. .NET 8; the IDictionary is accessed under a caller lock; documents are private immutable byte arrays after copying; archive identities are persisted externally."
+      },
+      "operation_contract": {
+        "purpose": "Assign stable content identities while ensuring distinct legal documents are not silently treated as the same object.",
+        "trust_boundary": "An uploader may choose document bytes and request repeated insertions; the archive index is service-owned.",
+        "legitimate_examples": [
+          {
+            "input": "Upload exactly the same document twice",
+            "expected": "Return the same versioned identity without duplicating content."
+          },
+          {
+            "input": "Upload distinct documents",
+            "expected": "Do not silently alias them solely because a legacy digest matches."
+          }
+        ],
+        "permitted_changes": [
+          "Use a collision-resistant versioned digest and compare stored bytes before treating a hit as identical.",
+          "Document index migration; retain existing document accessibility."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Changing the digest length without migrating persisted keys loses existing records.",
+        "An unkeyed hash is suitable for content identity here, but must not be repurposed as sender authentication."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Weak digest in an explicitly collision-sensitive deduplication decision.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-legal-content-address-collision",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The digest controls de-duplication of chosen content, providing a concrete collision consequence and persisted-key migration requirement. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-vulnerable-04",
+      "language": "fsharp",
+      "vulnerable": true,
+      "scenario": "External XML entities enter an import record through aliased reader settings",
+      "files": {
+        "src/FeedRecord.fs": "module FeedRecord\nopen System\nopen System.IO\nopen System.Xml\nopen System.Xml.Linq\nlet read (xml: string) =\n    if xml.Length > 16384 then invalidArg \"xml\" \"too large\"\n    let settings = XmlReaderSettings()\n    let parserPolicy = settings\n    parserPolicy.DtdProcessing <- DtdProcessing.Parse\n    parserPolicy.XmlResolver <- XmlUrlResolver()\n    parserPolicy.MaxCharactersFromEntities <- 1024L\n    use input = new StringReader(xml)\n    use reader = XmlReader.Create(input, settings)\n    let document = XDocument.Load reader\n    let title = document.Root.Element(XName.Get \"title\")\n    if isNull title then failwith \"title missing\"\n    title.Value\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-xml",
+          "cwe": "CWE-611",
+          "path": "src/FeedRecord.fs",
+          "line_start": 11,
+          "line_end": 11
+        }
+      ],
+      "rationale": "The alias and original refer to the same mutable settings object. Enabling the resolver through parserPolicy affects the reader created with settings and permits external entity content in the returned title.",
+      "remediation_constraints": [
+        "Disable external resolution and prohibit DTDs on the actual settings object.",
+        "Keep ordinary XML entity decoding and the required title check."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. Feed ingress requires a record root and rejects missing root; no DTD is part of the protocol. Document input and entity expansion are bounded."
+      },
+      "operation_contract": {
+        "purpose": "Extract the title of a bounded partner feed record.",
+        "trust_boundary": "A partner controls the XML; the service does not grant access to local files or internal network resources.",
+        "legitimate_examples": [
+          {
+            "input": "<record><title>Morning &amp; Evening</title></record>",
+            "expected": "Return Morning & Evening."
+          },
+          {
+            "input": "An external entity used inside title",
+            "expected": "Reject without resolving it."
+          }
+        ],
+        "permitted_changes": [
+          "Disable external resolution and prohibit DTDs on the actual settings object.",
+          "Keep ordinary XML entity decoding and the required title check."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Treating aliases as unrelated objects misses the effective parser policy.",
+        "Mutating a new unused settings object does not protect this reader."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "XML resolver alias tracking and live-reader policy.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-xml-settings-object-alias",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The case requires object alias reasoning inside one lexical scope and a concrete reader consumption path rather than a detached configuration assignment. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-vulnerable-05",
+      "language": "fsharp",
+      "vulnerable": true,
+      "scenario": "Batch billing selection joins client IDs into an unquoted IN list",
+      "files": {
+        "src/BillingBatch.fs": "module BillingBatch\nopen System\nopen Microsoft.Data.SqlClient\nlet total (connection: SqlConnection) (invoiceIds: string list) =\n    if List.isEmpty invoiceIds || List.length invoiceIds > 20 then invalidArg \"invoiceIds\" \"count\"\n    if invoiceIds |> List.exists (fun id -> id.Length > 40) then invalidArg \"invoiceIds\" \"length\"\n    let selected = String.concat \",\" invoiceIds\n    use command = connection.CreateCommand()\n    command.CommandText <- \"SELECT SUM(Amount) FROM Invoices WHERE InvoiceId IN (\" + selected + \")\"\n    let result = command.ExecuteScalar()\n    if isNull result || result = box DBNull.Value then 0M\n    else Convert.ToDecimal result\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "src/BillingBatch.fs",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "A size-limited list still contains unvalidated SQL fragments. Joining textual IDs into an unquoted IN clause permits expression and statement syntax rather than integer values.",
+      "remediation_constraints": [
+        "Parse each ID into the documented integer range and bind each value or a table-valued parameter.",
+        "Retain empty-list rejection, duplicate-as-set semantics and null-sum behavior."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. SQL Server 2022; Microsoft.Data.SqlClient 5.2.2; authorized connection is scoped to one account view; InvoiceId is INT and Amount DECIMAL."
+      },
+      "operation_contract": {
+        "purpose": "Sum the amounts of a bounded nonempty set of authorized integer invoice IDs.",
+        "trust_boundary": "The API receives IDs as JSON strings; authorization establishes account access but does not validate the numeric grammar.",
+        "legitimate_examples": [
+          {
+            "input": "IDs [\"12\",\"31\"]",
+            "expected": "Sum invoices 12 and 31 once according to IN semantics."
+          },
+          {
+            "input": "ID containing SQL punctuation",
+            "expected": "Reject as a noninteger or bind a validated integer; never execute it as syntax."
+          }
+        ],
+        "permitted_changes": [
+          "Parse each ID into the documented integer range and bind each value or a table-valued parameter.",
+          "Retain empty-list rejection, duplicate-as-set semantics and null-sum behavior."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Quoting joined IDs instead of parameterizing preserves a second injection boundary.",
+        "Changing IN to a join that counts duplicate IDs alters totals."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "SQL syntax construction from a collection, with duplicate and absent-value semantics.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-invoice-collection-sql-list",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A collection-to-query conversion introduces cardinality, duplicate and type-conversion requirements absent from a scalar lookup. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-vulnerable-06",
+      "language": "fsharp",
+      "vulnerable": true,
+      "scenario": "A literal log search term is interpolated into a shell pipeline",
+      "files": {
+        "src/JobLogSearch.fs": "module JobLogSearch\nopen System\nopen System.Diagnostics\nlet search (term: string) =\n    if term.Length = 0 || term.Length > 60 then invalidArg \"term\" \"length\"\n    let start = ProcessStartInfo(\"/bin/sh\")\n    start.UseShellExecute <- false\n    start.RedirectStandardOutput <- true\n    start.ArgumentList.Add \"-c\"\n    start.ArgumentList.Add (\"/usr/bin/grep -F -- \\\"\" + term + \"\\\" /srv/jobs/current.log | /usr/bin/head -n 20\")\n    use child = Process.Start start\n    if isNull child then failwith \"spawn\"\n    let output = child.StandardOutput.ReadToEnd()\n    child.WaitForExit()\n    if child.ExitCode <> 0 then failwith \"search\"\n    output\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/JobLogSearch.fs",
+          "line_start": 10,
+          "line_end": 10
+        }
+      ],
+      "rationale": "grep -F makes its pattern literal only after shell parsing. Dollar substitutions and quote characters in the term are still interpreted by sh before grep sees them.",
+      "remediation_constraints": [
+        "Use a bounded direct line-reading literal search, or separate child arguments without a shell pipeline.",
+        "Preserve first-twenty ordering, empty-result success and the caller output limit."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. GNU grep/coreutils 9.4; the fixed log is at most 2 MiB, uses UTF-8 lines of at most 4096 bytes and is a stable snapshot during search."
+      },
+      "operation_contract": {
+        "purpose": "Return at most the first twenty log lines containing a literal user search term.",
+        "trust_boundary": "A support user may search a preauthorized fixed log but may not run worker commands or select paths.",
+        "legitimate_examples": [
+          {
+            "input": "Term costs $5",
+            "expected": "Match that literal text."
+          },
+          {
+            "input": "No matching lines",
+            "expected": "Return an empty string as a successful search."
+          }
+        ],
+        "permitted_changes": [
+          "Use a bounded direct line-reading literal search, or separate child arguments without a shell pipeline.",
+          "Preserve first-twenty ordering, empty-result success and the caller output limit."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Removing -F changes a literal search into a regular-expression language.",
+        "A grep exit code of 1 means no matches, not an operational failure."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Shell injection with downstream literal matching and pipeline exit semantics.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-log-search-literal-pipeline",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This case separates literal matcher flags from shell expansion and makes empty search results an explicit regression trap. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-safe-01",
+      "language": "fsharp",
+      "vulnerable": false,
+      "scenario": "A retry policy rejects unknown mode names without evaluating configuration text",
+      "files": {
+        "src/RetryPolicy.fs": "module RetryPolicy\nopen System\nlet delays (mode: string) (attempts: int) =\n    if attempts < 0 || attempts > 5 then invalidArg \"attempts\" \"range\"\n    let initial =\n        match mode with\n        | \"interactive\" -> 100\n        | \"batch\" -> 1000\n        | _ -> invalidArg \"mode\" \"unknown\"\n    [ for step in 0 .. attempts - 1 do\n        yield TimeSpan.FromMilliseconds(float (initial * (1 <<< step))) ]\n"
+      },
+      "expected_findings": [],
+      "rationale": "Configuration text is matched against two literal names, and the attempt bound makes the integer shift and multiplication safe. No expression parser or shell evaluates the mode.",
+      "remediation_constraints": [
+        "Preserve exact schedules and the attempt cap.",
+        "Keep mode selection as a closed match."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. .NET 8 TimeSpan; zero attempts returns an empty list and no wait is performed by this helper."
+      },
+      "operation_contract": {
+        "purpose": "Build a deterministic bounded exponential retry schedule.",
+        "trust_boundary": "A user selects one of two modes and up to five attempts; arbitrary executable formulas are not accepted.",
+        "legitimate_examples": [
+          {
+            "input": "interactive, 3",
+            "expected": "Return delays of 100, 200 and 400 milliseconds."
+          },
+          {
+            "input": "batch; command, 2",
+            "expected": "Reject the mode rather than interpret it."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve exact schedules and the attempt cap.",
+          "Keep mode selection as a closed match."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Changing the mode into an eval-based expression expands configuration into code.",
+        "Lifting the attempt bound makes shift and delay overflow possible."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Dynamic-evaluation and arithmetic false-positive control in bounded policy selection.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-closed-retry-policy",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A small business configuration language is explicitly an enum with arithmetic bounds rather than arbitrary executable input. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-safe-02",
+      "language": "fsharp",
+      "vulnerable": false,
+      "scenario": "Invitation tokens use operating-system randomness and a bounded lifetime",
+      "files": {
+        "src/InvitationToken.fs": "module InvitationToken\nopen System\nopen System.Security.Cryptography\nlet issue (now: DateTimeOffset) (minutes: int) =\n    if minutes < 1 || minutes > 60 then invalidArg \"minutes\" \"range\"\n    let bytes = RandomNumberGenerator.GetBytes(32)\n    let token =\n        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')\n    CryptographicOperations.ZeroMemory(Span<byte>(bytes))\n    let expires = now.AddMinutes(float minutes)\n    token, expires\n"
+      },
+      "expected_findings": [],
+      "rationale": "The token contains 256 bits from the operating-system CSPRNG and the URL-safe encoding does not reduce entropy. Lifetime is bounded and computed from a caller-owned time source.",
+      "remediation_constraints": [
+        "Keep cryptographic randomness, 32 random bytes and bounded expiry.",
+        "Do not derive the secret from names, timestamps or System.Random."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. .NET 8 RandomNumberGenerator; trusted now is far enough from DateTimeOffset.MaxValue for the lifetime; the caller stores and redeems tokens with single-use expiry enforcement."
+      },
+      "operation_contract": {
+        "purpose": "Issue an opaque invitation secret and its expiration timestamp.",
+        "trust_boundary": "A user may request an allowed lifetime but cannot influence random bytes; the token is returned only to the authorized invitation issuer.",
+        "legitimate_examples": [
+          {
+            "input": "now=2025-01-01T00:00:00Z, minutes=15",
+            "expected": "Return a 43-character unpadded URL-safe token and expiry 00:15:00Z."
+          },
+          {
+            "input": "minutes=61",
+            "expected": "Reject without issuing a token."
+          }
+        ],
+        "permitted_changes": [
+          "Keep cryptographic randomness, 32 random bytes and bounded expiry.",
+          "Do not derive the secret from names, timestamps or System.Random."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Base64 encoding is transport representation, not encryption or entropy generation.",
+        "The caller must store only a suitable token verifier and enforce single use; this helper does not claim to implement redemption."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Cryptographic random secret generation and bounded issuance metadata.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-invitation-csprng-expiry",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The operation generates a fresh bearer secret rather than verifying an HMAC, with randomness and expiry as its distinct invariants. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-safe-03",
+      "language": "fsharp",
+      "vulnerable": false,
+      "scenario": "A database paging request binds numeric bounds and keeps ordering fixed",
+      "files": {
+        "src/RecentEvents.fs": "module RecentEvents\nopen System\nopen System.Data\nopen Microsoft.Data.SqlClient\nlet read (connection: SqlConnection) (afterId: int64) (count: int) =\n    if afterId < 0L || count < 1 || count > 100 then invalidArg \"paging\" \"range\"\n    use command = connection.CreateCommand()\n    command.CommandText <- \"SELECT TOP (@count) Id FROM Events WHERE Id > @after ORDER BY Id ASC\"\n    command.Parameters.Add(\"@count\", SqlDbType.Int).Value <- count\n    command.Parameters.Add(\"@after\", SqlDbType.BigInt).Value <- afterId\n    use reader = command.ExecuteReader()\n    [ while reader.Read() do yield reader.GetInt64(0) ]\n"
+      },
+      "expected_findings": [],
+      "rationale": "Both numeric values are bound with explicit SQL types; the ordering and query structure are fixed. The page bound also limits result volume.",
+      "remediation_constraints": [
+        "Keep typed parameters, exclusive cursor and ascending order.",
+        "Maintain the page-size bound."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. SQL Server 2022; Microsoft.Data.SqlClient 5.2.2; Id is unique BIGINT; connection visibility is authorized by the caller."
+      },
+      "operation_contract": {
+        "purpose": "Return the next ascending event IDs after an exclusive cursor.",
+        "trust_boundary": "A client chooses a cursor and page count but cannot select SQL structure or arbitrary order expressions.",
+        "legitimate_examples": [
+          {
+            "input": "afterId=10, count=2 with rows 10,11,15",
+            "expected": "Return [11;15]."
+          },
+          {
+            "input": "count=101",
+            "expected": "Reject before executing the query."
+          }
+        ],
+        "permitted_changes": [
+          "Keep typed parameters, exclusive cursor and ascending order.",
+          "Maintain the page-size bound."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Replacing > with >= repeats the cursor event.",
+        "Interpolating even validated numbers obscures the explicit parameter contract."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Fixed SQL structure and typed paging values.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-numeric-event-cursor",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A safe paged query has cursor ordering and result-count invariants distinct from scalar string lookup or IN-list assembly. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-safe-04",
+      "language": "fsharp",
+      "vulnerable": false,
+      "scenario": "A bounded binary export is compressed without interpreting its content",
+      "files": {
+        "src/ExportCompression.fs": "module ExportCompression\nopen System\nopen System.IO\nopen System.IO.Compression\nlet pack (payload: byte[]) =\n    if payload.Length > 65536 then invalidArg \"payload\" \"size\"\n    use destination = new MemoryStream()\n    do\n        use compressor = new GZipStream(destination, CompressionLevel.Fastest, true)\n        compressor.Write(payload, 0, payload.Length)\n    let complete = destination.ToArray()\n    if complete.Length = 0 then failwith \"empty gzip output\"\n    complete\n"
+      },
+      "expected_findings": [],
+      "rationale": "The bounded byte array is passed to a trusted compression writer without parsing, executing or formatting its contents. Disposing the compressor before reading the destination completes the gzip trailer.",
+      "remediation_constraints": [
+        "Keep the input bound and dispose the compressor before taking destination bytes.",
+        "Preserve binary transparency and ownership of the returned byte array."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. .NET 8 built-in GZipStream; payload storage is stable for the call; compression is not combined with secret data or exposed through a chosen-input length oracle."
+      },
+      "operation_contract": {
+        "purpose": "Return a complete gzip member representing exactly one bounded binary export.",
+        "trust_boundary": "A tenant controls export bytes; it cannot select executable code, filesystem paths or compression plugins.",
+        "legitimate_examples": [
+          {
+            "input": "Payload containing NUL and percent bytes",
+            "expected": "Decompression by the recipient recovers every original byte."
+          },
+          {
+            "input": "Empty payload",
+            "expected": "Return a complete gzip representation of zero bytes, not an empty output file."
+          }
+        ],
+        "permitted_changes": [
+          "Keep the input bound and dispose the compressor before taking destination bytes.",
+          "Preserve binary transparency and ownership of the returned byte array."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Reading MemoryStream before compressor disposal can omit the gzip trailer.",
+        "Converting the payload to a string loses binary data and is unnecessary."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Bounded binary transformation with no executable or parser language.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-bounded-gzip-export",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The safe operation is a binary compression writer with explicit disposal ordering, wholly separate from XML feed parsing. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-safe-05",
+      "language": "fsharp",
+      "vulnerable": false,
+      "scenario": "A diagnostic bundle escapes control characters without formatting evaluation",
+      "files": {
+        "src/DiagnosticLine.fs": "module DiagnosticLine\nopen System\nopen System.Text\nlet render (field: string) =\n    if field.Length > 256 then invalidArg \"field\" \"size\"\n    let builder = StringBuilder(\"field=\")\n    for ch in field do\n        match ch with\n        | '\\n' -> builder.Append(\"\\\\n\") |> ignore\n        | '\\r' -> builder.Append(\"\\\\r\") |> ignore\n        | '\\\\' -> builder.Append(\"\\\\\\\\\") |> ignore\n        | value -> builder.Append(value) |> ignore\n    builder.Append('\\n').ToString()\n"
+      },
+      "expected_findings": [],
+      "rationale": "The input is appended as characters after escaping record separators and backslashes. Percent sequences and braces are never evaluated by a formatting engine.",
+      "remediation_constraints": [
+        "Keep backslash and newline escaping unambiguous and preserve all accepted text.",
+        "Retain the bounded field length."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. .NET UTF-16 strings; downstream decoder recognizes only the documented escapes and never evaluates code."
+      },
+      "operation_contract": {
+        "purpose": "Render one reversible diagnostic field on one physical line.",
+        "trust_boundary": "A remote client controls field text; the service owns the log prefix and line boundaries.",
+        "legitimate_examples": [
+          {
+            "input": "Field a followed by newline then b",
+            "expected": "Return field=a\\nb followed by one real newline."
+          },
+          {
+            "input": "Field %s {0}",
+            "expected": "Preserve both sequences literally."
+          }
+        ],
+        "permitted_changes": [
+          "Keep backslash and newline escaping unambiguous and preserve all accepted text.",
+          "Retain the bounded field length."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Escaping newlines without escaping backslashes makes decoding ambiguous.",
+        "Changing Append to an input-controlled format string introduces new semantics."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Format and log-boundary false-positive control with explicit escaping.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-reversible-diagnostic-escaping",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The safe case has reversible record-boundary encoding rather than simply a fixed printf format. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-fsharp-safe-06",
+      "language": "fsharp",
+      "vulnerable": false,
+      "scenario": "Request completion logs only an explicit nonsecret audit projection",
+      "files": {
+        "src/RequestAudit.fs": "module RequestAudit\nopen System\nopen System.Text.Json\ntype Incoming = { Method: string; RequestId: Guid; Authorization: string; Body: string }\ntype Entry = { Method: string; Route: string; RequestId: string; Status: int }\nlet serialize (routeName: string) (request: Incoming) (status: int) =\n    if status < 100 || status > 599 then invalidArg \"status\" \"range\"\n    if routeName.Length > 80 then invalidArg \"routeName\" \"length\"\n    let methodName =\n        match request.Method with\n        | \"GET\" | \"POST\" | \"PUT\" | \"PATCH\" | \"DELETE\" -> request.Method\n        | _ -> \"OTHER\"\n    let entry = { Method = methodName; Route = routeName;\n                  RequestId = request.RequestId.ToString(\"D\"); Status = status }\n    JsonSerializer.Serialize(entry)\n",
+        "src/RequestCompletion.fs": "module RequestCompletion\nopen System.IO\nlet recordPasswordChange (audit: TextWriter) (request: RequestAudit.Incoming) (status: int) =\n    let encoded = RequestAudit.serialize \"account.password-change\" request status\n    audit.WriteLine(encoded)\n    audit.Flush()\n"
+      },
+      "expected_findings": [],
+      "rationale": "The serializer receives a newly constructed allow-listed audit record, not the incoming request object. Authorization and body fields can contain secrets but are never copied into the persisted JSON or used as a format program.",
+      "remediation_constraints": [
+        "Keep the explicit audit projection and never serialize the Incoming record or arbitrary headers/body.",
+        "Retain a fixed service route label, GUID correlation, validated status and one JSON record per line.",
+        "Preserve operator diagnostics without logging password or authorization values."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; F# 8",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64",
+        "setup": ".NET 8; F#8; compile RequestAudit.fs before RequestCompletion.fs. System.Text.Json serializes public F# record properties with default encoding. Ingress bounds method and body size, all strings are non-null, the server generates RequestId, and a serialized caller owns the TextWriter. The body may contain credentials and must never be logged."
+      },
+      "operation_contract": {
+        "purpose": "Write one structured password-change completion event containing method, a fixed route name, a correlation ID and status, while excluding submitted credentials.",
+        "trust_boundary": "The client controls authorization/body text and method input. The service generates the request GUID and the included completion caller chooses the fixed route label and actual response status.",
+        "legitimate_examples": [
+          {
+            "input": "POST request with Authorization=Bearer secret and Body containing an old/new password, status=204",
+            "expected": "Write one JSON event containing POST, account.password-change, the request GUID and 204; neither secret field nor its value appears."
+          },
+          {
+            "input": "An unknown method spelling, status=400",
+            "expected": "Write Method=OTHER and the remaining approved fields, without serializing the raw method."
+          }
+        ],
+        "permitted_changes": [
+          "Keep the explicit audit projection and never serialize the Incoming record or arbitrary headers/body.",
+          "Retain a fixed service route label, GUID correlation, validated status and one JSON record per line.",
+          "Preserve operator diagnostics without logging password or authorization values."
+        ],
+        "forbidden_changes": [
+          "Do not delete the operation or replace its result with a constant.",
+          "Do not expose credentials or change the documented input/output contract."
+        ]
+      },
+      "regression_traps": [
+        "Serializing the full incoming record and removing a few known secret substrings is not equivalent to the allow-list.",
+        "Adding the raw request URL could expose query-string credentials; the current route label is deliberately service-owned.",
+        "Writing an unencoded user object through string concatenation can break log record boundaries."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Data minimization in structured audit output and prevention of format/log injection. This case does not claim to implement authentication, authorization or password changes themselves.",
+        "reviewed_residual_risks": [
+          "AI candidate: human review of labels, runtime assumptions and cross-corpus independence remains pending.",
+          "Caller responsibilities are explicit assumptions, not a claim of whole-application security."
+        ]
+      },
+      "derivation": {
+        "group": "fsharp-request-audit-allowlisted-projection",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This operation enforces nonsecret field selection at an audit boundary using typed projection and a visible fixed-route caller. It does not launch a tool or inspect archive contents. Conceptual independence remains subject to human review.",
+        "retired_drafts": [
+          {
+            "reason": "Replaced before scanner exposure after cross-language audit identified a substantially shared operation/mechanism.",
+            "overlap_case_ids": [
+              "v2-scala-safe-04"
+            ],
+            "retired_before_scanner_exposure": true,
+            "case_snapshot": {
+              "id": "v2-fsharp-safe-06",
+              "language": "fsharp",
+              "vulnerable": false,
+              "scenario": "A preflight worker uses a closed executable argument vector",
+              "files": {
+                "src/ArchivePreflight.fs": "module ArchivePreflight\nopen System\nopen System.Diagnostics\nlet inspect () =\n    let start = ProcessStartInfo(\"/usr/bin/unzip\")\n    start.UseShellExecute <- false\n    start.RedirectStandardOutput <- true\n    start.ArgumentList.Add \"-Z1\"\n    start.ArgumentList.Add \"/srv/jobs/staged.zip\"\n    use child = Process.Start start\n    if isNull child then failwith \"spawn\"\n    let listing = child.StandardOutput.ReadToEnd()\n    child.WaitForExit()\n    if child.ExitCode <> 0 then failwith \"invalid archive\"\n    listing\n"
+              },
+              "expected_findings": [],
+              "rationale": "The inspection command and path are fixed and launched without a shell. Archive entry names appear only in captured output; this helper does not extract them.",
+              "remediation_constraints": [
+                "Keep listing-only behavior, fixed paths and non-shell invocation.",
+                "Do not treat successful listing as permission to extract unsafe member paths."
+              ],
+              "runtime_assumptions": {
+                "runtime": ".NET 8.0; F# 8",
+                "libraries": [
+                  ".NET 8 BCL"
+                ],
+                "platform": "Linux x86-64",
+                "setup": "Functions receive non-null values; configuration, executable paths and injected database connections are trusted. Info-ZIP unzip 6.0 is a trusted system installation; caller enforces an archive-size limit, output cap and deadline; staged.zip is a private immutable file."
+              },
+              "operation_contract": {
+                "purpose": "Return the member-name listing of one staged archive for later policy checks.",
+                "trust_boundary": "An uploader controls archive bytes but not the executable path, arguments or staging filename.",
+                "legitimate_examples": [
+                  {
+                    "input": "Archive containing a member named ../note",
+                    "expected": "Return the literal member name for policy review without extracting it."
+                  },
+                  {
+                    "input": "Invalid archive",
+                    "expected": "Report helper failure after child cleanup."
+                  }
+                ],
+                "permitted_changes": [
+                  "Keep listing-only behavior, fixed paths and non-shell invocation.",
+                  "Do not treat successful listing as permission to extract unsafe member paths."
+                ],
+                "forbidden_changes": [
+                  "Do not delete the demonstrated operation or replace its output with a constant.",
+                  "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+                ]
+              },
+              "regression_traps": [
+                "Listing an unsafe-looking member is not itself filesystem traversal.",
+                "A later extractor must separately enforce containment and is not implied safe here."
+              ],
+              "ground_truth_scope": {
+                "profile": "security-v2",
+                "scope": "Process construction and nonextracting archive inspection; trusted tool defects are outside this source evaluation.",
+                "reviewed_residual_risks": [
+                  "AI-authored candidate: labels, scope and independence require human review before freezing.",
+                  "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+                ]
+              },
+              "derivation": {
+                "group": "fsharp-fixed-archive-listing-only",
+                "origin": "new AI-authored candidate",
+                "related_case_ids": [],
+                "independence_rationale": "An attacker controls a data file consumed by a fixed utility, while path traversal is deliberately a later policy boundary rather than this operation. Independence is a proposed classification pending human review; no effective sample size is claimed."
+              },
+              "provenance": {
+                "origin": "original AI-authored evaluation candidate",
+                "author": "Codex AI author",
+                "generated": true,
+                "license": "CC0-1.0",
+                "references": [
+                  "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/functions/",
+                  "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings"
+                ]
+              },
+              "split": "held_out",
+              "human_review": {
+                "status": "pending",
+                "reviewer_kind": null,
+                "reviewer": null,
+                "reviewed_at": null,
+                "notes": null,
+                "review_schema_version": "2.0",
+                "reviewed_content_sha256": null,
+                "reviewed_case_sha256": null
+              }
+            },
+            "source_sha256": "6674f9eaab630c13eab225e6777a69cc09e61642cf4d961bd77b9c2f8015b0c5"
+          }
+        ]
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/how-to",
+          "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/records"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

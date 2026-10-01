@@ -1,1095 +1,563 @@
-"""Main FastAPI application for CodeAgent Vulnerability Scanner."""
-
+"""HTTP API for the durable scanner. Execution belongs to the worker process."""
 import asyncio
-import json
-import logging
-import os
-import hmac
+from contextlib import asynccontextmanager
 import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import time
 import uuid
-from datetime import datetime
-from typing import Optional, List, Dict, Any
-import tempfile
-import shutil
 
 import httpx
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response, File, Form, UploadFile, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
-from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_202_ACCEPTED, HTTP_400_BAD_REQUEST
-import uvicorn
+from fastapi import FastAPI, HTTPException, Request, Query, Body
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import ValidationError
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Import our modules
-from pipeline.orchestrator import get_orchestrator, JobOrchestrator
-from pipeline.report_schema import (
-    AnalyzeRequest, AnalyzeResponse, JobInfo, Report, ReportListResponse, 
-    ReportListItem, ToolsResponse, HealthResponse, ErrorResponse,
-    WebhookConfig, WebhookPayload, AnalyzerConfig, SeveritySummary
-)
-from analyzers.base import analyzer_registry
-from integration.camel_bridge import CamelBridge
-
-# Register all analyzers
-from analyzers.semgrep_runner import SemgrepAnalyzer
-from analyzers.bandit_runner import BanditAnalyzer
-from analyzers.depcheck_runner import DepCheckAnalyzer
-
-# Configuration
-STORAGE_BASE = os.getenv("STORAGE_BASE", "./storage")
-MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 50 * 1024 * 1024))  # 50MB
-MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", 2))
-API_VERSION = "0.1.0"
-
-# Ensure storage directories exist
-for subdir in ["workspace", "reports", "logs"]:
-    os.makedirs(os.path.join(STORAGE_BASE, subdir), exist_ok=True)
-
-# Initialize FastAPI app
-app = FastAPI(
-    title="CodeAgent Vulnerability Scanner API",
-    version=API_VERSION,
-    description="Security vulnerability scanner for source code repositories"
-)
-
-# Add CORS middleware
-# Development: Allow localhost origins for frontend integration
-# Production: Replace with your actual domain(s)
-ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000").split(",")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,  # Configured for local development
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],  # Allow frontend to read response headers
-)
-
-# Global state
-orchestrator: Optional[JobOrchestrator] = None
-agent_bridge: Optional[CamelBridge] = None
-webhooks: Dict[str, WebhookConfig] = {}
-sse_clients: Dict[str, List] = {}  # job_id -> list of response objects
+from ingestion.snapshots import SourceError, validate_github_url, github_repository_identity
+from pipeline.contracts import Job, JobList, ReviewConfig, ScanReport, Submission
+from pipeline.orchestrator import redact
+from pipeline.store import Store, QueueFull, TERMINAL, now
+from settings import Settings
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize application on startup."""
-    global orchestrator, agent_bridge
-    orchestrator = get_orchestrator(STORAGE_BASE)
-    
-    # Initialize AI agent bridge (multi-agent system)
-    try:
-        agent_bridge = CamelBridge()
-        logger.info("Multi-Agent Bridge (CAMEL) initialized successfully")
-    except Exception as e:
-        logger.warning(f"Failed to initialize Multi-Agent Bridge: {e}")
-        agent_bridge = None
-    
-    # Register event callback for webhooks and SSE
-    orchestrator.add_event_callback(handle_job_event)
-    
-    logger.info(f"CodeAgent Scanner API v{API_VERSION} started")
+class RequestBodyLimit:
+    """Bound streamed multipart bytes before Starlette spools uploaded files."""
+    def __init__(self, app, limit):
+        self.app, self.limit = app, limit
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up on shutdown."""
-    logger.info("CodeAgent Scanner API shutting down")
-
-
-def handle_job_event(job_id: str, event_type: str, data: Dict[str, Any]):
-    """Handle job events for webhooks, SSE, and AI analysis."""
-    # Handle SSE clients
-    if job_id in sse_clients:
-        event_data = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-        for response in sse_clients[job_id][:]:  # Copy list to avoid modification during iteration
-            try:
-                # Note: This is simplified - in practice you'd need proper async handling
-                pass  # SSE would be handled differently in real implementation
-            except Exception as e:
-                logger.error(f"Failed to send SSE event: {e}")
-                sse_clients[job_id].remove(response)
-    
-    # Handle webhooks and AI analysis for completion events
-    if event_type == "finished" and data.get("status") == "completed":
-        # Run async function in background thread since we're in a sync context
-        import threading
-        def run_async_task():
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(process_completed_job(job_id, data))
-                loop.close()
-            except Exception as e:
-                logger.error(f"Error in background AI analysis: {e}", exc_info=True)
-        
-        thread = threading.Thread(target=run_async_task, daemon=True)
-        thread.start()
-
-
-async def process_completed_job(job_id: str, data: Dict[str, Any]):
-    """Process completed job: run AI analysis and deliver webhooks."""
-    # First, trigger AI analysis if enabled
-    enable_ai = os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true"
-    
-    if enable_ai and agent_bridge:
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        headers = dict(scope.get("headers", []))
         try:
-            # Get full report
-            report_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}.json")
-            if os.path.exists(report_file):
-                with open(report_file, 'r') as f:
-                    report = json.load(f)
-                
-                # Get workspace path
-                workspace_path = os.path.join(STORAGE_BASE, "workspace", job_id)
-                
-                # Check if there are any issues to analyze (all severity levels)
-                summary = report.get('summary', {})
-                total_issues = summary.get('critical', 0) + summary.get('high', 0) + summary.get('medium', 0) + summary.get('low', 0)
-                
-                if total_issues > 0:
-                    severity_info = f"critical: {summary.get('critical', 0)}, high: {summary.get('high', 0)}, medium: {summary.get('medium', 0)}, low: {summary.get('low', 0)}"
-                    logger.info(f"Starting AI analysis for job {job_id} - {total_issues} total issues ({severity_info})")
-
-                    
-                    # Run AI analysis
-                    ai_result = await agent_bridge.process_vulnerabilities(
-                        job_id=job_id,
-                        report=report,
-                        workspace_path=workspace_path
-                    )
-                    
-                    # Transform AI result to match frontend expectations
-                    fixes = []
-                    recommendations = []
-                    has_errors = False
-                    error_messages = []
-                    
-                    # Extract fixes from enhanced_issues
-                    for enhanced_issue in ai_result.get('enhanced_issues', []):
-                        ai_analysis = enhanced_issue.get('ai_analysis', {})
-                        file_path = enhanced_issue.get('file', '')
-                        
-                        # Check for errors
-                        if 'error' in ai_analysis:
-                            has_errors = True
-                            error_messages.append(f"{file_path}: {ai_analysis['error']}")
-                        
-                        # Check if AI analysis has fixes (not just error)
-                        if 'fixes' in ai_analysis:
-                            for fix in ai_analysis['fixes']:
-                                fixes.append({
-                                    'file': file_path,
-                                    'line': fix.get('line', 0),
-                                    'severity': fix.get('severity', 'unknown'),  # Include severity for proper ordering
-                                    'vulnerability_type': fix.get('vulnerability_type', ''),
-                                    'original_code': fix.get('original_code', ''),
-                                    'fixed_code': fix.get('fixed_code', ''),
-                                    'explanation': fix.get('explanation', '')
-                                })
-                        
-                        # Extract recommendations
-                        if 'recommendations' in ai_analysis:
-                            recommendations.extend(ai_analysis['recommendations'])
-                    
-                    # Sort fixes by severity (critical > high > medium > low) for emphasis
-                    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'unknown': 4}
-                    fixes.sort(key=lambda x: severity_order.get(x.get('severity', 'unknown'), 4))
-                    
-                    # Group fixes by severity for better organization
-                    fixes_by_severity = {
-                        'critical': [f for f in fixes if f.get('severity') == 'critical'],
-                        'high': [f for f in fixes if f.get('severity') == 'high'],
-                        'medium': [f for f in fixes if f.get('severity') == 'medium'],
-                        'low': [f for f in fixes if f.get('severity') == 'low']
-                    }
-                    
-                    # Create severity summary
-                    severity_summary = {
-                        'critical': len(fixes_by_severity['critical']),
-                        'high': len(fixes_by_severity['high']),
-                        'medium': len(fixes_by_severity['medium']),
-                        'low': len(fixes_by_severity['low']),
-                        'total': len(fixes)
-                    }
-                    
-                    # Sort and group recommendations by priority
-                    priority_order = {'high': 0, 'medium': 1, 'low': 2}
-                    # Deduplicate recommendations by title (keep first occurrence)
-                    seen_titles = set()
-                    recommendations_list = []
-                    for rec in recommendations:
-                        if rec.get('title') not in seen_titles:
-                            seen_titles.add(rec.get('title'))
-                            recommendations_list.append(rec)
-                    recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
-                    
-                    recommendations_by_priority = {
-                        'high': [r for r in recommendations_list if r.get('priority') == 'high'],
-                        'medium': [r for r in recommendations_list if r.get('priority') == 'medium'],
-                        'low': [r for r in recommendations_list if r.get('priority') == 'low']
-                    }
-                    
-                    # Create enhanced report by merging original report with AI analysis
-                    # Always include ai_analysis field, even if empty
-                    ai_analysis_data = {
-                        'fixes': fixes,  # All fixes in priority order
-                        'fixes_by_severity': fixes_by_severity,  # Grouped by severity
-                        'severity_summary': severity_summary,  # Count per severity
-                        'recommendations': recommendations_list,  # All recommendations in priority order
-                        'recommendations_by_priority': recommendations_by_priority  # Grouped by priority
-                    }
-                    
-                    # Add error information if present
-                    if has_errors:
-                        ai_analysis_data['errors'] = error_messages
-                        ai_analysis_data['status'] = 'partial' if fixes else 'failed'
-                    else:
-                        ai_analysis_data['status'] = 'complete'
-                    
-                    enhanced_report = {
-                        **report,  # Include all original report fields
-                        'ai_analysis': ai_analysis_data
-                    }
-                    
-                    # Save enhanced report
-                    enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
-                    with open(enhanced_file, 'w') as f:
-                        json.dump(enhanced_report, f, indent=2)
-                    
-                    logger.info(f"AI analysis completed for job {job_id} - Generated {len(fixes)} fixes and {len(recommendations)} recommendations")
-                else:
-                    logger.info(f"No security issues found for job {job_id}, skipping AI analysis")
-            
-        except Exception as e:
-            logger.error(f"AI analysis failed for job {job_id}: {e}")
-    
-    # Then deliver webhooks
-    await deliver_webhooks(job_id, data)
+            declared = int(headers.get(b"content-length", b"0"))
+        except ValueError:
+            return await JSONResponse({"error": {"code": "400", "message": "Invalid Content-Length"}}, 400)(scope, receive, send)
+        if declared > self.limit:
+            return await JSONResponse({"error": {"code": "413", "message": "Request exceeds upload limit"}}, 413)(scope, receive, send)
+        consumed = 0
+        async def bounded_receive():
+            nonlocal consumed
+            message = await receive()
+            if message["type"] == "http.request":
+                consumed += len(message.get("body", b""))
+                if consumed > self.limit:
+                    raise HTTPException(413, "Request exceeds upload limit")
+            return message
+        await self.app(scope, bounded_receive, send)
 
 
-async def deliver_webhooks(job_id: str, data: Dict[str, Any]):
-    """Deliver webhook notifications."""
-    for webhook_id, webhook in webhooks.items():
-        if "report.created" in webhook.events and webhook.active:
-            try:
-                # Get job info for payload
-                job_info = orchestrator.get_job_status(job_id)
-                if not job_info:
-                    continue
-                
-                # Create payload
-                payload = WebhookPayload(
-                    job_id=job_id,
-                    repo=None,  # Would need to get from job
-                    summary=SeveritySummary(),  # Would need to get from report
-                    report_url=f"/reports/{job_id}"
-                )
-                
-                # Send webhook
-                await send_webhook(webhook, payload.to_dict())
-                
-            except Exception as e:
-                logger.error(f"Failed to deliver webhook {webhook_id}: {e}")
+def valid_id(value):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", value):
+        raise HTTPException(404, "Resource not found")
+    return value
 
 
-async def send_webhook(webhook: WebhookConfig, payload: Dict[str, Any]):
-    """Send webhook HTTP POST."""
-    try:
-        headers = {
-            "Content-Type": "application/json",
-            "X-Event": "report.created"
-        }
-        
-        payload_json = json.dumps(payload)
-        
-        # Add signature if secret is configured
-        if webhook.secret:
-            signature = hmac.new(
-                webhook.secret.encode(),
-                payload_json.encode(),
-                hashlib.sha256
-            ).hexdigest()
-            headers["X-Signature"] = f"sha256={signature}"
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                webhook.url,
-                headers=headers,
-                content=payload_json,
-                timeout=30.0
-            )
-            
-            if response.status_code >= 200 and response.status_code < 300:
-                logger.info(f"Webhook delivered successfully to {webhook.url}")
-            else:
-                logger.warning(f"Webhook delivery failed: {response.status_code}")
-                
-    except Exception as e:
-        logger.error(f"Webhook delivery error: {e}")
+def create_app(settings=None):
+    settings = settings or Settings()
 
+    @asynccontextmanager
+    async def lifespan(app):
+        settings.prepare()
+        app.state.store = Store(settings.storage)
+        yield
 
-# Helper functions
-def validate_analyze_request(
-    github_url: Optional[str] = None,
-    file: Optional[UploadFile] = None
-) -> None:
-    """Validate analyze request parameters."""
-    if not github_url and not file:
-        raise HTTPException(
-            status_code=HTTP_400_BAD_REQUEST,
-            detail={"error": {"code": "INVALID_INPUT", "message": "Either github_url or file must be provided"}}
-        )
-    
-    if github_url and file:
-        raise HTTPException(
-            status_code=HTTP_400_BAD_REQUEST,
-            detail={"error": {"code": "INVALID_INPUT", "message": "Cannot provide both github_url and file"}}
-        )
-    
-    if file and file.size and file.size > MAX_UPLOAD_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail={"error": {"code": "PAYLOAD_TOO_LARGE", "message": f"File too large. Max size: {MAX_UPLOAD_SIZE} bytes"}}
-        )
+    app = FastAPI(title="CodeAgent Security Scanner", version="0.2.0", lifespan=lifespan)
+    app.add_middleware(RequestBodyLimit, limit=settings.max_upload_size + 1024 * 1024)
+    app.state.settings = settings
+    login_attempts = {}
 
+    def store():
+        if not hasattr(app.state, "store"):
+            settings.prepare()
+            app.state.store = Store(settings.storage)
+        return app.state.store
 
-async def create_analyze_request(
-    github_url: Optional[str] = Form(None),
-    ref: Optional[str] = Form(None),
-    commit: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    include: Optional[str] = Form(None),
-    exclude: Optional[str] = Form(None),
-    analyzers: Optional[str] = Form(None),
-    timeout_sec: Optional[int] = Form(None),
-    labels: Optional[str] = Form(None)
-) -> AnalyzeRequest:
-    """Create AnalyzeRequest from form data."""
-    validate_analyze_request(github_url, file)
-    
-    file_bytes = None
-    if file:
-        file_bytes = await file.read()
-    
-    return AnalyzeRequest(
-        github_url=github_url,
-        ref=ref,
-        commit=commit,
-        file=file_bytes,
-        include=include,
-        exclude=exclude,
-        analyzers=analyzers,
-        timeout_sec=timeout_sec,
-        labels=labels
-    )
+    def signature(value):
+        key = settings.session_secret or hashlib.sha256(("codeagent-session:" + settings.workspace_password).encode()).hexdigest()
+        return hmac.new(key.encode(), value.encode(), hashlib.sha256).hexdigest()
 
-
-def error_response(code: str, message: str, details: Optional[Dict] = None) -> JSONResponse:
-    """Create standardized error response."""
-    error = ErrorResponse(code=code, message=message, details=details)
-    status_code = {
-        "INVALID_INPUT": 400,
-        "UNAUTHORIZED": 401,
-        "FORBIDDEN": 403,
-        "NOT_FOUND": 404,
-        "CONFLICT": 409,
-        "PAYLOAD_TOO_LARGE": 413,
-        "RATE_LIMIT": 429,
-        "TIMEOUT": 504,
-        "INTERNAL": 500
-    }.get(code, 500)
-    
-    return JSONResponse(content=error.to_dict(), status_code=status_code)
-
-
-# API Endpoints
-
-@app.get("/health")
-async def health_check() -> HealthResponse:
-    """Health check endpoint."""
-    return HealthResponse(status="ok", version=API_VERSION)
-
-
-@app.get("/tools")
-async def get_tools() -> ToolsResponse:
-    """Get available analyzers and versions."""
-    available = analyzer_registry.list_analyzers()
-    versions = analyzer_registry.get_versions()
-    defaults = orchestrator.get_analyzer_config()["defaults"]
-    
-    return ToolsResponse(
-        available=available,
-        default=defaults,
-        versions=versions
-    )
-
-
-@app.post("/analyze")
-async def analyze(request: AnalyzeRequest = Depends(create_analyze_request)) -> AnalyzeResponse:
-    """Submit analysis job (sync or async based on estimated time)."""
-    if not orchestrator:
-        return error_response("INTERNAL", "Service not initialized")
-    
-    try:
-        job_id, job_info = orchestrator.submit_job(request, force_async=False)
-        
-        # For now, always return 202 (async) - sync detection would need more logic
-        return AnalyzeResponse(job_id=job_id, status="running")
-        
-    except Exception as e:
-        logger.error(f"Failed to submit job: {e}")
-        return error_response("INTERNAL", str(e))
-
-
-@app.post("/analyze-async")  
-async def analyze_async(request: AnalyzeRequest = Depends(create_analyze_request)) -> AnalyzeResponse:
-    """Submit analysis job (always async)."""
-    if not orchestrator:
-        return error_response("INTERNAL", "Service not initialized")
-    
-    try:
-        job_id, job_info = orchestrator.submit_job(request, force_async=True)
-        return AnalyzeResponse(job_id=job_id, status="queued")
-        
-    except Exception as e:
-        logger.error(f"Failed to submit async job: {e}")
-        return error_response("INTERNAL", str(e))
-
-
-@app.get("/jobs/{job_id}")
-async def get_job_status(job_id: str) -> JobInfo:
-    """Get job status and progress."""
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Service not initialized")
-    
-    job_info = orchestrator.get_job_status(job_id)
-    if not job_info:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    return job_info
-
-
-@app.delete("/jobs/{job_id}")
-async def cancel_job(job_id: str) -> Dict[str, str]:
-    """Cancel a running or queued job."""
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Service not initialized")
-    
-    success = orchestrator.cancel_job(job_id)
-    if not success:
-        raise HTTPException(status_code=409, detail="Cannot cancel job")
-    
-    return {"job_id": job_id, "status": "canceling"}
-
-
-@app.post("/jobs/{job_id}/rerun")
-async def rerun_job(job_id: str) -> AnalyzeResponse:
-    """Re-run a job with the same parameters."""
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Service not initialized")
-    
-    result = orchestrator.rerun_job(job_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Cannot rerun job")
-    
-    new_job_id, job_info = result
-    return AnalyzeResponse(job_id=new_job_id, status="queued")
-
-
-@app.get("/reports/{job_id}")
-async def get_report(job_id: str) -> Report:
-    """Get full scan report."""
-    report_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}.json")
-    
-    if not os.path.exists(report_file):
-        raise HTTPException(status_code=404, detail="Report not found")
-    
-    try:
-        with open(report_file, "r", encoding="utf-8") as f:
-            report_data = json.load(f)
-        return report_data
-    except Exception as e:
-        logger.error(f"Failed to load report {job_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to load report")
-
-
-@app.get("/reports")
-async def list_reports(
-    page: int = 1,
-    limit: int = 20,
-    severity: Optional[str] = None,
-    tool: Optional[str] = None,
-    repo: Optional[str] = None,
-    since: Optional[str] = None,
-    until: Optional[str] = None,
-    label: Optional[str] = None
-) -> ReportListResponse:
-    """List and filter reports with pagination."""
-    # This is a simplified implementation - would need proper database for filtering
-    reports_dir = os.path.join(STORAGE_BASE, "reports")
-    
-    if not os.path.exists(reports_dir):
-        return ReportListResponse(items=[], page=page, limit=limit, total=0)
-    
-    # Get all report files
-    report_files = [f for f in os.listdir(reports_dir) if f.endswith('.json')]
-    
-    # Load and filter reports (simplified)
-    items = []
-    for report_file in report_files:
+    def authenticated(request):
+        if not settings.workspace_password:
+            return True
+        bearer = request.headers.get("authorization", "")
+        if bearer.startswith("Bearer ") and hmac.compare_digest(bearer[7:], settings.workspace_password):
+            return True
+        token = request.cookies.get("codeagent_session", "")
         try:
-            with open(os.path.join(reports_dir, report_file), "r") as f:
-                report_data = json.load(f)
-            
-            # Create list item
-            item = ReportListItem(
-                job_id=report_data["job_id"],
-                repo_url=report_data["meta"]["repo"].get("url"),
-                generated_at=report_data["meta"]["generated_at"],
-                summary=SeveritySummary(**report_data["summary"]),
-                tools=report_data["meta"]["tools"],
-                labels=report_data["meta"]["labels"]
-            )
-            items.append(item)
-        except Exception as e:
-            logger.warning(f"Failed to load report {report_file}: {e}")
-    
-    # Sort by generated_at (newest first)
-    items.sort(key=lambda x: x.generated_at, reverse=True)
-    
-    # Paginate
-    start = (page - 1) * limit
-    end = start + limit
-    paginated_items = items[start:end]
-    
-    return ReportListResponse(
-        items=paginated_items,
-        page=page,
-        limit=limit,
-        total=len(items)
-    )
+            payload, sig = token.rsplit(".", 1)
+            expiry = int(payload.split(".", 1)[0])
+            return expiry > time.time() and hmac.compare_digest(signature(payload), sig)
+        except (ValueError, TypeError):
+            return False
 
+    @app.middleware("http")
+    async def access(request, call_next):
+        # Reject cross-origin writes even on a password-free localhost installation.
+        origin = request.headers.get("origin")
+        allowed = {item.strip() for item in os.getenv("PUBLIC_ORIGIN", "http://localhost:3000,http://127.0.0.1:3000").split(",")}
+        if origin and request.method not in ("GET", "HEAD", "OPTIONS") and origin not in allowed:
+            return JSONResponse({"error": {"code": "FORBIDDEN", "message": "Origin is not allowed"}}, 403)
+        if request.url.path not in ("/health", "/auth/status", "/auth/login") and not authenticated(request):
+            return JSONResponse({"error": {"code": "UNAUTHORIZED", "message": "Sign in to this workspace"}}, 401)
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
-@app.get("/reports/{job_id}/summary")
-async def get_report_summary(job_id: str) -> Dict[str, Any]:
-    """Get lightweight report summary."""
-    report_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}.json")
-    
-    if not os.path.exists(report_file):
-        raise HTTPException(status_code=404, detail="Report not found")
-    
-    try:
-        with open(report_file, "r", encoding="utf-8") as f:
-            report_data = json.load(f)
-        
-        return {
-            "job_id": job_id,
-            "summary": report_data["summary"]
-        }
-    except Exception as e:
-        logger.error(f"Failed to load report summary {job_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to load report summary")
+    @app.exception_handler(HTTPException)
+    async def http_error(request, exc):
+        return JSONResponse({"error": {"code": str(exc.status_code), "message": exc.detail}}, exc.status_code)
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        return JSONResponse({"error": {"code": "INVALID_INPUT", "message": "Invalid request", "details": [
+            {"location": list(error["loc"]), "message": error["msg"]} for error in exc.errors()]}}, 422)
 
-@app.get("/reports/{job_id}/enhanced")
-async def get_enhanced_report(job_id: str) -> Dict[str, Any]:
-    """Get AI-enhanced scan report with fixes."""
-    enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
-    
-    if not os.path.exists(enhanced_file):
-        raise HTTPException(status_code=404, detail="Enhanced report not available yet")
-    
-    try:
-        with open(enhanced_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to load enhanced report {job_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to load enhanced report")
+    @app.exception_handler(QueueFull)
+    async def queue_full(request, exc):
+        return JSONResponse({"error": {"code": "429", "message": str(exc)}}, 429)
 
+    @app.get("/health")
+    def health():
+        return {"status": "ok", "version": "0.2.0"}
 
-@app.post("/reports/{job_id}/enhance")
-async def trigger_enhanced_report(job_id: str, background_tasks: BackgroundTasks) -> Dict[str, Any]:
-    """Trigger AI analysis for a job report on-demand."""
-    
-    # Check if enhanced report already exists
-    enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
-    if os.path.exists(enhanced_file):
-        return {
-            "status": "already_exists",
-            "message": "Enhanced report already available",
-            "job_id": job_id
-        }
-    
-    # Check if regular report exists
-    report_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}.json")
-    if not os.path.exists(report_file):
-        raise HTTPException(status_code=404, detail="Report not found")
-    
-    # Check if AI is enabled
-    if not agent_bridge:
-        raise HTTPException(
-            status_code=503, 
-            detail="AI analysis not available. Please configure OpenAI API key."
-        )
-    
-    # Load report to check severity
-    try:
-        with open(report_file, 'r') as f:
-            report = json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to load report {job_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to load report")
-    
-    # Check if there are issues worth analyzing (all severity levels)
-    summary = report.get('summary', {})
-    total_issues = summary.get('critical', 0) + summary.get('high', 0) + summary.get('medium', 0) + summary.get('low', 0)
-    
-    if total_issues == 0:
-        return {
-            "status": "skipped",
-            "message": "No security issues found to analyze",
-            "job_id": job_id
-        }
-    
-    # Trigger AI analysis in background
-    background_tasks.add_task(run_ai_analysis, job_id, report)
-    
-    # Log severity breakdown
-    severity_breakdown = {
-        "critical": summary.get('critical', 0),
-        "high": summary.get('high', 0),
-        "medium": summary.get('medium', 0),
-        "low": summary.get('low', 0)
-    }
-    
-    return {
-        "status": "processing",
-        "message": f"AI analysis started for {total_issues} issues (all severity levels - prioritized: critical > high > medium > low)",
-        "job_id": job_id,
-        "issues_count": total_issues,
-        "severity_breakdown": severity_breakdown
-    }
+    @app.get("/auth/status")
+    def auth_status(request: Request):
+        return {"required": bool(settings.workspace_password), "authenticated": authenticated(request)}
 
+    @app.post("/auth/login")
+    async def login(request: Request):
+        host = request.client.host if request.client else "unknown"
+        attempts = [t for t in login_attempts.get(host, []) if time.time() - t < 60]
+        if len(attempts) >= 5:
+            raise HTTPException(429, "Too many login attempts; wait one minute")
+        try:
+            payload = await request.json()
+        except ValueError:
+            raise HTTPException(400, "Send a JSON object containing the workspace password")
+        if not isinstance(payload, dict) or not isinstance(payload.get("password"), str):
+            raise HTTPException(400, "Password is required")
+        if settings.workspace_password and not hmac.compare_digest(payload["password"], settings.workspace_password):
+            login_attempts[host] = [*attempts, time.time()]
+            raise HTTPException(401, "Incorrect workspace password")
+        login_attempts.pop(host, None)
+        token = f"{int(time.time()) + 43200}.{secrets.token_hex(16)}"
+        response = JSONResponse({"authenticated": True})
+        response.set_cookie("codeagent_session", token + "." + signature(token), httponly=True,
+                            secure=settings.cookie_secure, samesite="strict", max_age=43200, path="/")
+        return response
 
-async def run_ai_analysis(job_id: str, report: Dict[str, Any]):
-    """Background task to run AI analysis."""
-    try:
-        logger.info(f"Starting on-demand AI analysis for job {job_id}")
-        
-        workspace_path = os.path.join(STORAGE_BASE, "workspace", job_id)
-        
-        # Run AI analysis
-        ai_result = await agent_bridge.process_vulnerabilities(
-            job_id=job_id,
-            report=report,
-            workspace_path=workspace_path
-        )
-        
-        # Transform AI result to match frontend expectations
-        # Frontend expects: Report + { ai_analysis: { fixes: [...], recommendations: [...] } }
-        fixes = []
-        recommendations = []
-        has_errors = False
-        error_messages = []
-        
-        # Extract fixes from enhanced_issues
-        for enhanced_issue in ai_result.get('enhanced_issues', []):
-            ai_analysis = enhanced_issue.get('ai_analysis', {})
-            file_path = enhanced_issue.get('file', '')
-            
-            # Check for errors
-            if 'error' in ai_analysis:
-                has_errors = True
-                error_messages.append(f"{file_path}: {ai_analysis['error']}")
-            
-            # Check if AI analysis has fixes (not just error)
-            if 'fixes' in ai_analysis:
-                for fix in ai_analysis['fixes']:
-                    fixes.append({
-                        'file': file_path,
-                        'line': fix.get('line', 0),
-                        'severity': fix.get('severity', 'unknown'),  # Include severity for proper ordering
-                        'vulnerability_type': fix.get('vulnerability_type', ''),
-                        'original_code': fix.get('original_code', ''),
-                        'fixed_code': fix.get('fixed_code', ''),
-                        'explanation': fix.get('explanation', '')
-                    })
-            
-            # Extract recommendations
-            if 'recommendations' in ai_analysis:
-                recommendations.extend(ai_analysis['recommendations'])
-        
-        # Sort fixes by severity (critical > high > medium > low) for emphasis
-        severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'unknown': 4}
-        fixes.sort(key=lambda x: severity_order.get(x.get('severity', 'unknown'), 4))
-        
-        # Group fixes by severity for better organization
-        fixes_by_severity = {
-            'critical': [f for f in fixes if f.get('severity') == 'critical'],
-            'high': [f for f in fixes if f.get('severity') == 'high'],
-            'medium': [f for f in fixes if f.get('severity') == 'medium'],
-            'low': [f for f in fixes if f.get('severity') == 'low']
-        }
-        
-        # Create severity summary
-        severity_summary = {
-            'critical': len(fixes_by_severity['critical']),
-            'high': len(fixes_by_severity['high']),
-            'medium': len(fixes_by_severity['medium']),
-            'low': len(fixes_by_severity['low']),
-            'total': len(fixes)
-        }
-        
-        # Sort and group recommendations by priority
-        priority_order = {'high': 0, 'medium': 1, 'low': 2}
-        # Deduplicate recommendations by title (keep first occurrence)
-        seen_titles = set()
-        recommendations_list = []
-        for rec in recommendations:
-            if rec.get('title') not in seen_titles:
-                seen_titles.add(rec.get('title'))
-                recommendations_list.append(rec)
-        recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
-        recommendations_list.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 3))
-        
-        recommendations_by_priority = {
-            'high': [r for r in recommendations_list if r.get('priority') == 'high'],
-            'medium': [r for r in recommendations_list if r.get('priority') == 'medium'],
-            'low': [r for r in recommendations_list if r.get('priority') == 'low']
-        }
-        
-        # Create enhanced report by merging original report with AI analysis
-        # Always include ai_analysis field, even if empty
-        ai_analysis_data = {
-            'fixes': fixes,  # All fixes in priority order
-            'fixes_by_severity': fixes_by_severity,  # Grouped by severity
-            'severity_summary': severity_summary,  # Count per severity
-            'recommendations': recommendations_list,  # All recommendations in priority order
-            'recommendations_by_priority': recommendations_by_priority  # Grouped by priority
-        }        # Add error information if present
-        if has_errors:
-            ai_analysis_data['errors'] = error_messages
-            ai_analysis_data['status'] = 'partial' if fixes else 'failed'
+    @app.post("/auth/logout")
+    def logout():
+        response = JSONResponse({"authenticated": False})
+        response.delete_cookie("codeagent_session", path="/")
+        return response
+
+    def ai_config():
+        default = ReviewConfig(provider=os.getenv("AI_PROVIDER", "ollama"), model=os.getenv("AI_MODEL", "")).model_dump()
+        return {**default, **store().get_setting("ai", {})}
+
+    @app.get("/config/ai")
+    def get_ai_config():
+        config = ai_config()
+        return {**config, "enabled": bool(config["model"]), "bridge_initialized": bool(config["model"]),
+                "max_concurrent_reviews": 1 if config["provider"] == "ollama" else 2}
+
+    @app.post("/config/ai/test", status_code=202, response_model=Submission)
+    async def test_ai_config(body: dict = Body(default={})):
+        from pipeline.provider_checks import connection_fingerprint
+        config = validate_review(body)
+        await ensure_provider(config)
+        config["_connection_fingerprint"] = connection_fingerprint(settings, config["provider"], config["model"])
+        if config["provider"] == "ollama":
+            local = (await providers_available())["ollama"]
+            config["_model_digest"] = local.get("model_digests", {}).get(config["model"])
+        job = store().create_job("provider_check", config, {"source": "synthetic", "name": "Provider connection test"})
+        return {"job_id": job["job_id"], "run_id": job["job_id"], "status": job["status"]}
+
+    def validate_review(body):
+        try:
+            config = ReviewConfig(**{**ai_config(), **body}).model_dump()
+        except ValidationError as exc:
+            raise HTTPException(400, "; ".join(e["msg"] for e in exc.errors())) from exc
+        if config["model"] and (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/@-]*", config["model"]) or config["model"].startswith("GPT_")):
+            raise HTTPException(400, "Use an exact provider model ID, not a legacy GPT_* enum")
+        return config
+
+    @app.patch("/config/ai")
+    def set_ai_config(body: dict = Body(...)):
+        config = validate_review(body)
+        store().set_setting("ai", config)
+        return {"ok": True, "updated": body, **config}
+
+    async def tools_available():
+        if os.getenv("SCANNER_URL"):
+            try:
+                async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
+                    response = await client.get(os.environ["SCANNER_URL"].rstrip("/") + "/capabilities")
+                    response.raise_for_status()
+                    return response.json()
+            except httpx.HTTPError:
+                return []
+        from analyzers.service import get_capabilities
+        return await asyncio.to_thread(get_capabilities)
+
+    async def scanner_profiles():
+        try:
+            if os.getenv("SCANNER_URL"):
+                async with httpx.AsyncClient(timeout=10, trust_env=False) as client:
+                    response = await client.get(os.environ["SCANNER_URL"].rstrip("/") + "/profiles")
+                    response.raise_for_status()
+                    return response.json()
+            from analyzers.profiles import profile_metadata
+            return await asyncio.to_thread(lambda: {name: profile_metadata(name) for name in ('security-v1', 'security-v2')})
+        except (httpx.HTTPError, OSError, ValueError):
+            return {}
+
+    async def providers_available():
+        local = {"available": False, "models": [], "error": "Ollama is unavailable or has no installed model"}
+        try:
+            async with httpx.AsyncClient(timeout=3, trust_env=False) as client:
+                response = await client.get(settings.ollama_url.rstrip("/") + "/api/tags")
+                response.raise_for_status()
+                tags = response.json().get("models", [])[:40]
+                installed = [item["name"] for item in tags]
+                async def can_generate(name):
+                    try:
+                        metadata = await client.post(settings.ollama_url.rstrip("/") + "/api/show", json={"model": name})
+                        metadata.raise_for_status()
+                        return name if "completion" in metadata.json().get("capabilities", []) else None
+                    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+                        return None
+                models = [name for name in await asyncio.gather(*(can_generate(name) for name in installed)) if name]
+                local = {"available": bool(models), "models": models,
+                    "configured": True, "reachable": True,
+                    "model_digests": {item["name"]: item.get("digest") for item in tags},
+                    "excluded_models": [name for name in installed if name not in models],
+                    "error": None if models else "Install an Ollama text-generation model with completion support before review"}
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError):
+            pass
+        from pipeline.provider_checks import connection_fingerprint
+        configured = ai_config()
+        providers = {"openai": {"available": bool(settings.openai_key), "models": [],
+                "configured": bool(settings.openai_key), "reachable": None, "validated": False}, "ollama": local}
+        for kind, item in providers.items():
+            model = configured["model"] if configured["provider"] == kind else (item.get("models") or [None])[0]
+            if model:
+                saved = store().get_setting("provider_test:" + kind + ":" + model)
+                if saved and saved.get("configuration_hash") == connection_fingerprint(settings, kind, model):
+                    if kind != "ollama" or saved.get("model_digest") == item.get("model_digests", {}).get(model):
+                        item["last_test"] = {k: v for k, v in saved.items() if k != "configuration_hash"}
+                        item["validated"] = bool(saved.get("schema_test_passed"))
+        return providers
+
+    async def ensure_provider(config):
+        if not config.get("model"):
+            raise HTTPException(400, "Select a provider and model before starting AI review")
+        if config["provider"] == "openai" and not settings.openai_key:
+            raise HTTPException(503, "Configure OPENAI_API_KEY on the server")
+        if config["provider"] == "ollama":
+            local = (await providers_available())["ollama"]
+            if config["model"] not in local["models"]:
+                raise HTTPException(503, "The selected Ollama model is not installed or Ollama is unavailable")
+            config["_model_digest"] = local.get("model_digests", {}).get(config["model"])
+
+    @app.get("/capabilities")
+    async def capabilities():
+        from integration.workflow import WORKFLOW_VERSION, implementation_digest
+        analyzers, providers, profile_digests = await asyncio.gather(tools_available(), providers_available(), scanner_profiles())
+        online = store().worker_online()
+        return {"ready": online and bool(analyzers) and all(a.get("available") for a in analyzers),
+                "worker_online": online, "analyzers": analyzers, "providers": providers,
+                "languages": sorted({lang for a in analyzers for lang in a.get("languages", [])}),
+                "auth_required": bool(settings.workspace_password), "private_github": bool(settings.github_token),
+                "max_upload_size": settings.max_upload_size, "proposal_only": True,
+                "profiles": [{"id": "security-v1", "default": True, "status": "current"},
+                             {"id": "security-v2", "default": False, "status": "candidate"}],
+                "profile_digests": profile_digests,
+                "workflow": {"version": WORKFLOW_VERSION, "implementation_hash": implementation_digest()},
+                "release_gate": {"status": "candidate", "human_review_required": True}}
+
+    @app.get("/tools")
+    async def tools():
+        items = await tools_available()
+        return {"available": [t["name"] for t in items if t.get("available")],
+                "default": [t["name"] for t in items], "versions": {t["name"]: t.get("version", "unknown") for t in items}}
+
+    @app.get("/config/analyzers")
+    async def analyzer_config():
+        names = [tool["name"] for tool in await tools_available()]
+        return {"defaults": names, "rulesets": {"semgrep": ["security-v1", "security-v2"]}, "allow_list": ["https://github.com/"]}
+
+    @app.post("/analyze", status_code=202, response_model=Submission)
+    @app.post("/analyze-async", status_code=202, response_model=Submission)
+    async def submit(request: Request):
+        if store().list(limit=1, status="queued")["total"] >= 100:
+            raise HTTPException(429, "Job queue is full; retry later")
+        form = await request.form(max_files=1, max_fields=30)
+        url, upload = form.get("github_url"), form.get("file")
+        if bool(url) == bool(upload):
+            raise HTTPException(400, "Provide exactly one GitHub URL or ZIP file")
+        mode = str(form.get("mode", "static"))
+        if mode not in ("static", "multi_agent"):
+            raise HTTPException(400, "Mode must be static or multi_agent")
+        try:
+            timeout = int(str(form.get("timeout_sec", "600")))
+            if not 1 <= timeout <= 7200:
+                raise ValueError()
+        except ValueError:
+            raise HTTPException(400, "timeout_sec must be between 1 and 7200")
+        csv = lambda name: [part.strip() for part in str(form.get(name, "")).split(",") if part.strip()]
+        config = {"mode": mode, "timeout_sec": timeout, "analyzers": csv("analyzers") or None,
+                  "include": csv("include"), "exclude": csv("exclude"), "labels": csv("labels")}
+        config["profile"] = str(form.get("profile", "security-v1"))
+        if config["profile"] not in ("security-v1", "security-v2"):
+            raise HTTPException(400, "Choose security-v1 or candidate security-v2")
+        project_id = str(form.get("project_id") or "")
+        if project_id:
+            project = store().get_project(valid_id(project_id))
+            if not project or project["kind"] != ("github" if url else "zip"):
+                raise HTTPException(400, "Choose a project with the same source kind")
+        if config["analyzers"] and set(config["analyzers"]) - {"semgrep", "bandit", "dotnet", "depcheck", "trivy"}:
+            raise HTTPException(400, "Choose semgrep, bandit, dotnet, or depcheck analyzers")
+        if mode == "multi_agent":
+            config["review"] = validate_review({**{key: str(form[key]) for key in ("provider", "model", "min_severity") if key in form}, "workflow_mode": "multi_agent"})
+            await ensure_provider(config["review"])
+        job_id = str(uuid.uuid4())
+        if url:
+            try:
+                owner, repository = validate_github_url(str(url))
+            except SourceError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            source = {"source": "github", "url": str(url), "ref": form.get("ref") or None, "commit": form.get("commit") or None}
+            if any(value and (not isinstance(value, str) or len(value) > 250 or "\x00" in value) for value in (source["ref"], source["commit"])):
+                raise HTTPException(400, "Invalid ref or commit")
+            try:
+                identity = await asyncio.to_thread(github_repository_identity, str(url), settings)
+            except SourceError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            source['url'] = identity['url']
+            source['repository_id'] = identity['id']
+            if not source['ref'] and not source['commit']:
+                source['ref'] = identity['default_branch']
+            project = store().create_project(owner + "/" + repository, 'github', 'github:' + str(identity['id']))
+            project_id = project['id']
         else:
-            ai_analysis_data['status'] = 'complete'
-        
-        enhanced_report = {
-            **report,  # Include all original report fields
-            'ai_analysis': ai_analysis_data
-        }
-        
-        # Save enhanced report
-        enhanced_file = os.path.join(STORAGE_BASE, "reports", f"{job_id}_enhanced.json")
-        with open(enhanced_file, 'w') as f:
-            json.dump(enhanced_report, f, indent=2)
-        
-        logger.info(f"On-demand AI analysis completed for job {job_id} - Generated {len(fixes)} fixes and {len(recommendations)} recommendations")
-        
-    except Exception as e:
-        logger.error(f"On-demand AI analysis failed for job {job_id}: {e}")
-
-
-@app.get("/events/{job_id}")
-async def get_job_events(job_id: str) -> StreamingResponse:
-    """Server-Sent Events stream for job progress."""
-    
-    async def event_generator():
-        # Verify job exists
-        if not orchestrator:
-            yield f"data: {json.dumps({'error': 'Service not initialized'})}\n\n"
-            return
-            
-        try:
-            job_info = orchestrator.get_job_status(job_id)
-        except Exception as e:
-            logger.error(f"Failed to get job status for {job_id}: {e}")
-            yield f"data: {json.dumps({'error': 'Job not found'})}\n\n"
-            return
-        
-        # Send initial status immediately
-        if job_info:
-            yield f"data: {json.dumps(job_info.to_dict())}\n\n"
-        
-        # Poll for updates until job is in terminal state
-        terminal_statuses = ['completed', 'failed', 'canceled']
-        poll_interval = 2  # seconds
-        max_duration = 600  # 10 minutes max
-        elapsed = 0
-        
-        while elapsed < max_duration:
+            if not hasattr(upload, "read") or not str(upload.filename).lower().endswith(".zip"):
+                raise HTTPException(400, "Upload a ZIP archive")
+            target = settings.storage / "uploads" / f"{job_id}.zip"
+            size = 0
             try:
-                # Get current job status
-                current_status = orchestrator.get_job_status(job_id)
-                
-                # Send update
-                yield f"data: {json.dumps(current_status.to_dict())}\n\n"
-                
-                # Stop if job is in terminal state
-                if current_status.status in terminal_statuses:
-                    logger.info(f"Job {job_id} reached terminal state: {current_status.status}")
-                    break
-                
-                # Wait before next poll
-                await asyncio.sleep(poll_interval)
-                elapsed += poll_interval
-                
-            except Exception as e:
-                logger.error(f"Error polling job {job_id}: {e}")
-                break
-        
-        # Send final update
+                with target.open("xb") as output:
+                    while block := await upload.read(65536):
+                        size += len(block)
+                        if size > settings.max_upload_size:
+                            raise HTTPException(413, "Upload exceeds MAX_UPLOAD_SIZE")
+                        output.write(block)
+            except BaseException:
+                target.unlink(missing_ok=True)
+                raise
+            finally:
+                await upload.close()
+            source = {"source": "zip", "filename": Path(str(upload.filename).replace("\\", "/")).name}
         try:
-            final_status = orchestrator.get_job_status(job_id)
-            yield f"data: {json.dumps(final_status.to_dict())}\n\n"
-        except Exception as e:
-            logger.error(f"Failed to get final status for {job_id}: {e}")
-    
-    return StreamingResponse(
-        event_generator(), 
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
-            "Connection": "keep-alive",
-        }
-    )
+            if not project_id:
+                project_id = store().create_project(source.get("filename") or "Uploaded source")['id']
+            stream = str(source.get("ref") or ("detached:" + source['commit'] if source.get("commit") else "default"))
+            profiles = await scanner_profiles()
+            if profiles.get(config['profile']):
+                config['profile_digests'] = {key: profiles[config['profile']].get(key) for key in ('source', 'dependency')}
+            baseline_id, baseline_hash = form.get("baseline_run_id"), form.get("baseline_hash")
+            if baseline_id:
+                valid_id(str(baseline_id))
+            if baseline_hash and not re.fullmatch(r"[0-9a-f]{64}", str(baseline_hash)):
+                raise HTTPException(400, "Invalid baseline report hash")
+            source.update(project_id=project_id, stream=stream,
+                baseline=store().pin_baseline(project_id, stream, config, baseline_id, baseline_hash))
+            job = store().create_job("scan", config, source, job_id=job_id)
+        except BaseException as exc:
+            if source["source"] == "zip":
+                target.unlink(missing_ok=True)
+            if isinstance(exc, ValueError) and not isinstance(exc, QueueFull):
+                raise HTTPException(400, str(exc)) from exc
+            raise
+        return {"job_id": job["job_id"], "status": job["status"]}
 
+    @app.get("/jobs", response_model=JobList)
+    def jobs(page: int = Query(1, ge=1), limit: int = Query(20, ge=1, le=100), status: str | None = None, kind: str | None = None):
+        return store().list(page, limit, status, kind)
 
-@app.post("/webhooks/register")
-async def register_webhook(
-    url: str,
-    events: List[str],
-    secret: Optional[str] = None
-) -> Dict[str, str]:
-    """Register webhook for events."""
-    webhook_id = f"wh_{uuid.uuid4().hex[:8]}"
-    
-    webhook = WebhookConfig(
-        id=webhook_id,
-        url=url,
-        events=events,
-        secret=secret,
-        created_at=datetime.now().isoformat()
-    )
-    
-    webhooks[webhook_id] = webhook
-    
-    return {"id": webhook_id}
+    @app.get("/jobs/{job_id}", response_model=Job)
+    def get_job(job_id: str):
+        job = store().get(valid_id(job_id))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        return job
 
+    @app.delete("/jobs/{job_id}")
+    def cancel(job_id: str):
+        if not store().cancel(valid_id(job_id)):
+            raise HTTPException(409, "Job cannot be canceled in its current state")
+        return {"job_id": job_id, "status": "canceled"}
 
-@app.delete("/webhooks/{webhook_id}")
-async def delete_webhook(webhook_id: str) -> Dict[str, str]:
-    """Unregister webhook."""
-    if webhook_id not in webhooks:
-        raise HTTPException(status_code=404, detail="Webhook not found")
-    
-    del webhooks[webhook_id]
-    return {"id": webhook_id, "status": "deleted"}
+    @app.post("/jobs/{job_id}/retry", status_code=202, response_model=Submission)
+    def retry(job_id: str):
+        if not store().retry(valid_id(job_id)):
+            raise HTTPException(409, "Only failed, partial, or interrupted runs can be retried")
+        return {"job_id": job_id, "status": "queued"}
 
+    @app.post("/jobs/{job_id}/rerun", status_code=202, response_model=Submission)
+    def rerun(job_id: str, body: dict = Body(default={})):
+        original = get_job(job_id)
+        if original["kind"] != "scan":
+            raise HTTPException(409, "Rerun the original scan or retry this review")
+        source = dict(original["source"])
+        source.pop("report_hash", None)
+        if source.get('project_id'):
+            source['baseline'] = store().pin_baseline(source['project_id'], source.get('stream', 'default'), original['config'])
+        if body.get("latest"):
+            if source["source"] != "github":
+                raise HTTPException(400, "Scan latest requires a GitHub source")
+            if source.get("ref") and re.fullmatch(r"[0-9a-fA-F]{40,64}", str(source["ref"])):
+                raise HTTPException(400, "This source is pinned to a commit; submit a new scan with a branch or tag to scan its latest ref")
+            for key in ("snapshot_id", "digest", "commit"):
+                source.pop(key, None)
+        elif not source.get("snapshot_id") or not (settings.storage / "snapshots" / source["snapshot_id"] / "manifest.json").exists():
+            raise HTTPException(409, "Snapshot unavailable; submit a new scan")
+        job = store().create_job("scan", original["config"], source)
+        return {"job_id": job["job_id"], "status": job["status"]}
 
-@app.get("/config/analyzers")
-async def get_analyzer_config() -> AnalyzerConfig:
-    """Get analyzer configuration."""
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Service not initialized")
-    
-    config = orchestrator.get_analyzer_config()
-    return AnalyzerConfig(**config)
+    def read_report(job_id, enhanced=False, report_hash=None):
+        job_id = valid_id(job_id)
+        suffix = "_enhanced" if enhanced else ""
+        if report_hash and not re.fullmatch(r"[0-9a-f]{64}", report_hash):
+            raise HTTPException(400, "Invalid report version hash")
+        report = store().read_artifact(f"report_versions/{job_id}/{report_hash}.json" if report_hash else f"reports/{job_id}{suffix}.json")
+        if not report:
+            raise HTTPException(404, "Enhanced report not available" if enhanced else "Report not found")
+        if enhanced and report.get("report_hash"):
+            current = store().read_artifact(f"reports/{job_id}.json")
+            if not current or current.get("report_hash") != report["report_hash"]:
+                raise HTTPException(404, "No enhanced report exists for the current static report version")
+        if report.get("schema_version") != "2.0":
+            report["schema_version"] = "1.0"
+            report["legacy"] = True
+            if "ai_analysis" in report:
+                report["ai_analysis"]["review_status"] = "unreviewed"
+            for file in report.get("files", []):
+                for issue in file["issues"]:
+                    issue.setdefault("file", file["path"])
+                    issue.setdefault("id", hashlib.sha256(json.dumps(issue, sort_keys=True).encode()).hexdigest()[:24])
+        return report
 
+    @app.get("/reports/{job_id}", response_model=ScanReport)
+    def report(job_id: str, report_hash: str | None = None):
+        return read_report(job_id, report_hash=report_hash)
 
-@app.patch("/config/analyzers")
-async def update_analyzer_config(config: Dict[str, Any]) -> Dict[str, bool]:
-    """Update analyzer configuration."""
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Service not initialized")
-    
-    orchestrator.update_analyzer_config(config)
-    return {"ok": True}
+    @app.get("/reports/{job_id}/summary")
+    def summary(job_id: str):
+        return {"job_id": job_id, "summary": read_report(job_id)["summary"]}
 
+    @app.get("/reports/{job_id}/enhanced", response_model=ScanReport)
+    def enhanced(job_id: str):
+        return read_report(job_id, True)
 
-@app.get("/config/ai")
-async def get_ai_config() -> Dict[str, Any]:
-    """Get AI analysis configuration."""
-    return {
-        "enabled": os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true",
-        "model": os.getenv("AI_MODEL", "GPT_4"),
-        "min_severity": os.getenv("AI_ANALYSIS_MIN_SEVERITY", "high"),
-        "max_concurrent_reviews": int(os.getenv("MAX_CONCURRENT_AI_REVIEWS", "1")),
-        "timeout_sec": int(os.getenv("AI_ANALYSIS_TIMEOUT_SEC", "300")),
-        "bridge_initialized": agent_bridge is not None
-    }
+    @app.get("/reviews/{run_id}", response_model=ScanReport)
+    def review_report(run_id: str):
+        valid_id(run_id)
+        artifact = store().read_artifact(f"reviews/{run_id}.json")
+        if artifact is None:
+            raise HTTPException(404, "Review artifact is not available; inspect the run's saved steps")
+        return artifact
 
-
-@app.patch("/config/ai")
-async def update_ai_config(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Update AI analysis configuration (runtime only)."""
-    updated = {}
-    
-    # Note: In production, these should be persisted to a database
-    # For now, we only update environment variables for the current session
-    
-    if "enabled" in config:
-        os.environ["ENABLE_AI_ANALYSIS"] = str(config["enabled"]).lower()
-        updated["enabled"] = config["enabled"]
-    
-    if "model" in config:
-        valid_models = ["GPT_4", "GPT_3_5_TURBO", "GPT_4_32K"]
-        if config["model"] in valid_models:
-            os.environ["AI_MODEL"] = config["model"]
-            updated["model"] = config["model"]
-        else:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid model. Must be one of: {', '.join(valid_models)}"
-            )
-    
-    if "min_severity" in config:
-        valid_severities = ["critical", "high", "medium", "low"]
-        if config["min_severity"] in valid_severities:
-            os.environ["AI_ANALYSIS_MIN_SEVERITY"] = config["min_severity"]
-            updated["min_severity"] = config["min_severity"]
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid severity. Must be one of: {', '.join(valid_severities)}"
-            )
-    
-    if "max_concurrent_reviews" in config:
+    @app.post("/reports/{job_id}/enhance", status_code=202, response_model=Submission)
+    async def enhance(job_id: str, body: dict = Body(default={})):
+        source_report = read_report(job_id)
+        scan = store().get(job_id)
+        if not scan or not scan["source"].get("snapshot_id"):
+            raise HTTPException(409, "Historical report has no source snapshot; submit a new scan")
+        if scan["status"] not in ("completed", "partial"):
+            raise HTTPException(409, "Wait for a successful or partial static scan")
+        if not (settings.storage / "snapshots" / scan["source"]["snapshot_id"] / "manifest.json").is_file():
+            raise HTTPException(409, "Source snapshot expired; submit a new scan")
+        config = validate_review(body)
+        await ensure_provider(config)
         try:
-            value = int(config["max_concurrent_reviews"])
-            if value < 1 or value > 10:
-                raise ValueError("Must be between 1 and 10")
-            os.environ["MAX_CONCURRENT_AI_REVIEWS"] = str(value)
-            updated["max_concurrent_reviews"] = value
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-    
-    if "timeout_sec" in config:
-        try:
-            value = int(config["timeout_sec"])
-            if value < 60 or value > 600:
-                raise ValueError("Must be between 60 and 600 seconds")
-            os.environ["AI_ANALYSIS_TIMEOUT_SEC"] = str(value)
-            updated["timeout_sec"] = value
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-    
-    logger.info(f"AI configuration updated: {updated}")
-    return {
-        "ok": True,
-        "updated": updated,
-        "message": "Configuration updated successfully (runtime only, not persisted)"
-    }
+            job = store().create_review(job_id, config)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"job_id": job["job_id"], "run_id": job["job_id"], "status": job["status"]}
 
-
-@app.get("/dashboard/stats")
-async def get_dashboard_stats() -> Dict[str, Any]:
-    """Get overall statistics for dashboard."""
-    reports_dir = os.path.join(STORAGE_BASE, "reports")
-    
-    # Initialize stats
-    stats = {
-        "total_scans": 0,
-        "ai_enhanced_reports": 0,
-        "severity_distribution": {
-            "critical": 0,
-            "high": 0,
-            "medium": 0,
-            "low": 0
-        },
-        "active_jobs": 0,
-        "recent_scans": []
-    }
-    
-    # Check if reports directory exists
-    if not os.path.exists(reports_dir):
-        os.makedirs(reports_dir, exist_ok=True)
-        return stats
-    
-    try:
-        report_files = os.listdir(reports_dir)
-        
-        # Count reports
-        regular_reports = [f for f in report_files if f.endswith('.json') and not f.endswith('_enhanced.json')]
-        enhanced_reports = [f for f in report_files if f.endswith('_enhanced.json')]
-        
-        stats["total_scans"] = len(regular_reports)
-        stats["ai_enhanced_reports"] = len(enhanced_reports)
-        
-        # Calculate severity distribution and collect recent scans
-        recent_scans = []
-        
-        for report_file in regular_reports:
-            try:
-                report_path = os.path.join(reports_dir, report_file)
-                with open(report_path, 'r') as f:
-                    report = json.load(f)
-                
-                # Update severity totals
-                summary = report.get('summary', {})
-                for severity in stats["severity_distribution"]:
-                    stats["severity_distribution"][severity] += summary.get(severity, 0)
-                
-                # Collect recent scan info
-                job_id = report.get('job_id', report_file.replace('.json', ''))
-                recent_scans.append({
-                    'job_id': job_id,
-                    'generated_at': report.get('meta', {}).get('generated_at', ''),
-                    'total_issues': sum(summary.values()),
-                    'has_ai_analysis': f"{job_id}_enhanced.json" in enhanced_reports
-                })
-                
-            except Exception as e:
-                logger.warning(f"Failed to process report {report_file}: {e}")
+    def report_items():
+        items = []
+        for path in (settings.storage / "reports").glob("*.json"):
+            if path.name.endswith("_enhanced.json"):
                 continue
-        
-        # Sort by generated_at and take 10 most recent
-        recent_scans.sort(key=lambda x: x['generated_at'], reverse=True)
-        stats["recent_scans"] = recent_scans[:10]
-        
-        # Get active jobs count
-        if orchestrator:
-            stats["active_jobs"] = len(orchestrator.active_jobs)
-        
-    except Exception as e:
-        logger.error(f"Failed to generate dashboard stats: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate statistics")
-    
-    return stats
+            try:
+                data = json.loads(path.read_text())
+                items.append({"job_id": data["job_id"], "repo_url": data["meta"]["repo"].get("url"),
+                    "generated_at": data["meta"]["generated_at"], "summary": data["summary"],
+                    "tools": data["meta"].get("tools", []), "labels": data["meta"].get("labels", []),
+                    "status": data.get("status", "completed")})
+            except (ValueError, KeyError):
+                continue
+        return sorted(items, key=lambda item: item["generated_at"], reverse=True)
+
+    @app.get("/reports")
+    def reports(page: int = Query(1, ge=1), limit: int = Query(20, ge=1, le=100), severity: str | None = None,
+                tool: str | None = None, repo: str | None = None, label: str | None = None,
+                since: str | None = None, until: str | None = None):
+        items = [item for item in report_items() if
+            (not severity or item["summary"].get(severity, 0)) and (not tool or tool in item["tools"]) and
+            (not repo or repo.lower() in (item["repo_url"] or "").lower()) and (not label or label in item["labels"]) and
+            (not since or item["generated_at"] >= since) and (not until or item["generated_at"] <= until)]
+        return {"items": items[(page - 1) * limit:page * limit], "total": len(items), "page": page, "limit": limit}
+
+    @app.get("/dashboard/stats")
+    def stats():
+        items = report_items()
+        return {"total_scans": len(items), "ai_enhanced_reports": len(list((settings.storage / "reports").glob("*_enhanced.json"))),
+            "severity_distribution": {severity: sum(item["summary"].get(severity, 0) for item in items)
+                                      for severity in ("critical", "high", "medium", "low")},
+            "active_jobs": sum(store().list(limit=1, status=status)["total"] for status in ("queued", "running")),
+            "recent_scans": items[:10]}
+
+    @app.get("/events/{job_id}")
+    async def events(job_id: str, request: Request, after: int = Query(0, ge=0)):
+        get_job(job_id)
+        try:
+            cursor = max(after, int(request.headers.get("last-event-id", "0")))
+        except ValueError:
+            raise HTTPException(400, "Invalid event cursor")
+
+        async def stream():
+            nonlocal cursor
+            yield f"event: snapshot\ndata: {json.dumps(store().get(job_id))}\n\n"
+            idle = 0
+            while not await request.is_disconnected():
+                batch = store().events(job_id, cursor)
+                for event in batch:
+                    cursor = event["seq"]
+                    yield f"id: {cursor}\nevent: update\ndata: {json.dumps(event)}\n\n"
+                current = store().get(job_id)
+                child = store().get(current["latest_review_id"]) if current.get("latest_review_id") else None
+                if current["status"] in TERMINAL and (not child or child["status"] in TERMINAL) and not batch:
+                    break
+                idle += 1
+                if idle % 15 == 0:
+                    yield ": heartbeat\n\n"
+                await asyncio.sleep(1)
+        return StreamingResponse(stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    from api.project_routes import register_routes
+    register_routes(app, store, read_report, review_report, valid_id, settings)
+    return app
 
 
-# Exception handlers
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": {"code": "HTTP_ERROR", "message": exc.detail}}
-    )
-
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    """Handle general exceptions."""
-    logger.error(f"Unhandled exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"error": {"code": "INTERNAL", "message": "Internal server error"}}
-    )
-
-
-if __name__ == "__main__":
-    # Run with uvicorn for development
-    uvicorn.run(
-        "app:app",
-        host="0.0.0.0",
-        port=8080,
-        reload=True,
-        log_level="info"
-    )
+app = create_app()

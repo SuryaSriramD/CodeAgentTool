@@ -1,0 +1,976 @@
+{
+  "language": "scala",
+  "cases": [
+    {
+      "id": "v2-scala-safe-01",
+      "language": "scala",
+      "vulnerable": false,
+      "scenario": "shipment-id-list-placeholders",
+      "files": {
+        "ShipmentRows.scala": "import java.sql.Connection\nobject ShipmentRows {\n  def statuses(db: Connection, ids: Vector[Long]): Vector[String] = {\n    require(ids.size <= 40)\n    if (ids.isEmpty) return Vector.empty\n    val marks = Vector.fill(ids.size)(\"?\").mkString(\",\")\n    val statement = db.prepareStatement(\"SELECT status FROM shipments WHERE id IN (\" + marks + \") ORDER BY id\")\n    try {\n      ids.zipWithIndex.foreach { case (id, i) => statement.setLong(i + 1, id) }\n      val rows = statement.executeQuery()\n      try {\n        val result = Vector.newBuilder[String]\n        while (rows.next()) result += rows.getString(1)\n        result.result()\n      } finally rows.close()\n    } finally statement.close()\n  }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Dynamic SQL consists solely of repeated question-mark placeholders, not joined input values. The empty-list branch avoids malformed IN() without fabricating results.",
+      "remediation_constraints": [
+        "Return shipment statuses for a bounded list of authorized IDs in ID order.",
+        "Retain binding, bounded list length and deterministic result order.",
+        "Do not join numeric strings directly or change set membership into positional duplicate results."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "PostgreSQL16 JDBC42.7.4; connection is scoped to a caller-authorized shipment view; IDs are decoded as signed64-bit numbers before entry."
+      },
+      "operation_contract": {
+        "purpose": "Return shipment statuses for a bounded list of authorized IDs in ID order.",
+        "trust_boundary": "Only the number of trusted placeholder tokens affects SQL structure; every ID is bound.",
+        "legitimate_examples": [
+          {
+            "input": "IDs[9,2]",
+            "expected": "Statuses in ascending ID order"
+          },
+          {
+            "input": "Empty IDs",
+            "expected": []
+          }
+        ],
+        "permitted_changes": [
+          "Retain binding, bounded list length and deterministic result order."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not join numeric strings directly or change set membership into positional duplicate results."
+        ]
+      },
+      "regression_traps": [
+        "Do not join numeric strings directly or change set membership into positional duplicate results."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Tenant authorization comes from the scoped database view; this function does not accept a raw unrestricted connection in production."
+        ]
+      },
+      "derivation": {
+        "group": "shipment-id-list-placeholders",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around return shipment statuses for a bounded list of authorized ids in id order. Boundary: Only the number of trusted placeholder tokens affects SQL structure; every ID is bound. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/PreparedStatement.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-safe-02",
+      "language": "scala",
+      "vulnerable": false,
+      "scenario": "external-dtd-free-schema-validation",
+      "files": {
+        "InvoiceShape.scala": "import javax.xml.validation.SchemaFactory\nimport javax.xml.XMLConstants\nimport javax.xml.transform.stream.StreamSource\nimport java.io.StringReader\nobject InvoiceShape {\n  private val schemaText = \"<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'><xs:element name='amount' type='xs:decimal'/></xs:schema>\"\n  def valid(xml: String): Boolean = {\n    require(xml.length <= 2048)\n    val factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI)\n    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)\n    factory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, \"\")\n    factory.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, \"\")\n    val validator = factory.newSchema(new StreamSource(new StringReader(schemaText))).newValidator()\n    validator.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, \"\")\n    validator.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, \"\")\n    try { validator.validate(new StreamSource(new StringReader(xml))); true }\n    catch { case _: org.xml.sax.SAXException => false }\n  }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Both schema creation and the validator deny external protocols. The trusted schema controls document shape; input-provided schema hints cannot broaden resource access.",
+      "remediation_constraints": [
+        "Validate a bounded amount document against a trusted decimal schema.",
+        "Preserve decimal validation and fail-closed resource denial.",
+        "Do not convert all exceptions into successful validation or accept arbitrary element names."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "JDK built-in schema validator; schema is an application constant with no imports. Schema/parse errors reject the invoice; no insecure retry. JDK processing limits remain enabled."
+      },
+      "operation_contract": {
+        "purpose": "Validate a bounded amount document against a trusted decimal schema.",
+        "trust_boundary": "An untrusted invoice may not load schemas or DTD resources even when it supplies location hints.",
+        "legitimate_examples": [
+          {
+            "input": "<amount>12.50</amount>",
+            "expected": true
+          },
+          {
+            "input": "<amount>twelve</amount>",
+            "expected": false
+          }
+        ],
+        "permitted_changes": [
+          "Preserve decimal validation and fail-closed resource denial."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not convert all exceptions into successful validation or accept arbitrary element names."
+        ]
+      },
+      "regression_traps": [
+        "Do not convert all exceptions into successful validation or accept arbitrary element names."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The bounded XML and secure-processing limits constrain expansion; a maintainer should confirm those limits against deployment memory policies."
+        ]
+      },
+      "derivation": {
+        "group": "external-dtd-free-schema-validation",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around validate a bounded amount document against a trusted decimal schema. Boundary: An untrusted invoice may not load schemas or DTD resources even when it supplies location hints. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.xml/javax/xml/validation/SchemaFactory.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-safe-03",
+      "language": "scala",
+      "vulnerable": false,
+      "scenario": "legacy-contact-string-export-only",
+      "files": {
+        "ContactExport.scala": "import java.io.{ByteArrayOutputStream, ObjectOutputStream}\nobject ContactExport {\n  def download(addresses: Vector[String]): Array[Byte] = {\n    require(addresses.size <= 100 && addresses.forall(_.length <= 200))\n    val values = new java.util.ArrayList[String]()\n    addresses.foreach(values.add)\n    val bytes = new ByteArrayOutputStream()\n    val output = new ObjectOutputStream(bytes)\n    try {\n      output.writeObject(values)\n      output.flush()\n      bytes.toByteArray\n    } finally output.close()\n  }\n}\n",
+        "ContactDownload.scala": "object ContactDownload {\n  def attachment(authorizedContactNames: Vector[String]): Array[Byte] =\n    ContactExport.download(authorizedContactNames)\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "ObjectOutputStream writes a fixed trusted graph assembled from strings. There is no deserialization boundary, and object-looking strings are not parsed as class metadata.",
+      "remediation_constraints": [
+        "Export authorized contact strings in the documented legacy binary format.",
+        "Retain the fixed string-only graph, size bounds and exact order.",
+        "Do not accept arbitrary objects, deserialize user data to validate it, or replace binary output with a printed vector."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "Legacy export format is a serialized java.util.ArrayList[String] consumed by an offline migration utility. Function accepts only bounded Scala String values, not arbitrary AnyRef objects; it never reads an object stream. Contacts are authorized before entry."
+      },
+      "operation_contract": {
+        "purpose": "Export authorized contact strings in the documented legacy binary format.",
+        "trust_boundary": "Untrusted string contents are serialized as string data; they cannot select runtime object classes or invoke an input decoder.",
+        "legitimate_examples": [
+          {
+            "input": "Vector(alice@example.org,bob@example.org)",
+            "expected": "Archive containing exactly those two String values in order"
+          },
+          {
+            "input": "String containing a Java class name",
+            "expected": "Serialized as an inert String value"
+          }
+        ],
+        "permitted_changes": [
+          "Retain the fixed string-only graph, size bounds and exact order."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not accept arbitrary objects, deserialize user data to validate it, or replace binary output with a printed vector."
+        ]
+      },
+      "regression_traps": [
+        "Do not accept arbitrary objects, deserialize user data to validate it, or replace binary output with a printed vector."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The downstream migration utility needs its own safe decoder; this source-only label does not claim unrestricted object-input APIs are safe."
+        ]
+      },
+      "derivation": {
+        "group": "legacy-contact-string-export-only",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around export authorized contact strings in the documented legacy binary format. Boundary: Untrusted string contents are serialized as string data; they cannot select runtime object classes or invoke an input decoder. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/ObjectOutputStream.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-safe-04",
+      "language": "scala",
+      "vulnerable": false,
+      "scenario": "archive-entry-listing-direct-argv",
+      "files": {
+        "ArchiveListing.scala": "import scala.sys.process._\nimport java.nio.file.Path\nobject ArchiveListing {\n  def list(ownedArchive: Path): (Int, Vector[String]) = {\n    val lines = Vector.newBuilder[String]\n    val exit = Process(Seq(\"/usr/bin/unzip\", \"-Z1\", ownedArchive.toAbsolutePath.toString))\n      .!(ProcessLogger(line => lines += line, _ => ()))\n    (exit, lines.result())\n  }\n}\n",
+        "UploadedArchive.scala": "import java.nio.file.Path\nfinal case class UploadedArchive(serverAssignedAbsolutePath: Path)\nobject ListingRoute {\n  def show(upload: UploadedArchive): Vector[String] = {\n    val (status, names) = ArchiveListing.list(upload.serverAssignedAbsolutePath)\n    require(status == 0, \"unreadable archive\")\n    names\n  }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "A direct argv process receives a server-generated absolute file path; entries are listed and never passed to a shell or filesystem writer. Dangerous-looking names alone do not establish traversal.",
+      "remediation_constraints": [
+        "List names in an accepted archive without extracting or executing them.",
+        "Preserve listing-only behavior and propagate archive errors.",
+        "Do not extract to discover names or execute a command for each listed entry."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "Linux Info-ZIP6.0; ingestion has already accepted a bounded archive into a private server-assigned absolute filename. Listing does not extract entries. Names are JSON-encoded by the caller."
+      },
+      "operation_contract": {
+        "purpose": "List names in an accepted archive without extracting or executing them.",
+        "trust_boundary": "Attacker controls archive contents and entry names, not the absolute path or executable arguments.",
+        "legitimate_examples": [
+          {
+            "input": "Archive entries a.txt and docs/b.txt",
+            "expected": [
+              "a.txt",
+              "docs/b.txt"
+            ]
+          },
+          {
+            "input": "Entry name containing semicolon",
+            "expected": "Name remains one output line of data"
+          }
+        ],
+        "permitted_changes": [
+          "Preserve listing-only behavior and propagate archive errors."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not extract to discover names or execute a command for each listed entry."
+        ]
+      },
+      "regression_traps": [
+        "Do not extract to discover names or execute a command for each listed entry."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Archive size/entry count were enforced by trusted ingestion; third-party unzip implementation flaws are outside source-code ground truth."
+        ]
+      },
+      "derivation": {
+        "group": "archive-entry-listing-direct-argv",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around list names in an accepted archive without extracting or executing them. Boundary: Attacker controls archive contents and entry names, not the absolute path or executable arguments. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.scala-lang.org/api/2.13.x/scala/sys/process/index.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-safe-05",
+      "language": "scala",
+      "vulnerable": false,
+      "scenario": "user-photo-aes-gcm-envelope",
+      "files": {
+        "PhotoEnvelope.scala": "import javax.crypto.{Cipher, SecretKey}\nimport javax.crypto.spec.GCMParameterSpec\nimport java.security.SecureRandom\nobject PhotoEnvelope {\n  private val random = new SecureRandom()\n  def seal(jpeg: Array[Byte], key: SecretKey, ownerId: String): Array[Byte] = {\n    require(jpeg.length <= 1048576)\n    val nonce = new Array[Byte](12)\n    random.nextBytes(nonce)\n    val cipher = Cipher.getInstance(\"AES/GCM/NoPadding\")\n    cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(128, nonce))\n    cipher.updateAAD(ownerId.getBytes(java.nio.charset.StandardCharsets.UTF_8))\n    Array[Byte](1) ++ nonce ++ cipher.doFinal(jpeg)\n  }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The implementation uses a fresh random nonce, AEAD tag and explicit identity binding. The output retains nonce and version so it can be decrypted without weakening verification.",
+      "remediation_constraints": [
+        "Create an authenticated owner-bound encrypted envelope for a photo.",
+        "Retain random nonce generation, full authentication tag and owner binding.",
+        "Do not reuse a fixed IV, omit the nonce from storage, or move ownerId into unauthenticated metadata."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "Fresh 256-bit AES key from trusted keystore; ownerId comes from the authenticated session. Per-key volume bounded far below nonce-collision limits. Version1 consumer verifies GCM tag and same owner AAD before releasing plaintext."
+      },
+      "operation_contract": {
+        "purpose": "Create an authenticated owner-bound encrypted envelope for a photo.",
+        "trust_boundary": "Untrusted storage may read or alter ciphertext but lacks the key; owner identity is trusted AAD.",
+        "legitimate_examples": [
+          {
+            "input": "Same JPEG encrypted twice",
+            "expected": "Distinct nonce-bearing envelopes"
+          },
+          {
+            "input": "Photo later opened for a different owner",
+            "expected": "AAD verification fails in the documented consumer"
+          }
+        ],
+        "permitted_changes": [
+          "Retain random nonce generation, full authentication tag and owner binding."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not reuse a fixed IV, omit the nonce from storage, or move ownerId into unauthenticated metadata."
+        ]
+      },
+      "regression_traps": [
+        "Do not reuse a fixed IV, omit the nonce from storage, or move ownerId into unauthenticated metadata."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Authorization precedes the function; malformed JPEG handling belongs to a separate prevalidated image pipeline."
+        ]
+      },
+      "derivation": {
+        "group": "user-photo-aes-gcm-envelope",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around create an authenticated owner-bound encrypted envelope for a photo. Boundary: Untrusted storage may read or alter ciphertext but lacks the key; owner identity is trusted AAD. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/crypto/Cipher.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-safe-06",
+      "language": "scala",
+      "vulnerable": false,
+      "scenario": "enum-origin-health-request",
+      "files": {
+        "RegionHealth.scala": "import java.net.URI\nimport java.net.http.{HttpClient, HttpRequest, HttpResponse}\nimport java.time.Duration\nobject RegionHealth {\n  private val origins = Map(\"east\" -> \"https://east.example.org\", \"west\" -> \"https://west.example.org\")\n  private val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)\n    .connectTimeout(Duration.ofSeconds(2)).build()\n  def check(region: String): Int = {\n    val base = origins.getOrElse(region, throw new IllegalArgumentException(\"unknown region\"))\n    val request = HttpRequest.newBuilder(URI.create(base + \"/health\"))\n      .timeout(Duration.ofSeconds(2)).GET().build()\n    client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()\n  }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The original interface is a region enum, so the map does not remove a general URL-fetch requirement. Default verification and no redirects retain destination constraints.",
+      "remediation_constraints": [
+        "Check health of a selected configured region with certificate verification.",
+        "Retain the two region meanings, standard TLS checks and no-redirect behavior.",
+        "Do not interpret unknown region values as fallback URLs or mark connection failures healthy."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "Operator-controlled regional domains with standard CA certificates, trusted system resolver/root store; users choose a published region ID, never a URL. No global TLS overrides."
+      },
+      "operation_contract": {
+        "purpose": "Check health of a selected configured region with certificate verification.",
+        "trust_boundary": "Untrusted region name selects a closed trusted-origin map; network content is untrusted until standard TLS verification.",
+        "legitimate_examples": [
+          {
+            "input": "east",
+            "expected": "Status from configured east /health"
+          },
+          {
+            "input": "https://127.0.0.1",
+            "expected": "Rejected unknown region"
+          }
+        ],
+        "permitted_changes": [
+          "Retain the two region meanings, standard TLS checks and no-redirect behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not interpret unknown region values as fallback URLs or mark connection failures healthy."
+        ]
+      },
+      "regression_traps": [
+        "Do not interpret unknown region values as fallback URLs or mark connection failures healthy."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "DNS and operator domain ownership are trusted infrastructure, not supplied by tenants."
+        ]
+      },
+      "derivation": {
+        "group": "enum-origin-health-request",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around check health of a selected configured region with certificate verification. Boundary: Untrusted region name selects a closed trusted-origin map; network content is untrusted until standard TLS verification. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.net.http/java/net/http/HttpClient.Builder.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-vulnerable-01",
+      "language": "scala",
+      "vulnerable": true,
+      "scenario": "library-shelf-slick-literal-splice",
+      "files": {
+        "ShelfSearch.scala": "import slick.jdbc.PostgresProfile.api._\nimport scala.concurrent.Future\nfinal class ShelfSearch(db: Database) {\n  def locate(prefix: String): Future[Vector[String]] = {\n    require(prefix.length <= 60)\n    val pattern = prefix + \"%\"\n    db.run(sql\"SELECT title FROM books WHERE shelf LIKE '#$pattern' ORDER BY accession\".as[String])\n  }\n}\n",
+        "SearchEndpoint.scala": "import scala.concurrent.Future\nfinal class SearchEndpoint(search: ShelfSearch) {\n  def get(parameters: Map[String, String]): Future[Vector[String]] =\n    search.locate(parameters.getOrElse(\"shelf\", \"\"))\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "ShelfSearch.scala"
+        }
+      ],
+      "rationale": "Slick #$ explicitly splices literal text; surrounding it with SQL quotes does not turn it into a bound variable. A quote in the prefix can alter query grammar.",
+      "remediation_constraints": [
+        "Find book titles by a shelf-prefix pattern in accession order.",
+        "Bind the complete LIKE pattern using the regular Slick interpolator and preserve documented wildcard behavior.",
+        "Do not escape percent/underscore into literals unless the API contract is explicitly migrated, or replace prefix results with all books."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "Slick3.5.1, PostgreSQL16, PostgreSQL JDBC42.7.4; books(title,shelf,accession) public catalog. Prefix matching intentionally supports SQL LIKE % and _ wildcard semantics."
+      },
+      "operation_contract": {
+        "purpose": "Find book titles by a shelf-prefix pattern in accession order.",
+        "trust_boundary": "A reader controls a pattern passed through Slick literal splicing rather than a bound interpolator.",
+        "legitimate_examples": [
+          {
+            "input": "shelf=YA",
+            "expected": "Titles on shelves beginning YA"
+          },
+          {
+            "input": "shelf=A_",
+            "expected": "The documented single-character wildcard remains meaningful"
+          }
+        ],
+        "permitted_changes": [
+          "Bind the complete LIKE pattern using the regular Slick interpolator and preserve documented wildcard behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not escape percent/underscore into literals unless the API contract is explicitly migrated, or replace prefix results with all books."
+        ]
+      },
+      "regression_traps": [
+        "Do not escape percent/underscore into literals unless the API contract is explicitly migrated, or replace prefix results with all books."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Public catalog authorization is intentional; SQL account is read-only but injected predicates still violate filtering."
+        ]
+      },
+      "derivation": {
+        "group": "library-shelf-slick-literal-splice",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around find book titles by a shelf-prefix pattern in accession order. Boundary: A reader controls a pattern passed through Slick literal splicing rather than a bound interpolator. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://scala-slick.org/doc/3.5.1/sql.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-vulnerable-02",
+      "language": "scala",
+      "vulnerable": true,
+      "scenario": "theme-xslt-preview-external-document",
+      "files": {
+        "ThemePreview.scala": "import javax.xml.transform.TransformerFactory\nimport javax.xml.transform.stream.{StreamResult, StreamSource}\nimport javax.xml.XMLConstants\nimport java.io.{StringReader, StringWriter}\nobject ThemePreview {\n  def render(stylesheet: String): String = {\n    require(stylesheet.length <= 16384)\n    val factory = TransformerFactory.newInstance()\n    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, false)\n    factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, \"all\")\n    factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, \"all\")\n    val transformer = factory.newTransformer(new StreamSource(new StringReader(stylesheet)))\n    val output = new StringWriter()\n    transformer.transform(new StreamSource(new StringReader(\"<page><title>Welcome</title></page>\")), new StreamResult(output))\n    output.toString\n  }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-xml",
+          "cwe": "CWE-611",
+          "path": "ThemePreview.scala"
+        }
+      ],
+      "rationale": "The factory explicitly enables external resource access and disables secure processing before compiling an untrusted stylesheet. Transformer execution is the reachable boundary, not just parsing a harmless XML string.",
+      "remediation_constraints": [
+        "Preview a theme transform of a fixed welcome-page XML document.",
+        "Disable external resource access and extension execution while retaining the approved data-only XSLT subset; enforce transform resource limits.",
+        "Do not return the stylesheet itself or replace every transform with fixed Welcome text."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "JDK built-in XSLT transformer. Theme editors may author bounded presentation stylesheets but may not read host files or contact internal services. Response is previewed to the editor as inert text."
+      },
+      "operation_contract": {
+        "purpose": "Preview a theme transform of a fixed welcome-page XML document.",
+        "trust_boundary": "Editor-controlled XSLT can request external stylesheet/DTD/document resources with unrestricted access.",
+        "legitimate_examples": [
+          {
+            "input": "Stylesheet emitting page/title",
+            "expected": "Preview contains Welcome"
+          },
+          {
+            "input": "Stylesheet sorting fixed document nodes",
+            "expected": "The permitted data-only transform still executes"
+          }
+        ],
+        "permitted_changes": [
+          "Disable external resource access and extension execution while retaining the approved data-only XSLT subset; enforce transform resource limits."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not return the stylesheet itself or replace every transform with fixed Welcome text."
+        ]
+      },
+      "regression_traps": [
+        "Do not return the stylesheet itself or replace every transform with fixed Welcome text."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Inert preview delivery excludes HTML execution. XML external access may overlap SSRF; that is the same source resource-resolution flaw in this case."
+        ]
+      },
+      "derivation": {
+        "group": "theme-xslt-preview-external-document",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around preview a theme transform of a fixed welcome-page xml document. Boundary: Editor-controlled XSLT can request external stylesheet/DTD/document resources with unrestricted access. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/security/java-api-xml-processing-jaxp-security-guide.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-vulnerable-03",
+      "language": "scala",
+      "vulnerable": true,
+      "scenario": "automation-yaml-arbitrary-constructor",
+      "files": {
+        "WorkflowYaml.scala": "import org.yaml.snakeyaml.Yaml\nobject WorkflowYaml {\n  def title(upload: String): String = {\n    require(upload.length <= 16384)\n    val document: AnyRef = new Yaml().load[AnyRef](upload)\n    document match {\n      case fields: java.util.Map[_, _] => String.valueOf(fields.get(\"title\"))\n      case _ => throw new IllegalArgumentException(\"mapping required\")\n    }\n  }\n}\n",
+        "WorkflowDraft.scala": "final class WorkflowDraft {\n  def preview(untrustedYamlFromAuthor: String): String = WorkflowYaml.title(untrustedYamlFromAuthor)\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-deserialization",
+          "cwe": "CWE-502",
+          "path": "WorkflowYaml.scala"
+        }
+      ],
+      "rationale": "Under the explicitly pinned legacy constructor, global tags can activate arbitrary available classes before the match checks the result. The shape check is after deserialization and cannot establish a data-only boundary.",
+      "remediation_constraints": [
+        "Preview the title of a data-only workflow mapping supplied by an author.",
+        "Use a safe data constructor with explicit collection/size limits and reject non-data tags.",
+        "Do not return raw YAML, instantiate tagged classes merely to inspect their type, or stringify every document indiscriminately."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "SnakeYAML1.33 (not2.x); default Constructor permits global Java tags. The application classpath contains JDK classes; workflow authors are not trusted to instantiate arbitrary host objects. YAML is not signed."
+      },
+      "operation_contract": {
+        "purpose": "Preview the title of a data-only workflow mapping supplied by an author.",
+        "trust_boundary": "YAML tags reach the legacy general object constructor before the root mapping check.",
+        "legitimate_examples": [
+          {
+            "input": "title: Nightly inventory",
+            "expected": "Nightly inventory"
+          },
+          {
+            "input": "title: 'on: call'",
+            "expected": "on: call"
+          }
+        ],
+        "permitted_changes": [
+          "Use a safe data constructor with explicit collection/size limits and reject non-data tags."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not return raw YAML, instantiate tagged classes merely to inspect their type, or stringify every document indiscriminately."
+        ]
+      },
+      "regression_traps": [
+        "Do not return raw YAML, instantiate tagged classes merely to inspect their type, or stringify every document indiscriminately."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "This is a deliberate legacy API reachability case, not an unpinned claim about safe defaults in SnakeYAML2.x; gadget-specific execution is not assumed."
+        ]
+      },
+      "derivation": {
+        "group": "automation-yaml-arbitrary-constructor",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around preview the title of a data-only workflow mapping supplied by an author. Boundary: YAML tags reach the legacy general object constructor before the root mapping check. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://javadoc.io/doc/org.yaml/snakeyaml/1.33/org/yaml/snakeyaml/constructor/Constructor.html",
+          "https://javadoc.io/doc/org.yaml/snakeyaml/1.33/org/yaml/snakeyaml/constructor/SafeConstructor.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-vulnerable-04",
+      "language": "scala",
+      "vulnerable": true,
+      "scenario": "federated-admin-assertion-unverified-signature",
+      "files": {
+        "AdminAssertion.scala": "import java.security.PublicKey\nimport java.util.Base64\nimport java.nio.charset.StandardCharsets\nobject AdminAssertion {\n  def mayAdminister(token: String, configuredIssuerKey: PublicKey, now: Long): Boolean = {\n    require(token.length <= 8192)\n    val parts = token.split(\"\\\\.\", -1)\n    if (parts.length != 3 || parts(2).isEmpty) return false\n    val payload = new String(Base64.getUrlDecoder.decode(parts(1)), StandardCharsets.UTF_8)\n    val claims = ujson.read(payload)\n    claims(\"aud\").str == \"tenant-admin\" && claims(\"role\").str == \"admin\" && claims(\"exp\").num > now\n  }\n}\n",
+        "AdminPanel.scala": "import java.security.PublicKey\nobject AdminPanel {\n  def open(bearer: String, trustedIssuerKey: PublicKey, nowEpochSeconds: Long): String = {\n    if (!AdminAssertion.mayAdminister(bearer, trustedIssuerKey, nowEpochSeconds))\n      throw new SecurityException(\"administrator assertion required\")\n    \"administration-enabled\"\n  }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "signature-verification",
+          "cwe": "CWE-347",
+          "path": "AdminAssertion.scala"
+        }
+      ],
+      "rationale": "The configured verification key is never used and the third compact-token field is checked only for non-emptiness. Anyone can supply admin claims with arbitrary signature text; audience/expiry checks do not establish origin.",
+      "remediation_constraints": [
+        "Authorize the administration panel only with a valid issuer-signed unexpired admin assertion.",
+        "Verify the Ed25519 signature over the exact protected header and payload, enforce the allowed algorithm/issuer, then evaluate claims.",
+        "Do not delete role/expiry checks, accept alg=none, or replace signature verification with decoding or hashing alone."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "ujson3.3.1. Issuer uses Ed25519 compact JWS assertions with aud,role,exp claims; the server has the authentic issuer public key and a trusted clock. Edge maps malformed input to401. No upstream component verifies the signature."
+      },
+      "operation_contract": {
+        "purpose": "Authorize the administration panel only with a valid issuer-signed unexpired admin assertion.",
+        "trust_boundary": "Remote bearer-token claims are trusted after base64/JSON decoding without cryptographic verification.",
+        "legitimate_examples": [
+          {
+            "input": "Valid signed unexpired admin assertion",
+            "expected": "administration-enabled"
+          },
+          {
+            "input": "Valid signed non-admin assertion",
+            "expected": "Denied"
+          }
+        ],
+        "permitted_changes": [
+          "Verify the Ed25519 signature over the exact protected header and payload, enforce the allowed algorithm/issuer, then evaluate claims."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not delete role/expiry checks, accept alg=none, or replace signature verification with decoding or hashing alone."
+        ]
+      },
+      "regression_traps": [
+        "Do not delete role/expiry checks, accept alg=none, or replace signature verification with decoding or hashing alone."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Trusted key and clock are explicit; malformed-token denial-of-service is constrained by the byte limit and edge error mapping."
+        ]
+      },
+      "derivation": {
+        "group": "federated-admin-assertion-unverified-signature",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around authorize the administration panel only with a valid issuer-signed unexpired admin assertion. Boundary: Remote bearer-token claims are trusted after base64/JSON decoding without cryptographic verification. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/security/Signature.html",
+          "https://www.rfc-editor.org/rfc/rfc7515"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-vulnerable-05",
+      "language": "scala",
+      "vulnerable": true,
+      "scenario": "notification-callback-unrestricted-url",
+      "files": {
+        "DeliveryProbe.scala": "import java.net.URI\nimport java.net.http.{HttpClient, HttpRequest, HttpResponse}\nimport java.time.Duration\nobject DeliveryProbe {\n  private val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()\n  def probe(callback: String): Int = {\n    val uri = URI.create(callback)\n    require(Set(\"http\", \"https\").contains(uri.getScheme))\n    val request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(2)).GET().build()\n    client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()\n  }\n}\n",
+        "Registration.scala": "object Registration {\n  def preview(form: Map[String, String]): String = {\n    val result = DeliveryProbe.probe(form(\"callback\"))\n    \"Remote status: \" + result\n  }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "ssrf",
+          "cwe": "CWE-918",
+          "path": "DeliveryProbe.scala"
+        }
+      ],
+      "rationale": "An HTTP/HTTPS scheme allow-list does not exclude loopback, link-local or private destinations. Response status gives a concrete internal reachability oracle even though the body is discarded.",
+      "remediation_constraints": [
+        "Probe a tenant callback and report status before registration.",
+        "Enforce the public HTTPS callback policy, including DNS/address and redirect behavior, without blocking all public tenant endpoints.",
+        "Do not claim hostname text checks alone prevent DNS rebinding, or return a fabricated healthy status."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "Server has network routes to public HTTPS services and private management networks; callback authors are untrusted tenants. Successful registration permits public HTTPS callback origins only, not arbitrary internal endpoints."
+      },
+      "operation_contract": {
+        "purpose": "Probe a tenant callback and report status before registration.",
+        "trust_boundary": "Tenant URL is fetched by the privileged server after checking only the scheme.",
+        "legitimate_examples": [
+          {
+            "input": "Public HTTPS callback returns204",
+            "expected": "Remote status: 204"
+          },
+          {
+            "input": "Public HTTPS endpoint with path/query",
+            "expected": "Preserve that endpoint path/query"
+          }
+        ],
+        "permitted_changes": [
+          "Enforce the public HTTPS callback policy, including DNS/address and redirect behavior, without blocking all public tenant endpoints."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not claim hostname text checks alone prevent DNS rebinding, or return a fabricated healthy status."
+        ]
+      },
+      "regression_traps": [
+        "Do not claim hostname text checks alone prevent DNS rebinding, or return a fabricated healthy status."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "No redirect following is configured; the direct network destination remains unrestricted. Trusted egress enforcement may be a valid deployment-backed remediation if explicitly verifiable."
+        ]
+      },
+      "derivation": {
+        "group": "notification-callback-unrestricted-url",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around probe a tenant callback and report status before registration. Boundary: Tenant URL is fetched by the privileged server after checking only the scheme. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.net.http/java/net/http/HttpClient.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-scala-vulnerable-06",
+      "language": "scala",
+      "vulnerable": true,
+      "scenario": "legacy-vault-pbe-low-work-factor",
+      "files": {
+        "VaultEnvelope.scala": "import javax.crypto.{Cipher, SecretKeyFactory}\nimport javax.crypto.spec.{PBEKeySpec, PBEParameterSpec}\nobject VaultEnvelope {\n  def encrypt(note: Array[Byte], passphrase: Array[Char], salt: Array[Byte]): Array[Byte] = {\n    require(note.length <= 4096 && salt.length == 8)\n    val keySpec = new PBEKeySpec(passphrase)\n    try {\n      val key = SecretKeyFactory.getInstance(\"PBEWithMD5AndDES\").generateSecret(keySpec)\n      val cipher = Cipher.getInstance(\"PBEWithMD5AndDES\")\n      cipher.init(Cipher.ENCRYPT_MODE, key, new PBEParameterSpec(salt, 100))\n      salt ++ cipher.doFinal(note)\n    } finally { keySpec.clearPassword() }\n  }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "weak-cryptography",
+          "cwe": "CWE-327",
+          "path": "VaultEnvelope.scala"
+        }
+      ],
+      "rationale": "A fresh salt does not make DES or a 100-iteration legacy KDF adequate against offline attacks. Key strength and work factor are explicitly visible rather than inferred from a harmless hash mention.",
+      "remediation_constraints": [
+        "Encrypt a private vault note under a user passphrase into a portable envelope.",
+        "Define a versioned strong KDF plus AEAD envelope, including salt/nonce storage and a migration reader.",
+        "Do not lose portability, use a global fixed salt/nonce, or return only a hash that cannot restore the note."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Scala 2.13.14 on OpenJDK 21",
+        "libraries_platform_setup": "SunJCE provider; caller generates a fresh8-byte salt with SecureRandom for each note and stores the complete returned envelope. Offline attacker can obtain ciphertext but not the user passphrase."
+      },
+      "operation_contract": {
+        "purpose": "Encrypt a private vault note under a user passphrase into a portable envelope.",
+        "trust_boundary": "Sensitive note bytes rely on legacy MD5/DES password-based encryption with only100 iterations.",
+        "legitimate_examples": [
+          {
+            "input": "UTF-8 note under a passphrase",
+            "expected": "Portable encrypted envelope, no plaintext"
+          },
+          {
+            "input": "Two encryptions with different salts",
+            "expected": "Independent salt-prefixed envelopes"
+          }
+        ],
+        "permitted_changes": [
+          "Define a versioned strong KDF plus AEAD envelope, including salt/nonce storage and a migration reader."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not lose portability, use a global fixed salt/nonce, or return only a hash that cannot restore the note."
+        ]
+      },
+      "regression_traps": [
+        "Do not lose portability, use a global fixed salt/nonce, or return only a hash that cannot restore the note."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Trusted salt generation is assumed; the defect is cryptographic construction, not predictability of the supplied salt."
+        ]
+      },
+      "derivation": {
+        "group": "legacy-vault-pbe-low-work-factor",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around encrypt a private vault note under a user passphrase into a portable envelope. Boundary: Sensitive note bytes rely on legacy MD5/DES password-based encryption with only100 iterations. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/specs/security/standard-names.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

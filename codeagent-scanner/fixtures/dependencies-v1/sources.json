@@ -1,0 +1,106 @@
+{
+  "commit": "e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994",
+  "license": "Apache-2.0",
+  "fixtures": [
+    {
+      "format": "bun",
+      "filename": "bun.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/bun/bun.lock"
+    },
+    {
+      "format": "cargo",
+      "filename": "Cargo.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/cargo/Cargo.lock"
+    },
+    {
+      "format": "cocoapods",
+      "filename": "Podfile.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/cocoapods/Podfile.lock"
+    },
+    {
+      "format": "composer",
+      "filename": "composer.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/composer/composer.lock"
+    },
+    {
+      "format": "conan",
+      "filename": "conan.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/conan/conan.lock"
+    },
+    {
+      "format": "deps-json",
+      "filename": "datacollector.deps.json",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/dotnet/datacollector.deps.json"
+    },
+    {
+      "format": "gomod",
+      "filename": "go.mod",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/gomod/go.mod"
+    },
+    {
+      "format": "gradle",
+      "filename": "gradle.lockfile",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/gradle/gradle.lockfile"
+    },
+    {
+      "format": "npm",
+      "filename": "package-lock.json",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/npm/package-lock.json"
+    },
+    {
+      "format": "nuget",
+      "filename": "packages.lock.json",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/nuget/packages.lock.json"
+    },
+    {
+      "format": "requirements",
+      "filename": "requirements.txt",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/pip/requirements.txt"
+    },
+    {
+      "format": "pipenv",
+      "filename": "Pipfile.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/pipenv/Pipfile.lock"
+    },
+    {
+      "format": "pnpm",
+      "filename": "pnpm-lock.yaml",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/pnpm/pnpm-lock.yaml"
+    },
+    {
+      "format": "poetry",
+      "filename": "poetry.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/poetry/poetry.lock"
+    },
+    {
+      "format": "sbt",
+      "filename": "build.sbt.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/sbt/build.sbt.lock"
+    },
+    {
+      "format": "swift",
+      "filename": "Package.resolved",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/swift/Package.resolved"
+    },
+    {
+      "format": "uv",
+      "filename": "uv.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/uv/uv.lock"
+    },
+    {
+      "format": "yarn",
+      "filename": "yarn.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/integration/testdata/fixtures/repo/yarn/yarn.lock"
+    },
+    {
+      "format": "packages-config",
+      "filename": "packages.config",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/pkg/fanal/analyzer/language/dotnet/nuget/testdata/config/packages.config"
+    },
+    {
+      "format": "gemfile",
+      "filename": "Gemfile.lock",
+      "upstream": "https://raw.githubusercontent.com/aquasecurity/trivy/e1fd17a0ea4a8cf24bc4b4dd7e2cfbf4bb31b994/pkg/fanal/analyzer/testdata/app/Gemfile.lock"
+    }
+  ]
+}

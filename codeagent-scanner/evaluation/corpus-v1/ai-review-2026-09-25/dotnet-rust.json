@@ -1,0 +1,2049 @@
+{
+  "reviewer_kind": "ai",
+  "reviewer": "CodeAgent technical review subagent: corpus_review_dotnet_rust",
+  "review_date": "2026-09-25",
+  "languages": [
+    "csharp",
+    "visualbasic",
+    "fsharp",
+    "rust"
+  ],
+  "corpus_version": "heldout-1.0.0-candidate",
+  "corpus_file_sha256": "f04ead225f76197128a356ee83111e17ea8485ba884661ec447c0c8d9306f378",
+  "approval_status": "ai_assessment_only_not_human_approval",
+  "scope_notes": [
+    "Every source, label, expected finding/CWE, rationale and remediation constraint in these 48 cases was read.",
+    "All 48 cases are single-file snippets. No source execution, dependency installation, repository build, scanner run or benchmark run was performed.",
+    "Supported means the narrow technical label is supported under stated assumptions, not that conceptual independence, human approval or a release gate passed.",
+    "The 36 .NET entries reuse six API scenarios across three languages and two labels. Preserve clustered analysis; unique content hashes are not evidence of 36 independent scenarios.",
+    "Every vulnerable/safe sibling is paired. Rust hostname/certificate cases also share the same factory pattern, though hostname identity and chain trust are distinguishable security properties.",
+    "Framing correction: safe and vulnerable cases are submitted independently. A safe sibling is not a gold/reference remediation and is not shown to agents. Cross-pair behavior differences inform corpus diversity, not standalone label invalidity or fix-scoring defects. Contract issues here are tied to each case's own source and constraints."
+  ],
+  "summary": {
+    "needs_clarification": 10,
+    "supported": 32,
+    "revise": 6
+  },
+  "cases": [
+    {
+      "case_id": "rust-account-sqlx-vulnerable",
+      "content_sha256": "7c7e547c1c5b305305a60f47ca393910b1f3b24045dd82a9a7da02009a217acd",
+      "verdict": "needs_clarification",
+      "label_assessment": "CWE-89 is supported for attacker-controlled name with SQLx 0.8.x.",
+      "rationale": "app.rs:1 interpolates name inside a quoted SQL literal before preparing/executing it. Single-statement preparation does not prevent predicate injection; no returned rows does not remove timing/error or query-structure impact.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "SQLX_OPERATION_AND_VERSION_UNSPECIFIED",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The function executes a SELECT but returns only Result<(), Error>; the remediation rubric refers to selected records that this API never returns. No crate version/features are declared.",
+          "recommendation": "Specify SQLx 0.8.x/PostgreSQL runtime features and whether executing versus returning the lookup is intended. Add a small caller/result contract in a revised corpus; preserve the same contract in both variants.",
+          "references": [
+            "https://raw.githubusercontent.com/launchbadge/sqlx/v0.8.6/sqlx-core/src/query.rs",
+            "https://docs.rs/sqlx/latest/sqlx/fn.query.html"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The caller supplies untrusted name; the provided PgPool is usable against a users table.",
+        "A compatible SQLx version and PostgreSQL async runtime/features are present; no repository code was compiled or executed."
+      ],
+      "independence_group": "rust-sqlx-account-lookup",
+      "references": [
+        "https://raw.githubusercontent.com/launchbadge/sqlx/v0.8.6/sqlx-core/src/query.rs"
+      ]
+    },
+    {
+      "case_id": "rust-account-sqlx-safe",
+      "content_sha256": "440eb73c4f43c005a2fe7dc47a669bf0921e87d9b539066267a335a3cade6d15",
+      "verdict": "needs_clarification",
+      "label_assessment": "The bound $1 value is safe against the targeted CWE-89 under a compatible SQLx/PostgreSQL version.",
+      "rationale": "app.rs:1 keeps the statement literal and binds name as data. Quoted and Unicode values remain values. The safe implementation still discards rows, matching the shown function but leaving the account-lookup contract underspecified.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "SQLX_OPERATION_AND_VERSION_UNSPECIFIED",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The function executes a SELECT but returns only Result<(), Error>; the remediation rubric refers to selected records that this API never returns. No crate version/features are declared.",
+          "recommendation": "Specify SQLx 0.8.x/PostgreSQL runtime features and whether executing versus returning the lookup is intended. Add a small caller/result contract in a revised corpus; preserve the same contract in both variants.",
+          "references": [
+            "https://raw.githubusercontent.com/launchbadge/sqlx/v0.8.6/sqlx-core/src/query.rs",
+            "https://docs.rs/sqlx/latest/sqlx/fn.query.html"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The caller supplies untrusted name; the provided PgPool is usable against a users table.",
+        "A compatible SQLx version and PostgreSQL async runtime/features are present; no repository code was compiled or executed."
+      ],
+      "independence_group": "rust-sqlx-account-lookup",
+      "references": [
+        "https://raw.githubusercontent.com/launchbadge/sqlx/v0.8.6/sqlx-core/src/query.rs"
+      ]
+    },
+    {
+      "case_id": "rust-reqwest-certificates-vulnerable",
+      "content_sha256": "959459b934ce0dd213bf15147ed92d8b65052baddf0967da8320c4283ef40f28",
+      "verdict": "supported",
+      "label_assessment": "The targeted CWE-295 configuration label is supported.",
+      "rationale": "app.rs:1 explicitly disables certificate chain verification in the returned reqwest client. The snippet is a configuration factory; exploitation additionally requires using this client for HTTPS on an adversary-influenced network.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "TLS_BUILD_PROFILE_UNPINNED",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: Cargo version, enabled TLS backend/features and the consumer of this client are absent.",
+          "recommendation": "Record the intended crate version/features and HTTPS-use precondition as case metadata. Hostname and chain variants should share a broader TLS-configuration cluster.",
+          "references": [
+            "https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "reqwest 0.12.28 with a documented TLS feature and a non-WebAssembly target.",
+        "The returned client is used for HTTPS; no later configuration bypasses verification."
+      ],
+      "independence_group": "rust-reqwest-tls-verification",
+      "references": [
+        "https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html"
+      ]
+    },
+    {
+      "case_id": "rust-reqwest-certificates-safe",
+      "content_sha256": "6b2670e341b76874eb77d557288e8d98445c1fc69b2847f93e7d1e93c22b4420",
+      "verdict": "supported",
+      "label_assessment": "The explicit false setting is a valid safe counterexample for the targeted TLS check.",
+      "rationale": "app.rs:1 explicitly retains certificate chain verification in the returned reqwest client. The snippet is a configuration factory; exploitation additionally requires using this client for HTTPS on an adversary-influenced network.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "TLS_BUILD_PROFILE_UNPINNED",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: Cargo version, enabled TLS backend/features and the consumer of this client are absent.",
+          "recommendation": "Record the intended crate version/features and HTTPS-use precondition as case metadata. Hostname and chain variants should share a broader TLS-configuration cluster.",
+          "references": [
+            "https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "reqwest 0.12.28 with a documented TLS feature and a non-WebAssembly target.",
+        "The returned client is used for HTTPS; no later configuration bypasses verification."
+      ],
+      "independence_group": "rust-reqwest-tls-verification",
+      "references": [
+        "https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html"
+      ]
+    },
+    {
+      "case_id": "rust-shell-maintenance-vulnerable",
+      "content_sha256": "cb69f602244af353bc45fafa60134cfc3b3c916012623b1acc495798a58e47d7",
+      "verdict": "supported",
+      "label_assessment": "CWE-78 is supported for untrusted name.",
+      "rationale": "app.rs:2 places name in sh -c program text; shell metacharacters change the command. Passing the string through Command.arg does not neutralize the explicit sh interpreter.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.rs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "A Unix environment has sh and a stat implementation supporting --, such as GNU stat.",
+        "name is one filename rather than an intentionally executable shell expression; the executable search path is trusted."
+      ],
+      "independence_group": "rust-stat-process",
+      "references": [
+        "https://doc.rust-lang.org/std/process/struct.Command.html#method.arg"
+      ]
+    },
+    {
+      "case_id": "rust-shell-maintenance-safe",
+      "content_sha256": "30d8b25e83cab522264ff9e04db69a29f5692c3c1137350b37ddeb9554557624",
+      "verdict": "supported",
+      "label_assessment": "The direct argument-vector call is safe against the intended shell-injection and leading-option attacks.",
+      "rationale": "app.rs:2 invokes stat directly, passes an option terminator and keeps name a single literal operand. This preserves the intended single-file inspection, including spaces, without shell interpretation.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.rs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "A Unix environment has sh and a stat implementation supporting --, such as GNU stat.",
+        "name is one filename rather than an intentionally executable shell expression; the executable search path is trusted."
+      ],
+      "independence_group": "rust-stat-process",
+      "references": [
+        "https://doc.rust-lang.org/std/process/struct.Command.html#method.arg"
+      ]
+    },
+    {
+      "case_id": "rust-sqlite-update-vulnerable",
+      "content_sha256": "f84f88d5137c1d2b0d501e73fe3d003975e997ac2dffa8145b34d6cbcfc8fdde",
+      "verdict": "supported",
+      "label_assessment": "The unquoted-data boundary supports CWE-89.",
+      "rationale": "app.rs:1 embeds value inside a quoted UPDATE assignment. An attacker can change assignment/expression structure even if the driver rejects stacked statements. The all-rows update exists in both cases and must be part of the intended operation.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "value crosses an untrusted boundary and db is a usable SQLite connection.",
+        "Updating every settings row is intentional, and the returned affected-row count is preserved."
+      ],
+      "independence_group": "rust-rusqlite-update",
+      "references": [
+        "https://docs.rs/rusqlite/latest/rusqlite/"
+      ]
+    },
+    {
+      "case_id": "rust-sqlite-update-safe",
+      "content_sha256": "cecd64722fe2d3c7ba33483edf65efecde67a2a1a08c8e9dab37082e20645d8d",
+      "verdict": "supported",
+      "label_assessment": "The ?1 binding is a valid safe counterexample for CWE-89.",
+      "rationale": "app.rs:1 uses a fixed UPDATE and binds the sole value. No supplied SQL is re-parsed as query structure. The case intentionally updates all rows; adding an arbitrary WHERE clause would change behavior.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "value crosses an untrusted boundary and db is a usable SQLite connection.",
+        "Updating every settings row is intentional, and the returned affected-row count is preserved."
+      ],
+      "independence_group": "rust-rusqlite-update",
+      "references": [
+        "https://docs.rs/rusqlite/latest/rusqlite/"
+      ]
+    },
+    {
+      "case_id": "rust-hostname-acceptance-vulnerable",
+      "content_sha256": "e63b9bfaa63f368118037c58a9ca5ce35d7bf375e0c9bc7602d777644713bcdc",
+      "verdict": "supported",
+      "label_assessment": "The targeted CWE-295 configuration label is supported.",
+      "rationale": "app.rs:1 explicitly disables hostname verification in the returned reqwest client. The snippet is a configuration factory; exploitation additionally requires using this client for HTTPS on an adversary-influenced network.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "TLS_BUILD_PROFILE_UNPINNED",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: Cargo version, enabled TLS backend/features and the consumer of this client are absent.",
+          "recommendation": "Record the intended crate version/features and HTTPS-use precondition as case metadata. Hostname and chain variants should share a broader TLS-configuration cluster.",
+          "references": [
+            "https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "reqwest 0.12.28 with a documented TLS feature and a non-WebAssembly target.",
+        "The returned client is used for HTTPS; no later configuration bypasses verification."
+      ],
+      "independence_group": "rust-reqwest-tls-verification",
+      "references": [
+        "https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html"
+      ]
+    },
+    {
+      "case_id": "rust-hostname-acceptance-safe",
+      "content_sha256": "19b753ca36818bca14e2f8f64001bdbc2de2e54e9750ef2e4f3846846cc0815a",
+      "verdict": "supported",
+      "label_assessment": "The explicit false setting is a valid safe counterexample for the targeted TLS check.",
+      "rationale": "app.rs:1 explicitly retains hostname verification in the returned reqwest client. The snippet is a configuration factory; exploitation additionally requires using this client for HTTPS on an adversary-influenced network.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "TLS_BUILD_PROFILE_UNPINNED",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: Cargo version, enabled TLS backend/features and the consumer of this client are absent.",
+          "recommendation": "Record the intended crate version/features and HTTPS-use precondition as case metadata. Hostname and chain variants should share a broader TLS-configuration cluster.",
+          "references": [
+            "https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "reqwest 0.12.28 with a documented TLS feature and a non-WebAssembly target.",
+        "The returned client is used for HTTPS; no later configuration bypasses verification."
+      ],
+      "independence_group": "rust-reqwest-tls-verification",
+      "references": [
+        "https://docs.rs/reqwest/0.12.28/reqwest/struct.ClientBuilder.html"
+      ]
+    },
+    {
+      "case_id": "rust-artifact-file-vulnerable",
+      "content_sha256": "9b426afde88ac7d5af0bc4ca2085d9906a6dd874dd42331f6fde1558bf00b99a",
+      "verdict": "needs_clarification",
+      "label_assessment": "CWE-22 is supported; the allowable filename-to-public-identifier contract needs clarification before assessing proposed fixes.",
+      "rationale": "app.rs:1 joins an unchecked name and reads it. Absolute paths replace the base and traversal reaches parent directories. Its own remediation constraints demand fixed public-name mappings while preserving the operation, but do not define which legitimate artifact names must remain accepted.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "ARTIFACT_ALLOWLIST_CONTRACT_UNSPECIFIED",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The case requires mapping public artifact names without identifying the legitimate names or allowed files. A reviewer cannot determine whether an arbitrary reduced mapping preserves required access from this case alone.",
+          "recommendation": "Record the accepted public identifiers, permitted files and any allowed API migration in this vulnerable case. Do not use the separately submitted safe sibling as a gold fix.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The operating system supplies Unix-style /srv paths and the service can read files outside the artifact directory.",
+        "For the safe mapping, report.json and its parent directories cannot be replaced by an attacker-controlled symlink."
+      ],
+      "independence_group": "rust-artifact-selection",
+      "references": [
+        "https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join"
+      ]
+    },
+    {
+      "case_id": "rust-artifact-file-safe",
+      "content_sha256": "738190f95338fcbba24cbf2c7300990aef8658efc56703bea2c67e76a820c7cb",
+      "verdict": "supported",
+      "label_assessment": "The fixed mapping supports the standalone safe label for caller-controlled path traversal.",
+      "rationale": "app.rs:1 accepts only the report identifier and selects a literal path; traversal strings never become a pathname. This source independently defines an identifier-based API. Its different interface from the vulnerable sibling is not evidence that its safe label is wrong and it is not a reference patch for that sibling.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.rs",
+          "start_line": 1,
+          "end_line": 1,
+          "message": "app.rs:1: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The standalone public API intentionally exposes the report identifier only.",
+        "report.json and parent directories are trusted and cannot be replaced with an attacker-controlled symlink."
+      ],
+      "independence_group": "rust-artifact-selection",
+      "references": [
+        "https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join"
+      ]
+    },
+    {
+      "case_id": "csharp-account-command-vulnerable",
+      "content_sha256": "d46f47a585a71793ebb6aaefa8d92e9fac94dffa211292ce1e2e66fbe4959d33",
+      "verdict": "supported",
+      "label_assessment": "The constructed command supports the CWE-89 label when executed with untrusted input.",
+      "rationale": "app.cs:2 concatenates a caller string into a quoted SELECT predicate. Returning a SqlCommand is not itself database execution, but it is a valid unsafe command factory if the consumer executes it unchanged.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The caller value is untrusted and the consumer attaches a valid SQL Server connection and executes the returned command.",
+        "System.Data.SqlClient is available and the referenced table/column accepts a string value."
+      ],
+      "independence_group": "dotnet-sql-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types"
+      ]
+    },
+    {
+      "case_id": "csharp-account-command-safe",
+      "content_sha256": "3c792be4cf2a6595f70c20aab3f7865960f17ebef5542e7003ad118f2913671e",
+      "verdict": "supported",
+      "label_assessment": "The named SQL parameter prevents the targeted CWE-89.",
+      "rationale": "app.cs:2 creates fixed command text and binds the caller value with AddWithValue. Parameter inference may affect performance/types, but it does not reintroduce SQL syntax injection here. The returned command shape is preserved.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The caller value is untrusted and the consumer attaches a valid SQL Server connection and executes the returned command.",
+        "System.Data.SqlClient is available and the referenced table/column accepts a string value."
+      ],
+      "independence_group": "dotnet-sql-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types"
+      ]
+    },
+    {
+      "case_id": "csharp-shell-command-vulnerable",
+      "content_sha256": "85a022c8c2bfe815c981777d1e5464491798874a292030c25182f50da82c2f0e",
+      "verdict": "revise",
+      "label_assessment": "The explicit cmd.exe /c sink supports CWE-78; its own required safe operation is insufficiently defined.",
+      "rationale": "The function passes caller-controlled text to an explicit Windows command shell, establishing the unsafe source-to-interpreter boundary. Its own constraints require preserving the operation while using direct executable arguments, but no authorized operation or argument grammar is provided. No claim depends on treating the separate safe case as a proposed fix.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "SHELL_OPERATION_CONTRACT_UNSPECIFIED",
+          "source_file": "app.cs",
+          "start_line": 2,
+          "end_line": 2,
+          "message": "app.cs:2: The vulnerable case's own source accepts arbitrary shell program text, while its constraints require direct executable invocation and preservation of the operation. It does not identify the legitimate executable, argument grammar or allowed commands.",
+          "recommendation": "Define the intended diagnostic operation and legitimate input/output contract in this case, then assess proposals against it. Arbitrary untrusted command execution cannot simultaneously remain unrestricted and become safe.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The vulnerable case runs on Windows with cmd.exe available.",
+        "A trusted executable path and a precise allowed diagnostic operation must be supplied before judging the remediation."
+      ],
+      "independence_group": "dotnet-shell-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "csharp-shell-command-safe",
+      "content_sha256": "c1d8ec5474a5bd1c9c49bd29fd279da97bceb871c95e683deba70df2fa52b77f",
+      "verdict": "needs_clarification",
+      "label_assessment": "The standalone direct-argument call supports the targeted shell-injection safe label; its operational platform remains unspecified.",
+      "rationale": "The source invokes ping directly and passes text as one argument, rather than as command-shell source. It is independently evaluated, so differing behavior from the arbitrary-shell sibling is not a remediation failure. The undocumented target OS matters because -- is not a portable ping argument.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "PING_PLATFORM_CONTRACT_UNSPECIFIED",
+          "source_file": "app.cs",
+          "start_line": 2,
+          "end_line": 2,
+          "message": "app.cs:2: The standalone safe case passes -- to ping but declares no OS or executable implementation. This is a GNU-style terminator; Windows ping's documented grammar does not include it. The sibling's cmd.exe cannot be used to silently assign this case a platform.",
+          "recommendation": "Declare a Unix ping implementation that accepts --, or use documented Windows ping arguments with destination validation. Pin a .NET target supporting ArgumentList; make UseShellExecute=false explicit. Verify the resulting diagnostic operation under that target before approving the case.",
+          "references": [
+            "https://learn.microsoft.com/en-gb/windows-server/administration/windows-commands/ping",
+            "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+            "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The supplied text is a single legitimate diagnostic target.",
+        "The executable search path and ping program are trusted.",
+        "The chosen OS/ping implementation supports the shown -- invocation and the .NET target supports ArgumentList."
+      ],
+      "independence_group": "dotnet-shell-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "csharp-tls-handler-vulnerable",
+      "content_sha256": "d954764fc18f905c7bc50b4d61009cb532804966232fd9b5457e04c0e1f322fb",
+      "verdict": "supported",
+      "label_assessment": "The unconditional callback is an unsafe TLS-validation configuration under CWE-295.",
+      "rationale": "app.cs:2 returns true for every certificate-validation callback invocation, disregarding the reported trust errors. This is a configuration-level finding; the returned handler must be used by an HTTPS client for exposure.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The handler is used for HTTPS with ordinary platform trust configuration.",
+        "The relevant .NET HTTP backend supports this property and later callers do not alter the handler."
+      ],
+      "independence_group": "dotnet-tls-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclienthandler.servercertificatecustomvalidationcallback?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "csharp-tls-handler-safe",
+      "content_sha256": "06c00d5a72f45920ba59989a97e664a0743f69d11605309a6ad8ed8d1799eb16",
+      "verdict": "supported",
+      "label_assessment": "The default handler is a supported safe counterexample for this certificate-validation bypass.",
+      "rationale": "app.cs:2 returns an HttpClientHandler without replacing certificate verification. It has no callback that approves arbitrary certificates; no false positive should be generated solely for constructing the handler.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The handler is used for HTTPS with ordinary platform trust configuration.",
+        "The relevant .NET HTTP backend supports this property and later callers do not alter the handler."
+      ],
+      "independence_group": "dotnet-tls-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclienthandler.servercertificatecustomvalidationcallback?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "csharp-state-formatter-vulnerable",
+      "content_sha256": "ccc3b2a2949775339c4f65be636a51e451e0207bed7300178b49dd287ffe88e4",
+      "verdict": "revise",
+      "label_assessment": "CWE-502 is plausible only with an enabled legacy or compatibility BinaryFormatter implementation; the unqualified label is unsupported.",
+      "rationale": "The source invokes BinaryFormatter.Deserialize on a caller stream without a constrained data schema. That supports CWE-502 only where the formatter actually operates, but no target runtime/project compatibility profile is given. Its own data-only and behavior-preservation constraints also need an approved data contract; the safe sibling is not a reference replacement.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.cs:1-3: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "blocker",
+          "code": "BINARYFORMATTER_RUNTIME_LABEL",
+          "source_file": "app.cs",
+          "start_line": 3,
+          "end_line": 3,
+          "message": "app.cs:3: On .NET 9+ the in-box BinaryFormatter always throws, so this source does not demonstrate reachable object-graph deserialization there. Earlier versions also have project-dependent disabling behavior.",
+          "recommendation": "Pin a runtime/project profile where the vulnerable operation is enabled, or label this as a legacy unsafe-API pattern instead of asserting current exploitation. Include the relevant application configuration as evidence.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal"
+          ]
+        },
+        {
+          "severity": "major",
+          "code": "SERIALIZATION_MIGRATION_CONTRACT_UNSPECIFIED",
+          "source_file": "app.cs",
+          "start_line": 3,
+          "end_line": 3,
+          "message": "app.cs:3: This vulnerable case's own constraints require a constrained data-only representation while preserving an object-returning legacy binary deserializer. No accepted object schema, wire-format migration or compatible-data requirement is specified.",
+          "recommendation": "Document the actual accepted data schema and any permitted format/type migration in the vulnerable case. A safe sibling is not the reference remedy. A proposal preserving NRBF data may require a constrained data reader; a JSON migration requires explicit consumer compatibility.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.cs:1-3: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "body is untrusted and size-limited by an explicit contract.",
+        "Any transition from legacy object bytes to JSON must be deliberately permitted by the application owner."
+      ],
+      "independence_group": "dotnet-binary-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal",
+        "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+      ]
+    },
+    {
+      "case_id": "csharp-state-formatter-safe",
+      "content_sha256": "331fb6b9f1961f2bccd5cbd6575743d5dd7136905fd6591c9483641e17da36f4",
+      "verdict": "supported",
+      "label_assessment": "Typed string-array JSON supports the standalone safe label for unsafe object deserialization.",
+      "rationale": "This standalone case accepts a JSON stream and deserializes a string array without polymorphic object construction. The different format and result type from the BinaryFormatter sibling are not defects in this independent safe scenario. The data-only constraint is supported by the concrete target type, under normal input-size limits.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.cs:1-3: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.cs:1-3: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The standalone API intentionally accepts JSON string-array input.",
+        "The caller supplies an explicit input-size bound; custom unsafe converters are absent."
+      ],
+      "independence_group": "dotnet-binary-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal",
+        "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+      ]
+    },
+    {
+      "case_id": "csharp-integrity-alias-vulnerable",
+      "content_sha256": "19cb8cf0d80349ac18356be2f31641b0e6594dcc54f2689769ea470bcf47d87a",
+      "verdict": "needs_clarification",
+      "label_assessment": "MD5 is present, but CWE-328 vulnerability depends on an unstated security-sensitive use.",
+      "rationale": "app.cs:2 resolves to MD5 and computes a digest. The snippet shows neither an integrity/authenticity decision nor an attacker-controlled collision threat. A generic non-security checksum is not enough to establish the proposed vulnerability label.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "DIGEST_SECURITY_PURPOSE_UNSPECIFIED",
+          "source_file": "app.cs",
+          "start_line": 2,
+          "end_line": 2,
+          "message": "app.cs:2: No consumer establishes a collision-sensitive security decision; the case name/rationale asserts integrity but the code is a generic byte-array hash helper.",
+          "recommendation": "Specify a real integrity boundary and attacker capability, or explicitly score this as an API-policy finding rather than an exploitable vulnerability.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "DIGEST_OUTPUT_MIGRATION_UNSPECIFIED",
+          "source_file": "app.cs",
+          "start_line": 2,
+          "end_line": 2,
+          "message": "app.cs:2: This vulnerable case itself requires changing MD5 to SHA-256 and preserving digest output handling, but supplies no consumer or storage contract for the changed digest length.",
+          "recommendation": "Document the accepted digest format and update any fixed-length storage/verification consumer in the reviewed remediation contract.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "Any security use is collision-resistant integrity checking, not password storage or an unkeyed authenticity claim.",
+        "Digest consumers accept the algorithm/length migration, which needs an explicit contract."
+      ],
+      "independence_group": "dotnet-hash-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "csharp-integrity-alias-safe",
+      "content_sha256": "7733ce10e1c098ca7f69f5d33bf5dee2389a1513cb681382465ae6e8322ceac9",
+      "verdict": "supported",
+      "label_assessment": "SHA-256 is a valid safe counterexample to the narrow weak-digest check.",
+      "rationale": "app.cs:2 uses SHA-256 and returns a byte array. This standalone source uses the SHA-256 primitive. No claim is made that an unkeyed hash alone provides authenticity or password hashing.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "This standalone API intentionally returns a SHA-256 byte-array digest.",
+        "No claim is made that an unkeyed digest provides authenticity or is appropriate for password storage."
+      ],
+      "independence_group": "dotnet-hash-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "csharp-xml-resolver-vulnerable",
+      "content_sha256": "3345837c0d7f817d61fd7269ed66f7536c1ec3205bd5dbe45d38ef560eaa6b35",
+      "verdict": "supported",
+      "label_assessment": "The combination of DTD parsing and XmlUrlResolver supports the configuration-level CWE-611 label.",
+      "rationale": "app.cs:2 explicitly enables both DTD processing and an external-resource resolver. Unlike a DtdProcessing-only example, it does not rely on obsolete resolver defaults. Exposure requires passing the returned settings to a reader that parses untrusted XML.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "A consumer passes these settings to XmlReader.Create and reads attacker-supplied XML.",
+        "The intended accepted documents do not require DTD semantics; rejecting such documents is an explicitly accepted security restriction."
+      ],
+      "independence_group": "dotnet-xml-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.xmlresolver?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.dtdprocessing?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "csharp-xml-resolver-safe",
+      "content_sha256": "5b4524246acc63ccbada5ff08df8b87bd243ed3c3f3f3fbdfa70cb0dce81305c",
+      "verdict": "supported",
+      "label_assessment": "DTD prohibition plus a null resolver is a supported safe counterexample for CWE-611.",
+      "rationale": "app.cs:2 rejects DTDs and supplies no external resolver. It addresses both halves of the unsafe sibling and does not depend on a default resolver changing between framework versions.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.cs",
+          "start_line": 1,
+          "end_line": 2,
+          "message": "app.cs:1-2: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "A consumer passes these settings to XmlReader.Create and reads attacker-supplied XML.",
+        "The intended accepted documents do not require DTD semantics; rejecting such documents is an explicitly accepted security restriction."
+      ],
+      "independence_group": "dotnet-xml-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.xmlresolver?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.dtdprocessing?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "visualbasic-order-command-vulnerable",
+      "content_sha256": "62bc8cf8a4aabdbbc10527463b30cf274777a81eea5fcd56e3c217e809bdc114",
+      "verdict": "supported",
+      "label_assessment": "The constructed command supports the CWE-89 label when executed with untrusted input.",
+      "rationale": "app.vb:4 concatenates a caller string into a quoted SELECT predicate. Returning a SqlCommand is not itself database execution, but it is a valid unsafe command factory if the consumer executes it unchanged.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The caller value is untrusted and the consumer attaches a valid SQL Server connection and executes the returned command.",
+        "System.Data.SqlClient is available and the referenced table/column accepts a string value."
+      ],
+      "independence_group": "dotnet-sql-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types"
+      ]
+    },
+    {
+      "case_id": "visualbasic-order-command-safe",
+      "content_sha256": "fd5456e0f251d8a49b67c46455b0f77a0cd6f3666b8324589dd561389040d32a",
+      "verdict": "supported",
+      "label_assessment": "The named SQL parameter prevents the targeted CWE-89.",
+      "rationale": "app.vb:4 creates fixed command text and binds the caller value with AddWithValue. Parameter inference may affect performance/types, but it does not reintroduce SQL syntax injection here. The returned command shape is preserved.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 8,
+          "message": "app.vb:1-8: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 8,
+          "message": "app.vb:1-8: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The caller value is untrusted and the consumer attaches a valid SQL Server connection and executes the returned command.",
+        "System.Data.SqlClient is available and the referenced table/column accepts a string value."
+      ],
+      "independence_group": "dotnet-sql-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types"
+      ]
+    },
+    {
+      "case_id": "visualbasic-diagnostic-shell-vulnerable",
+      "content_sha256": "8b3c8dd715da6e9c59f56c81fb8a10250c70f7d3298e424f061129ee8d568929",
+      "verdict": "revise",
+      "label_assessment": "The explicit cmd.exe /c sink supports CWE-78; its own required safe operation is insufficiently defined.",
+      "rationale": "The function passes caller-controlled text to an explicit Windows command shell, establishing the unsafe source-to-interpreter boundary. Its own constraints require preserving the operation while using direct executable arguments, but no authorized operation or argument grammar is provided. No claim depends on treating the separate safe case as a proposed fix.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "SHELL_OPERATION_CONTRACT_UNSPECIFIED",
+          "source_file": "app.vb",
+          "start_line": 4,
+          "end_line": 4,
+          "message": "app.vb:4: The vulnerable case's own source accepts arbitrary shell program text, while its constraints require direct executable invocation and preservation of the operation. It does not identify the legitimate executable, argument grammar or allowed commands.",
+          "recommendation": "Define the intended diagnostic operation and legitimate input/output contract in this case, then assess proposals against it. Arbitrary untrusted command execution cannot simultaneously remain unrestricted and become safe.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The vulnerable case runs on Windows with cmd.exe available.",
+        "A trusted executable path and a precise allowed diagnostic operation must be supplied before judging the remediation."
+      ],
+      "independence_group": "dotnet-shell-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "visualbasic-diagnostic-shell-safe",
+      "content_sha256": "df1953f26552003f00ff68ca464aaa3e62b8e3927141a90cff29fd413bc63362",
+      "verdict": "needs_clarification",
+      "label_assessment": "The standalone direct-argument call supports the targeted shell-injection safe label; its operational platform remains unspecified.",
+      "rationale": "The source invokes ping directly and passes text as one argument, rather than as command-shell source. It is independently evaluated, so differing behavior from the arbitrary-shell sibling is not a remediation failure. The undocumented target OS matters because -- is not a portable ping argument.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 9,
+          "message": "app.vb:1-9: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "PING_PLATFORM_CONTRACT_UNSPECIFIED",
+          "source_file": "app.vb",
+          "start_line": 4,
+          "end_line": 6,
+          "message": "app.vb:4: The standalone safe case passes -- to ping but declares no OS or executable implementation. This is a GNU-style terminator; Windows ping's documented grammar does not include it. The sibling's cmd.exe cannot be used to silently assign this case a platform.",
+          "recommendation": "Declare a Unix ping implementation that accepts --, or use documented Windows ping arguments with destination validation. Pin a .NET target supporting ArgumentList; make UseShellExecute=false explicit. Verify the resulting diagnostic operation under that target before approving the case.",
+          "references": [
+            "https://learn.microsoft.com/en-gb/windows-server/administration/windows-commands/ping",
+            "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+            "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 9,
+          "message": "app.vb:1-9: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The supplied text is a single legitimate diagnostic target.",
+        "The executable search path and ping program are trusted.",
+        "The chosen OS/ping implementation supports the shown -- invocation and the .NET target supports ArgumentList."
+      ],
+      "independence_group": "dotnet-shell-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "visualbasic-certificate-callback-vulnerable",
+      "content_sha256": "cfaa7fe4623f1c46fa5f4438f94f77095dff3e050f7d42ebaea4e650f17ab5f7",
+      "verdict": "supported",
+      "label_assessment": "The unconditional callback is an unsafe TLS-validation configuration under CWE-295.",
+      "rationale": "app.vb:5 returns true for every certificate-validation callback invocation, disregarding the reported trust errors. This is a configuration-level finding; the returned handler must be used by an HTTPS client for exposure.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 8,
+          "message": "app.vb:1-8: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 8,
+          "message": "app.vb:1-8: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The handler is used for HTTPS with ordinary platform trust configuration.",
+        "The relevant .NET HTTP backend supports this property and later callers do not alter the handler."
+      ],
+      "independence_group": "dotnet-tls-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclienthandler.servercertificatecustomvalidationcallback?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "visualbasic-certificate-callback-safe",
+      "content_sha256": "7559de36fa8935341599b1c11b1793293154daa670a748f8af5f2d5872d47a43",
+      "verdict": "supported",
+      "label_assessment": "The default handler is a supported safe counterexample for this certificate-validation bypass.",
+      "rationale": "app.vb:4 returns an HttpClientHandler without replacing certificate verification. It has no callback that approves arbitrary certificates; no false positive should be generated solely for constructing the handler.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The handler is used for HTTPS with ordinary platform trust configuration.",
+        "The relevant .NET HTTP backend supports this property and later callers do not alter the handler."
+      ],
+      "independence_group": "dotnet-tls-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclienthandler.servercertificatecustomvalidationcallback?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "visualbasic-import-formatter-vulnerable",
+      "content_sha256": "8dc8a8315e17f2b25d880c62763fb59edf4441642daa4960292f3efeb058a590",
+      "verdict": "revise",
+      "label_assessment": "CWE-502 is plausible only with an enabled legacy or compatibility BinaryFormatter implementation; the unqualified label is unsupported.",
+      "rationale": "The source invokes BinaryFormatter.Deserialize on a caller stream without a constrained data schema. That supports CWE-502 only where the formatter actually operates, but no target runtime/project compatibility profile is given. Its own data-only and behavior-preservation constraints also need an approved data contract; the safe sibling is not a reference replacement.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 7,
+          "message": "app.vb:1-7: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "blocker",
+          "code": "BINARYFORMATTER_RUNTIME_LABEL",
+          "source_file": "app.vb",
+          "start_line": 5,
+          "end_line": 5,
+          "message": "app.vb:5: On .NET 9+ the in-box BinaryFormatter always throws, so this source does not demonstrate reachable object-graph deserialization there. Earlier versions also have project-dependent disabling behavior.",
+          "recommendation": "Pin a runtime/project profile where the vulnerable operation is enabled, or label this as a legacy unsafe-API pattern instead of asserting current exploitation. Include the relevant application configuration as evidence.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal"
+          ]
+        },
+        {
+          "severity": "major",
+          "code": "SERIALIZATION_MIGRATION_CONTRACT_UNSPECIFIED",
+          "source_file": "app.vb",
+          "start_line": 5,
+          "end_line": 5,
+          "message": "app.vb:5: This vulnerable case's own constraints require a constrained data-only representation while preserving an object-returning legacy binary deserializer. No accepted object schema, wire-format migration or compatible-data requirement is specified.",
+          "recommendation": "Document the actual accepted data schema and any permitted format/type migration in the vulnerable case. A safe sibling is not the reference remedy. A proposal preserving NRBF data may require a constrained data reader; a JSON migration requires explicit consumer compatibility.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 7,
+          "message": "app.vb:1-7: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "body is untrusted and size-limited by an explicit contract.",
+        "Any transition from legacy object bytes to JSON must be deliberately permitted by the application owner."
+      ],
+      "independence_group": "dotnet-binary-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal",
+        "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+      ]
+    },
+    {
+      "case_id": "visualbasic-import-formatter-safe",
+      "content_sha256": "5313b9b76071e08717d0bd291ee19948bf57d3ff93888629e3370b490e49bb63",
+      "verdict": "supported",
+      "label_assessment": "Typed string-array JSON supports the standalone safe label for unsafe object deserialization.",
+      "rationale": "This standalone case accepts a JSON stream and deserializes a string array without polymorphic object construction. The different format and result type from the BinaryFormatter sibling are not defects in this independent safe scenario. The data-only constraint is supported by the concrete target type, under normal input-size limits.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 7,
+          "message": "app.vb:1-7: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 7,
+          "message": "app.vb:1-7: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The standalone API intentionally accepts JSON string-array input.",
+        "The caller supplies an explicit input-size bound; custom unsafe converters are absent."
+      ],
+      "independence_group": "dotnet-binary-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal",
+        "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+      ]
+    },
+    {
+      "case_id": "visualbasic-digest-import-vulnerable",
+      "content_sha256": "bbd06bcd7ae589097afc2112046ef61fb7bcbd8e77e9583db72195f381d17bc2",
+      "verdict": "needs_clarification",
+      "label_assessment": "MD5 is present, but CWE-328 vulnerability depends on an unstated security-sensitive use.",
+      "rationale": "app.vb:4 resolves to MD5 and computes a digest. The snippet shows neither an integrity/authenticity decision nor an attacker-controlled collision threat. A generic non-security checksum is not enough to establish the proposed vulnerability label.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "DIGEST_SECURITY_PURPOSE_UNSPECIFIED",
+          "source_file": "app.vb",
+          "start_line": 4,
+          "end_line": 4,
+          "message": "app.vb:4: No consumer establishes a collision-sensitive security decision; the case name/rationale asserts integrity but the code is a generic byte-array hash helper.",
+          "recommendation": "Specify a real integrity boundary and attacker capability, or explicitly score this as an API-policy finding rather than an exploitable vulnerability.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "DIGEST_OUTPUT_MIGRATION_UNSPECIFIED",
+          "source_file": "app.vb",
+          "start_line": 4,
+          "end_line": 4,
+          "message": "app.vb:4: This vulnerable case itself requires changing MD5 to SHA-256 and preserving digest output handling, but supplies no consumer or storage contract for the changed digest length.",
+          "recommendation": "Document the accepted digest format and update any fixed-length storage/verification consumer in the reviewed remediation contract.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "Any security use is collision-resistant integrity checking, not password storage or an unkeyed authenticity claim.",
+        "Digest consumers accept the algorithm/length migration, which needs an explicit contract."
+      ],
+      "independence_group": "dotnet-hash-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "visualbasic-digest-import-safe",
+      "content_sha256": "04fb71c0beb8be53782e0c3e9c232542a7f8b1b1a22bced0bcf67b9a9559714f",
+      "verdict": "supported",
+      "label_assessment": "SHA-256 is a valid safe counterexample to the narrow weak-digest check.",
+      "rationale": "app.vb:4 uses SHA-256 and returns a byte array. This standalone source uses the SHA-256 primitive. No claim is made that an unkeyed hash alone provides authenticity or password hashing.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "This standalone API intentionally returns a SHA-256 byte-array digest.",
+        "No claim is made that an unkeyed digest provides authenticity or is appropriate for password storage."
+      ],
+      "independence_group": "dotnet-hash-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "visualbasic-xml-settings-vulnerable",
+      "content_sha256": "854597e8800cc46eee41080cf7abd9490e08b0c5e3a18b230a5bb194e08ab155",
+      "verdict": "supported",
+      "label_assessment": "The combination of DTD parsing and XmlUrlResolver supports the configuration-level CWE-611 label.",
+      "rationale": "app.vb:4 explicitly enables both DTD processing and an external-resource resolver. Unlike a DtdProcessing-only example, it does not rely on obsolete resolver defaults. Exposure requires passing the returned settings to a reader that parses untrusted XML.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "A consumer passes these settings to XmlReader.Create and reads attacker-supplied XML.",
+        "The intended accepted documents do not require DTD semantics; rejecting such documents is an explicitly accepted security restriction."
+      ],
+      "independence_group": "dotnet-xml-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.xmlresolver?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.dtdprocessing?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "visualbasic-xml-settings-safe",
+      "content_sha256": "3a38efa463ceb246d8c3426cc7d6e7164506c42760c62ec7f7e437e300b92cf3",
+      "verdict": "supported",
+      "label_assessment": "DTD prohibition plus a null resolver is a supported safe counterexample for CWE-611.",
+      "rationale": "app.vb:4 rejects DTDs and supplies no external resolver. It addresses both halves of the unsafe sibling and does not depend on a default resolver changing between framework versions.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.vb",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.vb:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "A consumer passes these settings to XmlReader.Create and reads attacker-supplied XML.",
+        "The intended accepted documents do not require DTD semantics; rejecting such documents is an explicitly accepted security restriction."
+      ],
+      "independence_group": "dotnet-xml-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.xmlresolver?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.dtdprocessing?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "fsharp-invoice-command-vulnerable",
+      "content_sha256": "66f6bab5c8dc4411bff6928508dbe8c49ad87be2785906a6b9adf7cb3a36ea1c",
+      "verdict": "supported",
+      "label_assessment": "The constructed command supports the CWE-89 label when executed with untrusted input.",
+      "rationale": "app.fs:3 concatenates a caller string into a quoted SELECT predicate. Returning a SqlCommand is not itself database execution, but it is a valid unsafe command factory if the consumer executes it unchanged.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The caller value is untrusted and the consumer attaches a valid SQL Server connection and executes the returned command.",
+        "System.Data.SqlClient is available and the referenced table/column accepts a string value."
+      ],
+      "independence_group": "dotnet-sql-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types"
+      ]
+    },
+    {
+      "case_id": "fsharp-invoice-command-safe",
+      "content_sha256": "7e7132148f85da23c02174a6857223fbbd3f11d42ace01c643b8a2d4fa8d23e5",
+      "verdict": "supported",
+      "label_assessment": "The named SQL parameter prevents the targeted CWE-89.",
+      "rationale": "app.fs:4 creates fixed command text and binds the caller value with AddWithValue. Parameter inference may affect performance/types, but it does not reintroduce SQL syntax injection here. The returned command shape is preserved.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.fs:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.fs:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The caller value is untrusted and the consumer attaches a valid SQL Server connection and executes the returned command.",
+        "System.Data.SqlClient is available and the referenced table/column accepts a string value."
+      ],
+      "independence_group": "dotnet-sql-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types"
+      ]
+    },
+    {
+      "case_id": "fsharp-support-process-vulnerable",
+      "content_sha256": "d85010770055de91caab1c26818a9d838c8466edccac53d4ce6e4f7538f74c6e",
+      "verdict": "revise",
+      "label_assessment": "The explicit cmd.exe /c sink supports CWE-78; its own required safe operation is insufficiently defined.",
+      "rationale": "The function passes caller-controlled text to an explicit Windows command shell, establishing the unsafe source-to-interpreter boundary. Its own constraints require preserving the operation while using direct executable arguments, but no authorized operation or argument grammar is provided. No claim depends on treating the separate safe case as a proposed fix.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "SHELL_OPERATION_CONTRACT_UNSPECIFIED",
+          "source_file": "app.fs",
+          "start_line": 3,
+          "end_line": 3,
+          "message": "app.fs:3: The vulnerable case's own source accepts arbitrary shell program text, while its constraints require direct executable invocation and preservation of the operation. It does not identify the legitimate executable, argument grammar or allowed commands.",
+          "recommendation": "Define the intended diagnostic operation and legitimate input/output contract in this case, then assess proposals against it. Arbitrary untrusted command execution cannot simultaneously remain unrestricted and become safe.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The vulnerable case runs on Windows with cmd.exe available.",
+        "A trusted executable path and a precise allowed diagnostic operation must be supplied before judging the remediation."
+      ],
+      "independence_group": "dotnet-shell-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "fsharp-support-process-safe",
+      "content_sha256": "28914a708b283fbdd7efb4eae69caf5873f87ccf8c2cc6bbcfb95f34aa2851dd",
+      "verdict": "needs_clarification",
+      "label_assessment": "The standalone direct-argument call supports the targeted shell-injection safe label; its operational platform remains unspecified.",
+      "rationale": "The source invokes ping directly and passes text as one argument, rather than as command-shell source. It is independently evaluated, so differing behavior from the arbitrary-shell sibling is not a remediation failure. The undocumented target OS matters because -- is not a portable ping argument.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 7,
+          "message": "app.fs:1-7: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "PING_PLATFORM_CONTRACT_UNSPECIFIED",
+          "source_file": "app.fs",
+          "start_line": 4,
+          "end_line": 6,
+          "message": "app.fs:4: The standalone safe case passes -- to ping but declares no OS or executable implementation. This is a GNU-style terminator; Windows ping's documented grammar does not include it. The sibling's cmd.exe cannot be used to silently assign this case a platform.",
+          "recommendation": "Declare a Unix ping implementation that accepts --, or use documented Windows ping arguments with destination validation. Pin a .NET target supporting ArgumentList; make UseShellExecute=false explicit. Verify the resulting diagnostic operation under that target before approving the case.",
+          "references": [
+            "https://learn.microsoft.com/en-gb/windows-server/administration/windows-commands/ping",
+            "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+            "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 7,
+          "message": "app.fs:1-7: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The supplied text is a single legitimate diagnostic target.",
+        "The executable search path and ping program are trusted.",
+        "The chosen OS/ping implementation supports the shown -- invocation and the .NET target supports ArgumentList."
+      ],
+      "independence_group": "dotnet-shell-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.useshellexecute?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "fsharp-http-callback-vulnerable",
+      "content_sha256": "ab955dff29fd4cfcb1b7d57669fd3c4173f78433135bf28ad2d21d0b6509eb47",
+      "verdict": "supported",
+      "label_assessment": "The unconditional callback is an unsafe TLS-validation configuration under CWE-295.",
+      "rationale": "app.fs:5 returns true for every certificate-validation callback invocation, disregarding the reported trust errors. This is a configuration-level finding; the returned handler must be used by an HTTPS client for exposure.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.fs:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.fs:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The handler is used for HTTPS with ordinary platform trust configuration.",
+        "The relevant .NET HTTP backend supports this property and later callers do not alter the handler."
+      ],
+      "independence_group": "dotnet-tls-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclienthandler.servercertificatecustomvalidationcallback?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "fsharp-http-callback-safe",
+      "content_sha256": "544143fb30d416a52becfbef15a6336dff0818a749d48c317485d74c8f0e86ec",
+      "verdict": "supported",
+      "label_assessment": "The default handler is a supported safe counterexample for this certificate-validation bypass.",
+      "rationale": "app.fs:3 returns an HttpClientHandler without replacing certificate verification. It has no callback that approves arbitrary certificates; no false positive should be generated solely for constructing the handler.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "The handler is used for HTTPS with ordinary platform trust configuration.",
+        "The relevant .NET HTTP backend supports this property and later callers do not alter the handler."
+      ],
+      "independence_group": "dotnet-tls-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclienthandler.servercertificatecustomvalidationcallback?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "fsharp-binary-state-vulnerable",
+      "content_sha256": "930b5a6fd5ad0a46fee1367b2e225edfdf6b471c4d1cd76923a5bc235680fd43",
+      "verdict": "revise",
+      "label_assessment": "CWE-502 is plausible only with an enabled legacy or compatibility BinaryFormatter implementation; the unqualified label is unsupported.",
+      "rationale": "The source invokes BinaryFormatter.Deserialize on a caller stream without a constrained data schema. That supports CWE-502 only where the formatter actually operates, but no target runtime/project compatibility profile is given. Its own data-only and behavior-preservation constraints also need an approved data contract; the safe sibling is not a reference replacement.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 4,
+          "message": "app.fs:1-4: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "blocker",
+          "code": "BINARYFORMATTER_RUNTIME_LABEL",
+          "source_file": "app.fs",
+          "start_line": 4,
+          "end_line": 4,
+          "message": "app.fs:4: On .NET 9+ the in-box BinaryFormatter always throws, so this source does not demonstrate reachable object-graph deserialization there. Earlier versions also have project-dependent disabling behavior.",
+          "recommendation": "Pin a runtime/project profile where the vulnerable operation is enabled, or label this as a legacy unsafe-API pattern instead of asserting current exploitation. Include the relevant application configuration as evidence.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal"
+          ]
+        },
+        {
+          "severity": "major",
+          "code": "SERIALIZATION_MIGRATION_CONTRACT_UNSPECIFIED",
+          "source_file": "app.fs",
+          "start_line": 4,
+          "end_line": 4,
+          "message": "app.fs:4: This vulnerable case's own constraints require a constrained data-only representation while preserving an object-returning legacy binary deserializer. No accepted object schema, wire-format migration or compatible-data requirement is specified.",
+          "recommendation": "Document the actual accepted data schema and any permitted format/type migration in the vulnerable case. A safe sibling is not the reference remedy. A proposal preserving NRBF data may require a constrained data reader; a JSON migration requires explicit consumer compatibility.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 4,
+          "message": "app.fs:1-4: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "body is untrusted and size-limited by an explicit contract.",
+        "Any transition from legacy object bytes to JSON must be deliberately permitted by the application owner."
+      ],
+      "independence_group": "dotnet-binary-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal",
+        "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+      ]
+    },
+    {
+      "case_id": "fsharp-binary-state-safe",
+      "content_sha256": "e42a5fb4c3240e3138e5561a14a6027a212561f717ef3b16ce323d486bc7ea09",
+      "verdict": "needs_clarification",
+      "label_assessment": "Typed string-array JSON supports the standalone safe label for unsafe object deserialization.",
+      "rationale": "This standalone case accepts a JSON stream and deserializes a string array without polymorphic object construction. The different format and result type from the BinaryFormatter sibling are not defects in this independent safe scenario. Its own bounded-schema constraint still requires explicit resource limits or a documented upstream bound.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 4,
+          "message": "app.fs:1-4: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "BOUNDED_SCHEMA_NOT_ENFORCED",
+          "source_file": "app.fs",
+          "start_line": 4,
+          "end_line": 4,
+          "message": "app.fs:4: The remediation says bounded data-only schema, but the source imposes no stream-byte, string-length or array-count bound. A fixed element type alone does not supply these resource bounds.",
+          "recommendation": "State the trusted upstream byte limit or include explicit bounded input/collection checks in a revised case. Avoid crediting an unbounded replacement as meeting the bounded-schema rubric.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 4,
+          "message": "app.fs:1-4: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The standalone API intentionally accepts JSON string-array input.",
+        "The caller supplies an explicit input-size bound; custom unsafe converters are absent."
+      ],
+      "independence_group": "dotnet-binary-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/9.0/binaryformatter-removal",
+        "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide/choose-a-serializer"
+      ]
+    },
+    {
+      "case_id": "fsharp-digest-scope-vulnerable",
+      "content_sha256": "b105bd3726d34a36238ba02d38423da8b49c1dfbc81cac1d1884d2442c5751b3",
+      "verdict": "needs_clarification",
+      "label_assessment": "MD5 is present, but CWE-328 vulnerability depends on an unstated security-sensitive use.",
+      "rationale": "app.fs:4 resolves to MD5 and computes a digest. The snippet shows neither an integrity/authenticity decision nor an attacker-controlled collision threat. A generic non-security checksum is not enough to establish the proposed vulnerability label. The local use binding has normal lexical lifetime; the safe file's misleading MD5 string is documentation data and must not be treated as a call.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 5,
+          "message": "app.fs:1-5: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "major",
+          "code": "DIGEST_SECURITY_PURPOSE_UNSPECIFIED",
+          "source_file": "app.fs",
+          "start_line": 4,
+          "end_line": 4,
+          "message": "app.fs:4: No consumer establishes a collision-sensitive security decision; the case name/rationale asserts integrity but the code is a generic byte-array hash helper.",
+          "recommendation": "Specify a real integrity boundary and attacker capability, or explicitly score this as an API-policy finding rather than an exploitable vulnerability.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "DIGEST_OUTPUT_MIGRATION_UNSPECIFIED",
+          "source_file": "app.fs",
+          "start_line": 4,
+          "end_line": 4,
+          "message": "app.fs:4: This vulnerable case itself requires changing MD5 to SHA-256 and preserving digest output handling, but supplies no consumer or storage contract for the changed digest length.",
+          "recommendation": "Document the accepted digest format and update any fixed-length storage/verification consumer in the reviewed remediation contract.",
+          "references": [
+            "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 5,
+          "message": "app.fs:1-5: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "Any security use is collision-resistant integrity checking, not password storage or an unkeyed authenticity claim.",
+        "Digest consumers accept the algorithm/length migration, which needs an explicit contract."
+      ],
+      "independence_group": "dotnet-hash-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "fsharp-digest-scope-safe",
+      "content_sha256": "cee489ed5dbf634cab9455784f1cbce30463a650aff4f464dd0f1c8969f5a211",
+      "verdict": "supported",
+      "label_assessment": "SHA-256 is a valid safe counterexample to the narrow weak-digest check.",
+      "rationale": "app.fs:4 uses SHA-256 and returns a byte array. This standalone source uses the SHA-256 primitive. No claim is made that an unkeyed hash alone provides authenticity or password hashing. The local use binding has normal lexical lifetime; the safe file's misleading MD5 string is documentation data and must not be treated as a call.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.fs:1-6: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 6,
+          "message": "app.fs:1-6: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "This standalone API intentionally returns a SHA-256 byte-array digest.",
+        "No claim is made that an unkeyed digest provides authenticity or is appropriate for password storage."
+      ],
+      "independence_group": "dotnet-hash-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.md5?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "fsharp-xml-configuration-vulnerable",
+      "content_sha256": "68087dc60c14e04663ce03fc3767bd565296676abcbc68940760a9f388513e3d",
+      "verdict": "supported",
+      "label_assessment": "The combination of DTD parsing and XmlUrlResolver supports the configuration-level CWE-611 label.",
+      "rationale": "app.fs:3 explicitly enables both DTD processing and an external-resource resolver. Unlike a DtdProcessing-only example, it does not rely on obsolete resolver defaults. Exposure requires passing the returned settings to a reader that parses untrusted XML.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "A consumer passes these settings to XmlReader.Create and reads attacker-supplied XML.",
+        "The intended accepted documents do not require DTD semantics; rejecting such documents is an explicitly accepted security restriction."
+      ],
+      "independence_group": "dotnet-xml-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.xmlresolver?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.dtdprocessing?view=net-10.0"
+      ]
+    },
+    {
+      "case_id": "fsharp-xml-configuration-safe",
+      "content_sha256": "9146a7e3ea465fcdc808c00c5043e71e3b5532d6baaa10a37f0476ad8a044eb6",
+      "verdict": "supported",
+      "label_assessment": "DTD prohibition plus a null resolver is a supported safe counterexample for CWE-611.",
+      "rationale": "app.fs:3 rejects DTDs and supplies no external resolver. It addresses both halves of the unsafe sibling and does not depend on a default resolver changing between framework versions.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TRANSLATED_TEMPLATE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: This is a direct translation of the same .NET API scenario in C#, Visual Basic and F#. Table/variable/scenario names do not introduce an independent trust boundary or behavior.",
+          "recommendation": "Retain translations as language coverage checks if useful, but replace derivative cases with independent scenarios to satisfy the 204-independent-case gate. Cluster translated and safe/vulnerable siblings in statistical analysis.",
+          "references": []
+        },
+        {
+          "severity": "minor",
+          "code": "PAIRED_CASE_DEPENDENCE",
+          "source_file": "app.fs",
+          "start_line": 1,
+          "end_line": 3,
+          "message": "app.fs:1-3: The vulnerable/safe sibling uses the same scenario and program skeleton. Different content hashes do not establish two independent scenarios.",
+          "recommendation": "Record a shared scenario cluster; do not count this pair as independent observations or split it across tuning and held-out partitions.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The surrounding application uses the helper as described; missing entry-point boilerplate alone is not an invalidity.",
+        "A consumer passes these settings to XmlReader.Create and reads attacker-supplied XML.",
+        "The intended accepted documents do not require DTD semantics; rejecting such documents is an explicitly accepted security restriction."
+      ],
+      "independence_group": "dotnet-xml-api-template",
+      "references": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.xmlresolver?view=net-10.0",
+        "https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.dtdprocessing?view=net-10.0"
+      ]
+    }
+  ]
+}

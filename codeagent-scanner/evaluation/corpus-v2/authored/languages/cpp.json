@@ -1,0 +1,1073 @@
+{
+  "language": "cpp",
+  "cases": [
+    {
+      "id": "v2-cpp-vulnerable-01",
+      "language": "cpp",
+      "vulnerable": true,
+      "scenario": "Localized build status treats a translator string as a variadic format",
+      "files": {
+        "src/build_status.cpp": "#include <cstdio>\n#include <string>\n#include <unordered_map>\nint build_status(FILE *out, const std::unordered_map<std::string, std::string>& catalog,\n                 const std::string& locale, unsigned completed) {\n    auto entry = catalog.find(locale);\n    if (entry == catalog.end() || entry->second.size() > 160) return -1;\n    if (std::fputs(\"Build status: \", out) == EOF) return -1;\n    if (std::fprintf(out, entry->second.c_str(), completed) < 0) return -1;\n    if (std::fputc('\\n', out) == EOF) return -1;\n    return std::fflush(out) == EOF ? -1 : 0;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "format-string",
+          "cwe": "CWE-134",
+          "path": "src/build_status.cpp",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "The locale key is found safely, but a tenant translator controls the selected format value. Conversions other than the intended integer substitution consume incompatible variadic arguments.",
+      "remediation_constraints": [
+        "Implement the documented literal {count} substitution or an equivalently constrained template parser.",
+        "Reject zero or multiple placeholders explicitly; preserve other literal text."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. Catalog ingestion enforces exactly one literal {count} placeholder and rejects newlines; this renderer currently uses the wrong formatting API."
+      },
+      "operation_contract": {
+        "purpose": "Render a tenant translation with exactly one {count} placeholder into an operator build status line.",
+        "trust_boundary": "Translators may edit bounded catalog values but are not trusted to supply printf programs; completed is a trusted integer.",
+        "legitimate_examples": [
+          {
+            "input": "Catalog value Finished {count} files; completed=7",
+            "expected": "Output Build status: Finished 7 files and newline."
+          },
+          {
+            "input": "Catalog value 100% complete: {count}",
+            "expected": "Render the percent sign literally and substitute the count."
+          }
+        ],
+        "permitted_changes": [
+          "Implement the documented literal {count} substitution or an equivalently constrained template parser.",
+          "Reject zero or multiple placeholders explicitly; preserve other literal text."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Escaping the entire template and dropping the count breaks localization.",
+        "Limiting length does not restrict format conversions."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Untrusted format interpretation; map lookup and translation authorization are defined by the caller.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-translation-placeholder-language",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A translator capability intentionally permits a small placeholder language, requiring a semantic repair rather than simply rendering every character verbatim. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-vulnerable-02",
+      "language": "cpp",
+      "vulnerable": true,
+      "scenario": "Export worker quotes a title but leaves shell command substitution active",
+      "files": {
+        "src/pdf_export.cpp": "#include <cstdio>\n#include <string>\n#include <stdexcept>\nstd::string render_pdf_summary(const std::string& title) {\n    if (title.size() > 180 || title.find('\"') != std::string::npos) throw std::invalid_argument(\"title\");\n    std::string command = \"/usr/local/bin/render-pdf --title \\\"\" + title + \"\\\" --summary\";\n    FILE *child = popen(command.c_str(), \"r\");\n    if (!child) throw std::runtime_error(\"spawn\");\n    char buffer[512];\n    std::string output;\n    while (std::fgets(buffer, sizeof buffer, child)) output += buffer;\n    int status = pclose(child);\n    if (status != 0) throw std::runtime_error(\"render failed\");\n    return output;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/pdf_export.cpp",
+          "line_start": 7,
+          "line_end": 7
+        }
+      ],
+      "rationale": "Rejecting double quotes does not neutralize command substitution inside a double-quoted shell word. A user title reaches popen and executes with the export worker permissions.",
+      "remediation_constraints": [
+        "Launch the renderer directly with discrete arguments and capture stdout.",
+        "Preserve the full title, child exit failures and process cleanup."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. The trusted renderer emits at most 16 KiB and has a caller-enforced deadline; it does not itself interpret title text as code. Input titles contain no newline or NUL."
+      },
+      "operation_contract": {
+        "purpose": "Render a PDF with a literal user title and return the renderer summary after reaping the child.",
+        "trust_boundary": "An authenticated editor controls a report title; the renderer executable and document input are service-owned.",
+        "legitimate_examples": [
+          {
+            "input": "Title Quarterly revenue",
+            "expected": "Pass that complete title as one argument and return the summary."
+          },
+          {
+            "input": "Title Costs $5 and taxes",
+            "expected": "Keep the dollar sign and spaces literally."
+          }
+        ],
+        "permitted_changes": [
+          "Launch the renderer directly with discrete arguments and capture stdout.",
+          "Preserve the full title, child exit failures and process cleanup."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Rejecting only quote characters misses shell expansion.",
+        "Replacing popen with exec discards the output-returning parent contract."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Shell injection despite attempted quoting; renderer input semantics are explicitly literal.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-report-title-partial-shell-escaping",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "An attempted quote filter creates a different injection boundary from raw filename concatenation and requires preserving captured subprocess output. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-vulnerable-03",
+      "language": "cpp",
+      "vulnerable": true,
+      "scenario": "A legacy binary response has a size-aware interface but ignores capacity",
+      "files": {
+        "src/session_reply.cpp": "#include <cstring>\n#include <string>\n#include <cstddef>\nstruct Reply { char *data; std::size_t capacity; std::size_t used; };\nbool session_reply(Reply& out, const std::string& session_label) {\n    if (session_label.size() > 256 || out.capacity < 4) return false;\n    const char prefix[] = \"OK \";\n    std::memcpy(out.data, prefix, 3);\n    std::strcpy(out.data + 3, session_label.c_str());\n    out.used = 3 + session_label.size();\n    return true;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "buffer-overflow",
+          "cwe": "CWE-120",
+          "path": "src/session_reply.cpp",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "The output object carries a capacity but only checks space for the prefix. The string copy can exceed a small reply allocation even for valid bounded labels.",
+      "remediation_constraints": [
+        "Check total required bytes including the terminator before any mutation.",
+        "Preserve the struct ABI, caller buffer ownership and atomic-failure behavior."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. Reply.data points to a writable capacity-byte allocation; session_label contains no NUL; used starts at zero and must remain unchanged on failure."
+      },
+      "operation_contract": {
+        "purpose": "Populate a caller-owned wire reply and publish used only after a complete successful write.",
+        "trust_boundary": "A remote session supplies the label; a connection pool provides reply buffers of varying capacities.",
+        "legitimate_examples": [
+          {
+            "input": "Label east, capacity 8",
+            "expected": "Write OK east plus NUL; set used=7 and return true."
+          },
+          {
+            "input": "Label east, capacity 7",
+            "expected": "Return false without changing data or used."
+          }
+        ],
+        "permitted_changes": [
+          "Check total required bytes including the terminator before any mutation.",
+          "Preserve the struct ABI, caller buffer ownership and atomic-failure behavior."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Updating used after a truncated copy falsely advertises bytes not written.",
+        "Changing the function to return a new std::string leaves existing connection buffers unchanged."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Destination-capacity misuse; source std::string ownership is valid.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-reply-capacity-publication",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The consumer-facing protocol object includes capacity and used metadata, making repair correctness depend on atomic publication rather than a bare copy wrapper. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-vulnerable-04",
+      "language": "cpp",
+      "vulnerable": true,
+      "scenario": "Two valid route fragments overflow a shared diagnostic scratch buffer",
+      "files": {
+        "src/route_trace.cpp": "#include <cstdio>\n#include <cstring>\n#include <string>\nint route_trace(FILE *out, const std::string& from, const std::string& to) {\n    if (from.size() > 40 || to.size() > 40) return -1;\n    char trace[64];\n    std::strcpy(trace, from.c_str());\n    std::strcat(trace, \" -> \");\n    std::strcat(trace, to.c_str());\n    if (std::fprintf(out, \"%s\\n\", trace) < 0) return -1;\n    return std::fflush(out) == EOF ? -1 : 0;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "buffer-overflow",
+          "cwe": "CWE-120",
+          "path": "src/route_trace.cpp",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "The first copy fits, but the accepted pair can require 85 bytes including separator and terminator in a 64-byte scratch buffer.",
+      "remediation_constraints": [
+        "Use size-aware composition or streaming while retaining the entire route.",
+        "Keep the stream ownership and 0/-1 error result."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. Route identifiers contain only alphanumeric, dash and underscore characters and are NUL-free."
+      },
+      "operation_contract": {
+        "purpose": "Write a complete source-to-destination route trace in a fixed textual layout.",
+        "trust_boundary": "Peers supply two separately bounded route identifiers; neither identifier alone violates its input contract.",
+        "legitimate_examples": [
+          {
+            "input": "from=west, to=east",
+            "expected": "Write west -> east followed by newline."
+          },
+          {
+            "input": "Two 40-character identifiers",
+            "expected": "Write all characters with the separator; never silently shorten a route."
+          }
+        ],
+        "permitted_changes": [
+          "Use size-aware composition or streaming while retaining the entire route.",
+          "Keep the stream ownership and 0/-1 error result."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Reducing both limits to fit changes the declared accepted route space.",
+        "Checking only the source of the final strcat misses the existing prefix length."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "C-style string aggregate overflow within a C++ ownership boundary.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-two-endpoint-route-aggregation",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Two independent protocol fields share one fixed scratch allocation; neither is an individually oversized source, unlike the variable-capacity reply scenario. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-vulnerable-05",
+      "language": "cpp",
+      "vulnerable": true,
+      "scenario": "Maintenance queue interprets a requested retention suffix through a shell",
+      "files": {
+        "src/retention_job.cpp": "#include <cstdlib>\n#include <string>\n#include <stdexcept>\nstruct RetentionJob { std::string suffix; unsigned tenant; };\nint run_retention(const RetentionJob& job) {\n    if (job.tenant == 0 || job.suffix.empty() || job.suffix.size() > 64) throw std::invalid_argument(\"job\");\n    std::string root = \"/srv/retention/\" + std::to_string(job.tenant);\n    std::string command = \"/usr/bin/find \" + root + \" -maxdepth 1 -type f -name '*\" + job.suffix + \"' -delete\";\n    int status = std::system(command.c_str());\n    if (status == -1) throw std::runtime_error(\"start failed\");\n    return status;\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/retention_job.cpp",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "A tenant selects a filename suffix which is embedded inside single quotes. An apostrophe can end the quoting and introduce shell operators in a scheduled deletion job.",
+      "remediation_constraints": [
+        "Use direct filesystem enumeration with literal suffix comparison or a non-shell argv API with explicit glob escaping.",
+        "Preserve root containment, regular-file filtering and completion status."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. Each tenant root is service-owned and stable during enumeration; tenant IDs are authorized unsigned integers. This case does not permit glob-pattern input."
+      },
+      "operation_contract": {
+        "purpose": "Delete only direct regular files in the authorized tenant root whose names end in a literal suffix.",
+        "trust_boundary": "The queue validates tenant identity independently but allows arbitrary non-NUL suffix text, including apostrophes.",
+        "legitimate_examples": [
+          {
+            "input": "Tenant 17, suffix .tmp",
+            "expected": "Delete direct regular files ending in .tmp in tenant 17 only."
+          },
+          {
+            "input": "Suffix owner's draft",
+            "expected": "Treat the apostrophe and space literally as suffix characters."
+          }
+        ],
+        "permitted_changes": [
+          "Use direct filesystem enumeration with literal suffix comparison or a non-shell argv API with explicit glob escaping.",
+          "Preserve root containment, regular-file filtering and completion status."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Passing a suffix unchanged to find -name still interprets glob metacharacters.",
+        "Do not delete directories or follow links while removing shell use."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Shell injection plus literal-versus-glob contract; filesystem races are excluded by the stable private workspace.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-retention-literal-suffix",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The repair must distinguish shell quoting from downstream glob semantics while preserving a scoped destructive operation. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-vulnerable-06",
+      "language": "cpp",
+      "vulnerable": true,
+      "scenario": "A path-segment encoder budgets input bytes but not escape expansion",
+      "files": {
+        "src/PercentSegment.cpp": "#include <string>\n#include <stdexcept>\n#include <cstddef>\nstd::string percent_segment(const std::string& segment) {\n    if (segment.size() > 96) throw std::invalid_argument(\"segment\");\n    constexpr char hex[] = \"0123456789ABCDEF\";\n    char encoded[128];\n    std::size_t used = 0;\n    for (unsigned char ch : segment) {\n        bool literal = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||\n                       (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.' || ch == '~';\n        if (literal) {\n            encoded[used++] = static_cast<char>(ch);\n        } else {\n            encoded[used++] = '%';\n            encoded[used++] = hex[ch >> 4];\n            encoded[used++] = hex[ch & 15];\n        }\n    }\n    encoded[used] = '\\0';\n    return std::string(encoded);\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "buffer-overflow",
+          "cwe": "CWE-787",
+          "path": "src/PercentSegment.cpp",
+          "line_start": 17,
+          "line_end": 17
+        }
+      ],
+      "rationale": "The 96-byte input cap does not account for three-byte percent escapes. A valid segment with many reserved bytes requires up to 289 bytes including its terminator, overflowing the 128-byte array.",
+      "remediation_constraints": [
+        "Use checked dynamic storage or budget the maximum expansion including the terminator.",
+        "Preserve uppercase hexadecimal escapes and encode every reserved byte, including slash."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. Input is a stable byte string of length at most 96 and may contain non-ASCII bytes or NUL; the required encoding is bytewise RFC 3986 path-segment data."
+      },
+      "operation_contract": {
+        "purpose": "Encode every byte of a bounded opaque identifier as one URI path segment, leaving only ASCII unreserved bytes literal.",
+        "trust_boundary": "A user controls identifier bytes; the service must not let slashes or other reserved characters become URI structure.",
+        "legitimate_examples": [
+          {
+            "input": "Segment team/a b",
+            "expected": "Return team%2Fa%20b."
+          },
+          {
+            "input": "Ninety-six slash bytes",
+            "expected": "Return exactly ninety-six %2F escapes, without truncation or memory corruption."
+          }
+        ],
+        "permitted_changes": [
+          "Use checked dynamic storage or budget the maximum expansion including the terminator.",
+          "Preserve uppercase hexadecimal escapes and encode every reserved byte, including slash."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Bounding input length alone does not bound encoded output to the same length.",
+        "Dropping or double-encoding bytes changes resource identity."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Destination expansion overflow and exact URI-component identity preservation.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-uri-component-expansion-capacity",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The vulnerability comes from variable-width encoding expansion, not a raw string copy, variadic format or aggregation of separately bounded fields. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.rfc-editor.org/rfc/rfc3986#section-2.1",
+          "https://eel.is/c++draft/expr.add"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-safe-01",
+      "language": "cpp",
+      "vulnerable": false,
+      "scenario": "A fixed-size telemetry sample keeps indexes inside the owning vector",
+      "files": {
+        "src/TelemetrySlice.cpp": "#include <vector>\n#include <span>\n#include <stdexcept>\n#include <cstddef>\nstd::vector<double> sample_window(std::span<const double> samples,\n                                  std::size_t begin, std::size_t count) {\n    if (samples.size() > 4096) throw std::invalid_argument(\"samples\");\n    if (begin > samples.size() || count > samples.size() - begin) throw std::out_of_range(\"window\");\n    std::vector<double> selected;\n    selected.reserve(count);\n    for (std::size_t offset = 0; offset < count; ++offset) {\n        selected.push_back(samples[begin + offset]);\n    }\n    return selected;\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The begin check precedes subtraction, and count is checked against remaining elements before index addition. The returned vector owns its copy and does not outlive a borrowed view.",
+      "remediation_constraints": [
+        "Keep checked subtraction before index addition and owning result storage.",
+        "Preserve exact numeric values, order and the valid empty tail window."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. The source span remains stable during the call and contains initialized doubles; NaN values are data and copied without normalization."
+      },
+      "operation_contract": {
+        "purpose": "Return an owning copy of a requested contiguous telemetry window.",
+        "trust_boundary": "A dashboard user controls begin and count; the service owns a stable bounded sample array.",
+        "legitimate_examples": [
+          {
+            "input": "Samples [1.5,2.5,3.5], begin=1, count=2",
+            "expected": "Return an owning [2.5,3.5] vector."
+          },
+          {
+            "input": "begin at the sample count, count=0",
+            "expected": "Return an empty vector; a larger count is rejected."
+          }
+        ],
+        "permitted_changes": [
+          "Keep checked subtraction before index addition and owning result storage.",
+          "Preserve exact numeric values, order and the valid empty tail window."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Checking begin+count without guarding overflow can accept an invalid range.",
+        "Returning a span instead of an owning vector changes the result lifetime contract."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Bounds arithmetic and object lifetime in a bounded C++ span operation.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-telemetry-owning-window",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The safe operation copies a requested numeric range with arithmetic and lifetime invariants; it is unrelated to binary-to-hex rendering. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-safe-02",
+      "language": "cpp",
+      "vulnerable": false,
+      "scenario": "An approved report ID is resolved to a private immutable file",
+      "files": {
+        "src/report_lookup.cpp": "#include <fstream>\n#include <iterator>\n#include <string>\n#include <unordered_map>\n#include <stdexcept>\nstd::string read_report(const std::string& public_id) {\n    static const std::unordered_map<std::string, std::string> paths = {\n        {\"weekly\", \"/srv/reports/weekly.txt\"}, {\"billing\", \"/srv/reports/billing.txt\"}\n    };\n    auto found = paths.find(public_id);\n    if (found == paths.end()) throw std::invalid_argument(\"report\");\n    std::ifstream input(found->second, std::ios::binary);\n    if (!input) throw std::runtime_error(\"open\");\n    return std::string(std::istreambuf_iterator<char>(input), {});\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The user value is only a key in a closed map, never a joined path. Both targets are immutable private regular files under service control.",
+      "remediation_constraints": [
+        "Keep the closed alias-to-path mapping and binary output.",
+        "Retain caller authorization for the selected report."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. The private directory and both files are not attacker writable, contain no symlinks, and each is at most 1 MiB."
+      },
+      "operation_contract": {
+        "purpose": "Return the exact bytes of either public report identified by a documented stable alias.",
+        "trust_boundary": "A user chooses weekly or billing after caller authorization; arbitrary filenames are not part of this API.",
+        "legitimate_examples": [
+          {
+            "input": "ID weekly",
+            "expected": "Return all bytes of weekly.txt, including embedded newline characters."
+          },
+          {
+            "input": "ID ../secret",
+            "expected": "Reject as an unknown report."
+          }
+        ],
+        "permitted_changes": [
+          "Keep the closed alias-to-path mapping and binary output.",
+          "Retain caller authorization for the selected report."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Adding a fallback that joins unknown IDs to a directory breaks containment.",
+        "Replacing the existing alias API with filename acceptance expands the trust boundary."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Path-selection control and exact bounded-source reading; the caller authorizes report access.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-report-alias-file-selection",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This is an intentionally alias-based read API with fixed small report inventory, distinct from retrofitting aliases onto a filename API. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-safe-03",
+      "language": "cpp",
+      "vulnerable": false,
+      "scenario": "Structured SQL evidence is displayed with iostream insertion",
+      "files": {
+        "src/query_plan_view.cpp": "#include <ostream>\n#include <string>\n#include <vector>\n#include <stdexcept>\nstruct PlanRow { std::string operation; unsigned cost; };\nvoid show_plan(std::ostream& out, const std::vector<PlanRow>& rows) {\n    if (rows.size() > 100) throw std::invalid_argument(\"rows\");\n    for (const auto& row : rows) {\n        if (row.operation.size() > 120) throw std::invalid_argument(\"operation\");\n        out << \"SQL plan: \" << row.operation << \" cost=\" << row.cost << '\\n';\n        if (!out) throw std::runtime_error(\"write\");\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Operation text is streamed as data; no SQL execution or printf format sink exists. The term SQL and untrusted plan text are diagnostic evidence, not executable query assembly.",
+      "remediation_constraints": [
+        "Preserve row order, costs and stream error handling.",
+        "Keep the plan renderer separate from query execution."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. Operation names have CR/LF stripped by the protocol adapter; the supplied ostream is valid and operator-only."
+      },
+      "operation_contract": {
+        "purpose": "List a bounded query execution plan for an authorized operator.",
+        "trust_boundary": "A database response supplies plan operation names; the renderer cannot submit queries.",
+        "legitimate_examples": [
+          {
+            "input": "Operation Index Scan, cost 12",
+            "expected": "Write SQL plan: Index Scan cost=12 and newline."
+          },
+          {
+            "input": "Operation containing %s",
+            "expected": "Display %s literally."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve row order, costs and stream error handling.",
+          "Keep the plan renderer separate from query execution."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Flagging every SQL-bearing concatenation would be a false positive.",
+        "Do not accidentally use an operation value as a printf format during refactoring."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "SQL and format-string false-positive control for diagnostic-only flow.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-query-plan-nonexecuting-view",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This case distinguishes SQL-like vocabulary from executable query construction through an output-only type and interface. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-safe-04",
+      "language": "cpp",
+      "vulnerable": false,
+      "scenario": "A ZIP central-directory name is rendered as escaped HTML text",
+      "files": {
+        "src/archive_listing.cpp": "#include <string>\n#include <stdexcept>\nstd::string archive_name_html(const std::string& name) {\n    if (name.size() > 512) throw std::invalid_argument(\"name\");\n    std::string output = \"<li>\";\n    for (char ch : name) {\n        switch (ch) {\n            case '&': output += \"&amp;\"; break;\n            case '<': output += \"&lt;\"; break;\n            case '>': output += \"&gt;\"; break;\n            default: output += ch;\n        }\n    }\n    output += \"</li>\";\n    return output;\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The name appears only in an HTML text node and escapes the three text-node metacharacters. This function never extracts the archive or opens a path.",
+      "remediation_constraints": [
+        "Keep text-node escaping and the fixed element wrapper.",
+        "Do not reuse this escaping routine for attributes, script or style contexts."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. Names are valid UTF-8 without NUL; output is inserted as HTML body content and never used as an attribute or script string."
+      },
+      "operation_contract": {
+        "purpose": "Render a bounded archive entry name in a list item without interpreting it as markup or a filesystem path.",
+        "trust_boundary": "An uploaded archive controls UTF-8 entry names; the caller inserts this result only as element content.",
+        "legitimate_examples": [
+          {
+            "input": "Name <draft>&notes",
+            "expected": "Return <li>&lt;draft&gt;&amp;notes</li>."
+          },
+          {
+            "input": "Name ../src/main.cpp",
+            "expected": "Display that literal path without opening or extracting it."
+          }
+        ],
+        "permitted_changes": [
+          "Keep text-node escaping and the fixed element wrapper.",
+          "Do not reuse this escaping routine for attributes, script or style contexts."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A ../ string is not path traversal without a filesystem operation.",
+        "The output encoding contract is text-node-only, not universal HTML sanitization."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Buffer, path and text-rendering boundaries in the declared text-node context.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-archive-name-display-only",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "An archive-looking path remains display data; there is intentionally no extraction or path-joining sink. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-safe-05",
+      "language": "cpp",
+      "vulnerable": false,
+      "scenario": "A monotonic sequence parser rejects overflow before multiplication",
+      "files": {
+        "src/sequence_number.cpp": "#include <string_view>\n#include <cstdint>\n#include <limits>\n#include <optional>\nstd::optional<std::uint32_t> sequence_number(std::string_view input) {\n    if (input.empty() || input.size() > 10) return std::nullopt;\n    std::uint32_t result = 0;\n    for (char digit : input) {\n        if (digit < '0' || digit > '9') return std::nullopt;\n        unsigned value = static_cast<unsigned>(digit - '0');\n        if (result > (std::numeric_limits<std::uint32_t>::max() - value) / 10) return std::nullopt;\n        result = result * 10 + value;\n    }\n    return result;\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The digit range and pre-multiplication bound prevent wraparound; no memory access depends on a parsed unchecked length.",
+      "remediation_constraints": [
+        "Preserve decimal-only grammar and exact 32-bit range.",
+        "Keep checked arithmetic before each multiplication."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. The string_view references stable readable memory; leading zeros are legitimate decimal input."
+      },
+      "operation_contract": {
+        "purpose": "Parse a decimal protocol sequence into an unsigned 32-bit value or reject it.",
+        "trust_boundary": "A peer controls the complete decimal field, including length and characters.",
+        "legitimate_examples": [
+          {
+            "input": "4294967295",
+            "expected": "Return the maximum uint32 value."
+          },
+          {
+            "input": "4294967296",
+            "expected": "Return nullopt without wrapping to zero."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve decimal-only grammar and exact 32-bit range.",
+          "Keep checked arithmetic before each multiplication."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Checking overflow only after arithmetic loses the original value.",
+        "Replacing rejection with clamping changes sequence identity."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Integer parsing and source bounds; downstream authorization does not depend on this function.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-sequence-decimal-overflow-control",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A protocol identity parser establishes a numeric invariant without string or shell sinks, providing a distinct safe input-handling operation. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-cpp-safe-06",
+      "language": "cpp",
+      "vulnerable": false,
+      "scenario": "A user search token is matched literally against a fixed in-memory index",
+      "files": {
+        "src/catalog_search.cpp": "#include <string>\n#include <vector>\n#include <stdexcept>\nstd::vector<std::string> catalog_search(const std::vector<std::string>& titles,\n                                      const std::string& token) {\n    if (token.empty() || token.size() > 80 || titles.size() > 1000) throw std::invalid_argument(\"search\");\n    std::vector<std::string> matches;\n    for (const auto& title : titles) {\n        if (title.size() > 200) throw std::invalid_argument(\"title\");\n        if (title.find(token) != std::string::npos) matches.push_back(title);\n    }\n    return matches;\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The token is used by literal substring search over bounded std::string values. Shell-looking and SQL-looking characters acquire no executable meaning.",
+      "remediation_constraints": [
+        "Preserve exact substring semantics, duplicates and input order.",
+        "Keep bounded input counts and lengths."
+      ],
+      "runtime_assumptions": {
+        "runtime": "C++20 with POSIX.1-2008 interfaces where used",
+        "libraries": [
+          "libstdc++ 13",
+          "glibc 2.39"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "Caller-owned streams and strings are valid. Executable paths and service-owned directories cannot be modified by the requester. Titles and token are NUL-free UTF-8 byte strings; matching is intentionally bytewise and case-sensitive."
+      },
+      "operation_contract": {
+        "purpose": "Return original catalog titles containing an exact, case-sensitive substring in original order.",
+        "trust_boundary": "A user supplies the search token; the service provides an already authorized bounded list of titles.",
+        "legitimate_examples": [
+          {
+            "input": "Token ' OR 1=1 --",
+            "expected": "Match only titles containing those literal bytes."
+          },
+          {
+            "input": "Token [a-z]",
+            "expected": "Search the literal bracketed text; do not treat it as a regular expression."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve exact substring semantics, duplicates and input order.",
+          "Keep bounded input counts and lengths."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Changing find to a regular-expression API introduces a different input language.",
+        "No database or process sink exists even when input resembles injected code."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Injection false-positive control and bounded standard-library string operations.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "cpp-literal-catalog-search",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The input deliberately resembles injection payloads but only a literal in-memory search consumes it; it has no repaired vulnerable sibling. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://eel.is/c++draft/string.classes",
+          "https://pubs.opengroup.org/onlinepubs/9799919799/functions/printf.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

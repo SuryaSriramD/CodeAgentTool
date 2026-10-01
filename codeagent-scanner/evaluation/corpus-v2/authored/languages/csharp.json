@@ -1,0 +1,1160 @@
+{
+  "language": "csharp",
+  "cases": [
+    {
+      "id": "v2-csharp-vulnerable-01",
+      "language": "csharp",
+      "vulnerable": true,
+      "scenario": "Tenant-bound customer search splices a free-text predicate into SQL",
+      "files": {
+        "src/CustomerSearch.cs": "using System;\nusing System.Data;\nusing System.Collections.Generic;\nusing Microsoft.Data.SqlClient;\npublic static class CustomerSearch {\n    public static List<string> Find(SqlConnection connection, int tenant, string city) {\n        if (city.Length > 80) throw new ArgumentException(\"city\");\n        using var command = connection.CreateCommand();\n        command.CommandText = \"SELECT Name FROM Customers WHERE TenantId=@tenant AND City='\" + city + \"'\";\n        command.Parameters.Add(\"@tenant\", SqlDbType.Int).Value = tenant;\n        var names = new List<string>();\n        using var reader = command.ExecuteReader();\n        while (reader.Read()) names.Add(reader.GetString(0));\n        return names;\n    }\n}\n",
+        "src/CustomerRoute.cs": "using System;\nusing System.Collections.Generic;\nusing System.Security.Claims;\nusing Microsoft.Data.SqlClient;\npublic static class CustomerRoute {\n    public static List<string> Handle(SqlConnection connection, ClaimsPrincipal user,\n                                       IReadOnlyDictionary<string, string> query) {\n        if (user.Identity?.IsAuthenticated != true) throw new UnauthorizedAccessException();\n        var tenantClaim = user.FindFirst(\"tenant\") ?? throw new UnauthorizedAccessException();\n        if (!int.TryParse(tenantClaim.Value, out int tenant) || tenant < 1) throw new UnauthorizedAccessException();\n        if (!query.TryGetValue(\"city\", out string city)) throw new ArgumentException(\"city required\");\n        return CustomerSearch.Find(connection, tenant, city);\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "src/CustomerSearch.cs",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "TenantId is parameterized but City is inserted into the query grammar, allowing input to change the predicate despite one correctly bound parameter.",
+      "remediation_constraints": [
+        "Bind city with a typed parameter while retaining the tenant predicate.",
+        "Preserve the result list and database nullability contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. Microsoft.Data.SqlClient 5.2.2; SQL Server 2022; open connection; Name and City are NOT NULL NVARCHAR, City length 80. ClaimsPrincipal is created by a trusted authenticated middleware; client input cannot add or alter tenant claims."
+      },
+      "operation_contract": {
+        "purpose": "Return customer names in the authorized tenant whose city exactly equals the requested string.",
+        "trust_boundary": "The caller derives tenant from authenticated identity; the user supplies city and must not alter SQL syntax or tenant scope.",
+        "legitimate_examples": [
+          {
+            "input": "Tenant 7, city O'Fallon",
+            "expected": "Return only tenant 7 customers with that literal city."
+          },
+          {
+            "input": "City with SQL punctuation",
+            "expected": "Treat the entire value as a string predicate value."
+          }
+        ],
+        "permitted_changes": [
+          "Bind city with a typed parameter while retaining the tenant predicate.",
+          "Preserve the result list and database nullability contract."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Parameterizing one part of a query does not sanitize concatenated parts.",
+        "Removing the tenant predicate to simplify a fix exposes other tenants."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "SQL construction and tenant predicate preservation.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-mixed-bound-unbound-tenant-query",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The query already contains one security-sensitive bound filter, so repair must preserve isolation while binding another field. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-vulnerable-02",
+      "language": "csharp",
+      "vulnerable": true,
+      "scenario": "Image worker uses ArgumentList but deliberately launches a shell",
+      "files": {
+        "src/ImageSummary.cs": "using System;\nusing System.Diagnostics;\npublic static class ImageSummary {\n    public static string Summarize(string uploadPath) {\n        if (uploadPath.Length > 180) throw new ArgumentException(\"path\");\n        var start = new ProcessStartInfo(\"/bin/sh\") { UseShellExecute = false, RedirectStandardOutput = true };\n        start.ArgumentList.Add(\"-c\");\n        start.ArgumentList.Add(\"/usr/bin/identify -format '%wx%h' \" + uploadPath);\n        using var child = Process.Start(start) ?? throw new InvalidOperationException(\"spawn\");\n        string summary = child.StandardOutput.ReadToEnd();\n        child.WaitForExit();\n        if (child.ExitCode != 0) throw new InvalidOperationException(\"identify\");\n        return summary;\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/ImageSummary.cs",
+          "line_start": 8,
+          "line_end": 8
+        }
+      ],
+      "rationale": "ArgumentList separates the shell arguments but the -c argument remains a program assembled from an uploaded path. UseShellExecute=false does not disable an explicitly selected shell.",
+      "remediation_constraints": [
+        "Launch identify directly with separate arguments, a fixed format, and its option terminator.",
+        "Preserve captured output and exit failure handling; keep authorization of the upload path."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. ImageMagick 6.9 identify at /usr/bin/identify; caller supplies a stable regular image inside a private directory, caps output and enforces a deadline."
+      },
+      "operation_contract": {
+        "purpose": "Return the dimensions of one authorized uploaded image as widthxheight.",
+        "trust_boundary": "A user controls a basename already placed under an authorized private upload root; the complete path may contain shell metacharacters.",
+        "legitimate_examples": [
+          {
+            "input": "Path /srv/uploads/7/family photo.png",
+            "expected": "Return dimensions for that exact file."
+          },
+          {
+            "input": "Invalid image",
+            "expected": "Throw after reaping the child; do not manufacture dimensions."
+          }
+        ],
+        "permitted_changes": [
+          "Launch identify directly with separate arguments, a fixed format, and its option terminator.",
+          "Preserve captured output and exit failure handling; keep authorization of the upload path."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "ArgumentList is not a sanitizer for a string passed to sh -c.",
+        "Do not replace the worker process or drop captured dimensions."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Explicit shell interpretation of an authorized path; image parser vulnerabilities are outside this source case.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-shell-inside-argumentlist",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A normally safer process API is misused by selecting a shell and feeding it one constructed program string. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-vulnerable-03",
+      "language": "csharp",
+      "vulnerable": true,
+      "scenario": "Release metadata client disables verification on the handler it actually uses",
+      "files": {
+        "src/ReleaseMetadata.cs": "using System;\nusing System.Net.Http;\nusing System.Threading.Tasks;\npublic static class ReleaseMetadata {\n    public static async Task<string> CurrentAsync() {\n        using var handler = new HttpClientHandler();\n        handler.AllowAutoRedirect = false;\n        handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;\n        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };\n        using var response = await client.GetAsync(\"https://releases.example.org/current.json\");\n        response.EnsureSuccessStatusCode();\n        return await response.Content.ReadAsStringAsync();\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "src/ReleaseMetadata.cs",
+          "line_start": 8,
+          "line_end": 8
+        }
+      ],
+      "rationale": "The live HttpClient uses a handler that accepts any certificate, so an active network attacker can impersonate the fixed release host. A fixed URL and disabled redirects do not restore TLS authentication.",
+      "remediation_constraints": [
+        "Use platform hostname and chain verification, or a documented narrow trust policy.",
+        "Keep HTTPS, redirect refusal, timeout and non-success errors."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. .NET 8 HttpClientHandler on Linux with a maintained OS trust store; caller enforces a 64 KiB response cap at ingress."
+      },
+      "operation_contract": {
+        "purpose": "Return authenticated release metadata from a fixed HTTPS endpoint.",
+        "trust_boundary": "The network is untrusted and release metadata influences the version displayed to operators; the endpoint configuration is trusted.",
+        "legitimate_examples": [
+          {
+            "input": "Valid publicly trusted endpoint certificate",
+            "expected": "Return response body on a successful status."
+          },
+          {
+            "input": "Untrusted or wrong-host certificate",
+            "expected": "Fail before accepting metadata."
+          }
+        ],
+        "permitted_changes": [
+          "Use platform hostname and chain verification, or a documented narrow trust policy.",
+          "Keep HTTPS, redirect refusal, timeout and non-success errors."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Accepting certificates only when the subject text matches is not chain validation.",
+        "Changing the URL to HTTP makes the original security requirement impossible."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "TLS server authentication with explicit consumer wiring.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-release-handler-consumer",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The vulnerable policy is connected to a real request and has a defined integrity consequence rather than being an unused configuration snippet. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-vulnerable-04",
+      "language": "csharp",
+      "vulnerable": true,
+      "scenario": "Invoice importer resolves external XML entities before extracting a name",
+      "files": {
+        "src/InvoiceName.cs": "using System;\nusing System.IO;\nusing System.Xml;\nusing System.Xml.Linq;\npublic static class InvoiceName {\n    public static string Read(string xml) {\n        if (xml.Length > 65536) throw new ArgumentException(\"invoice\");\n        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Parse, XmlResolver = new XmlUrlResolver(), MaxCharactersFromEntities = 4096 };\n        using var text = new StringReader(xml);\n        using var reader = XmlReader.Create(text, settings);\n        var document = XDocument.Load(reader);\n        return document.Root?.Element(\"customer\")?.Value ?? throw new FormatException(\"customer\");\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-xml",
+          "cwe": "CWE-611",
+          "path": "src/InvoiceName.cs",
+          "line_start": 8,
+          "line_end": 8
+        }
+      ],
+      "rationale": "External entity resolution is explicitly enabled for tenant-uploaded XML. A finite entity expansion limit limits volume but still permits file or network content to enter the returned customer field.",
+      "remediation_constraints": [
+        "Prohibit DTDs and external resolution while preserving built-in XML entities and ordinary customer text.",
+        "Keep input size and required-customer validation."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. No application DTD is required; the service account can access nonpublic local configuration files."
+      },
+      "operation_contract": {
+        "purpose": "Read the customer text from a small invoice XML document.",
+        "trust_boundary": "A tenant supplies the entire XML, including any DOCTYPE; service files and internal network resources are not tenant-readable.",
+        "legitimate_examples": [
+          {
+            "input": "<invoice><customer>A &amp; B</customer></invoice>",
+            "expected": "Return A & B."
+          },
+          {
+            "input": "An invoice with an external entity declaration",
+            "expected": "Reject it without opening any external resource."
+          }
+        ],
+        "permitted_changes": [
+          "Prohibit DTDs and external resolution while preserving built-in XML entities and ordinary customer text.",
+          "Keep input size and required-customer validation."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Lowering MaxCharactersFromEntities does not prohibit external reads.",
+        "Returning escaped raw XML instead of the customer value changes the operation."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "External XML entity access; ordinary XML parsing and text extraction are required.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-invoice-reader-entity-access",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A bounded import requires actual XML text extraction, making external resolution observable in an application field. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-vulnerable-05",
+      "language": "csharp",
+      "vulnerable": true,
+      "scenario": "Legacy offline badge encryption uses DES with a random IV",
+      "files": {
+        "src/BadgeCipher.cs": "using System;\nusing System.Security.Cryptography;\npublic static class BadgeCipher {\n    public static byte[] Encrypt(byte[] employeeId, byte[] key) {\n        if (employeeId.Length > 128 || key.Length != 8) throw new ArgumentException(\"badge\");\n        using var algorithm = DES.Create();\n        algorithm.Key = key;\n        algorithm.GenerateIV();\n        using var transform = algorithm.CreateEncryptor();\n        byte[] ciphertext = transform.TransformFinalBlock(employeeId, 0, employeeId.Length);\n        byte[] envelope = new byte[algorithm.IV.Length + ciphertext.Length];\n        Buffer.BlockCopy(algorithm.IV, 0, envelope, 0, algorithm.IV.Length);\n        Buffer.BlockCopy(ciphertext, 0, envelope, algorithm.IV.Length, ciphertext.Length);\n        return envelope;\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "weak-cryptography",
+          "cwe": "CWE-327",
+          "path": "src/BadgeCipher.cs",
+          "line_start": 6,
+          "line_end": 6
+        }
+      ],
+      "rationale": "DES has an inadequate effective key length for confidentiality. Random IVs do not repair the primitive; unauthenticated CBC also requires an integrity-aware migration rather than an in-place constant substitution.",
+      "remediation_constraints": [
+        "Migrate to authenticated encryption with a new explicit envelope version and appropriately sized fresh keys.",
+        "Document reader migration and reject malformed envelopes; do not silently reinterpret old bytes."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. The eight-byte input key is a service-generated non-weak DES key; an external versioned badge-reader interface may be revised but must be documented."
+      },
+      "operation_contract": {
+        "purpose": "Produce a versioned encrypted employee identifier for an offline badge reader.",
+        "trust_boundary": "Attackers can obtain badge ciphertexts but not the encryption key; the reader must recover the original identifier after migration.",
+        "legitimate_examples": [
+          {
+            "input": "Employee identifier bytes for E-204",
+            "expected": "A compatible reader recovers exactly E-204."
+          },
+          {
+            "input": "Two encryptions of the same identifier",
+            "expected": "Use independent randomness; do not reuse a fixed IV."
+          }
+        ],
+        "permitted_changes": [
+          "Migrate to authenticated encryption with a new explicit envelope version and appropriately sized fresh keys.",
+          "Document reader migration and reject malformed envelopes; do not silently reinterpret old bytes."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Replacing DES with AES while retaining an eight-byte key is invalid.",
+        "Keeping old unauthenticated envelopes without a migration boundary leaves tampering unresolved."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Weak cipher selection and secure envelope migration; this candidate requires human validation of compatibility constraints.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-offline-badge-envelope-migration",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The fix crosses an external binary format and key-size contract, so primitive replacement alone is not a valid remediation. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-vulnerable-06",
+      "language": "csharp",
+      "vulnerable": true,
+      "scenario": "A legacy desktop bridge restores untrusted object graphs from an upload",
+      "files": {
+        "src/LayoutImport.cs": "using System;\nusing System.IO;\nusing System.Runtime.Serialization.Formatters.Binary;\n[Serializable]\npublic sealed class Layout { public string Name = \"\"; public int Columns; }\npublic static class LayoutImport {\n    public static Layout Import(byte[] upload) {\n        if (upload.Length > 65536) throw new ArgumentException(\"upload\");\n        using (var input = new MemoryStream(upload, false)) {\n            var formatter = new BinaryFormatter();\n            object value = formatter.Deserialize(input);\n            var layout = value as Layout;\n            if (layout == null || layout.Columns < 1 || layout.Columns > 12) throw new FormatException(\"layout\");\n            return layout;\n        }\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-deserialization",
+          "cwe": "CWE-502",
+          "path": "src/LayoutImport.cs",
+          "line_start": 11,
+          "line_end": 11
+        }
+      ],
+      "rationale": "BinaryFormatter instantiates an attacker-controlled object graph before the result is cast and validated. A post-deserialization type check does not make that operation safe.",
+      "remediation_constraints": [
+        "Replace object-graph deserialization with an explicit data-only schema and validate fields.",
+        "Allow a documented format migration; do not claim to safely deserialize arbitrary legacy BinaryFormatter uploads."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET Framework 4.8; C# 7.3",
+        "libraries": [
+          ".NET Framework 4.8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. This case specifically targets .NET Framework 4.8 on Windows 10/Server 2022, where BinaryFormatter.Deserialize remains enabled; it does not target .NET 9+."
+      },
+      "operation_contract": {
+        "purpose": "Import a bounded layout containing a name and column count from a partner upload.",
+        "trust_boundary": "The partner controls bytes and cannot run code in the desktop bridge; signed application code runs with user privileges.",
+        "legitimate_examples": [
+          {
+            "input": "Approved layout named Overview with three columns",
+            "expected": "Return those two values."
+          },
+          {
+            "input": "An object graph naming arbitrary runtime types",
+            "expected": "Reject without instantiating arbitrary types."
+          }
+        ],
+        "permitted_changes": [
+          "Replace object-graph deserialization with an explicit data-only schema and validate fields.",
+          "Allow a documented format migration; do not claim to safely deserialize arbitrary legacy BinaryFormatter uploads."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Casting to Layout after Deserialize is too late.",
+        "A new runtime that disables BinaryFormatter would make this original example non-reachable and must not be substituted silently."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Unsafe object graph construction on an explicitly supported legacy runtime.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-legacy-layout-object-graph",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The case pins an actually enabled legacy runtime and includes post-load checks that cannot undo arbitrary object construction. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-security-guide"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-safe-01",
+      "language": "csharp",
+      "vulnerable": false,
+      "scenario": "Password-change reauthentication derives a salted work-factor verifier",
+      "files": {
+        "src/PasswordProof.cs": "using System;\nusing System.Security.Cryptography;\npublic sealed record StoredPassword(byte[] Salt, byte[] Digest);\npublic static class PasswordProof {\n    public static bool Verify(StoredPassword stored, string candidate) {\n        if (stored.Salt.Length != 16 || stored.Digest.Length != 32) throw new ArgumentException(\"stored verifier\");\n        if (candidate.Length < 1 || candidate.Length > 256) return false;\n        byte[] derived = Rfc2898DeriveBytes.Pbkdf2(candidate, stored.Salt, 600000, HashAlgorithmName.SHA256, 32);\n        try {\n            return CryptographicOperations.FixedTimeEquals(derived, stored.Digest);\n        } finally {\n            CryptographicOperations.ZeroMemory(derived);\n        }\n    }\n}\n",
+        "src/PasswordChangeGate.cs": "using System;\npublic static class PasswordChangeGate {\n    public static bool ConfirmCurrentPassword(StoredPassword authenticatedAccount, string formValue) {\n        ArgumentNullException.ThrowIfNull(authenticatedAccount);\n        ArgumentNullException.ThrowIfNull(formValue);\n        return PasswordProof.Verify(authenticatedAccount, formValue);\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "A password is checked against a server-stored, per-account salted PBKDF2-HMAC-SHA256 verifier with a fixed work factor; the comparison is fixed-time and the temporary derived bytes are cleared. The candidate does not control salt, digest or iteration count.",
+      "remediation_constraints": [
+        "Keep a per-account random 16-byte salt, 600000 PBKDF2-HMAC-SHA256 iterations, a 32-byte verifier and fixed-time comparison.",
+        "Preserve exact UTF-8 password semantics without trimming, normalization or truncation.",
+        "Clear the temporary derived verifier and retain the 256-character ingress bound."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": ".NET 8; C#12. Enrollment uses the identical PBKDF2 parameters and a fresh cryptographic 16-byte salt per account. The caller is an already authenticated password-change flow and loads only that account’s record from immutable server storage. Requests are rate-limited before this CPU-expensive check; all strings and byte arrays are non-null."
+      },
+      "operation_contract": {
+        "purpose": "Reauthenticate the current account before allowing a password-change flow to proceed.",
+        "trust_boundary": "An authenticated user submits the current password; the included caller receives that account’s credential record from trusted server storage, never from request fields.",
+        "legitimate_examples": [
+          {
+            "input": "The exact password used when enrolling this salted record",
+            "expected": "Return true."
+          },
+          {
+            "input": "A different password or an empty string",
+            "expected": "Return false without changing the stored credential record."
+          }
+        ],
+        "permitted_changes": [
+          "Keep a per-account random 16-byte salt, 600000 PBKDF2-HMAC-SHA256 iterations, a 32-byte verifier and fixed-time comparison.",
+          "Preserve exact UTF-8 password semantics without trimming, normalization or truncation.",
+          "Clear the temporary derived verifier and retain the 256-character ingress bound."
+        ],
+        "forbidden_changes": [
+          "Do not delete the operation or replace its result with a constant.",
+          "Do not expose credentials or change the documented input/output contract."
+        ]
+      },
+      "regression_traps": [
+        "Replacing PBKDF2 with one fast SHA-256 hash removes the password work factor.",
+        "Taking the stored salt/digest or iteration count from the submitted form would bypass server-owned verification.",
+        "Do not erase or mutate the persisted verifier while clearing temporary bytes."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Password-specific key derivation and comparison; account sessions, enrollment storage access and request rate limits are explicit caller preconditions.",
+        "reviewed_residual_risks": [
+          "AI candidate: human review of labels, runtime assumptions and cross-corpus independence remains pending.",
+          "Caller responsibilities are explicit assumptions, not a claim of whole-application security."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-password-change-pbkdf2-verifier",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This operation tests password work-factor derivation, stored salt ownership and exact password semantics rather than authentication of a network message with a reusable HMAC key. Conceptual independence remains subject to human review.",
+        "retired_drafts": [
+          {
+            "reason": "Replaced before scanner exposure after cross-language audit identified a substantially shared operation/mechanism.",
+            "overlap_case_ids": [
+              "v2-kotlin-safe-02"
+            ],
+            "retired_before_scanner_exposure": true,
+            "case_snapshot": {
+              "id": "v2-csharp-safe-01",
+              "language": "csharp",
+              "vulnerable": false,
+              "scenario": "Webhook authentication compares an HMAC over the exact request bytes",
+              "files": {
+                "src/WebhookSignature.cs": "using System;\nusing System.Security.Cryptography;\npublic static class WebhookSignature {\n    public static bool Verify(byte[] rawBody, byte[] signature, byte[] key) {\n        if (rawBody.Length > 1048576 || key.Length < 32 || signature.Length != 32) return false;\n        using var mac = new HMACSHA256(key);\n        byte[] expected = mac.ComputeHash(rawBody);\n        bool valid = CryptographicOperations.FixedTimeEquals(expected, signature);\n        CryptographicOperations.ZeroMemory(expected);\n        return valid;\n    }\n}\n"
+              },
+              "expected_findings": [],
+              "rationale": "A secret HMAC authenticates exact request bytes, validates signature size and uses a fixed-time comparison. This is not an unkeyed digest mislabeled as authentication.",
+              "remediation_constraints": [
+                "Keep raw-byte authentication, secret key handling and fixed-time equality.",
+                "Preserve the explicit body and signature limits."
+              ],
+              "runtime_assumptions": {
+                "runtime": ".NET 8.0; C# 12",
+                "libraries": [
+                  ".NET 8 BCL"
+                ],
+                "platform": "Linux x86-64 unless a case explicitly says Windows",
+                "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. Key is generated with at least 256 bits of entropy and isolated from request data; replay prevention is enforced by the authenticated event ID in the caller."
+              },
+              "operation_contract": {
+                "purpose": "Authenticate a bounded webhook body without parsing or normalizing it first.",
+                "trust_boundary": "A sender controls body and supplied signature; the service key is independently configured and secret.",
+                "legitimate_examples": [
+                  {
+                    "input": "Correct HMAC-SHA256 for the exact body",
+                    "expected": "Return true."
+                  },
+                  {
+                    "input": "Same JSON meaning with different whitespace and old signature",
+                    "expected": "Return false because the authenticated bytes differ."
+                  }
+                ],
+                "permitted_changes": [
+                  "Keep raw-byte authentication, secret key handling and fixed-time equality.",
+                  "Preserve the explicit body and signature limits."
+                ],
+                "forbidden_changes": [
+                  "Do not delete the demonstrated operation or replace its output with a constant.",
+                  "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+                ]
+              },
+              "regression_traps": [
+                "Replacing HMAC with SHA256(body) removes authenticity.",
+                "Parsing and reserializing before verification changes the signed message."
+              ],
+              "ground_truth_scope": {
+                "profile": "security-v2",
+                "scope": "Cryptographic primitive and comparison safety; replay handling is explicitly a caller responsibility.",
+                "reviewed_residual_risks": [
+                  "AI-authored candidate: labels, scope and independence require human review before freezing.",
+                  "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+                ]
+              },
+              "derivation": {
+                "group": "csharp-webhook-keyed-authentication",
+                "origin": "new AI-authored candidate",
+                "related_case_ids": [],
+                "independence_rationale": "This safe control specifies a keyed authenticity requirement and exact-byte semantics rather than merely choosing a stronger hash. Independence is a proposed classification pending human review; no effective sample size is claimed."
+              },
+              "provenance": {
+                "origin": "original AI-authored evaluation candidate",
+                "author": "Codex AI author",
+                "generated": true,
+                "license": "CC0-1.0",
+                "references": [
+                  "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+                  "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+                ]
+              },
+              "split": "held_out",
+              "human_review": {
+                "status": "pending",
+                "reviewer_kind": null,
+                "reviewer": null,
+                "reviewed_at": null,
+                "notes": null,
+                "review_schema_version": "2.0",
+                "reviewed_content_sha256": null,
+                "reviewed_case_sha256": null
+              }
+            },
+            "source_sha256": "333bed21f057d595f7c48cc17b390e36c428a2459d744fe5dae2b8c94e8c754c"
+          }
+        ]
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.rfc2898derivebytes.pbkdf2",
+          "https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.cryptographicoperations.fixedtimeequals"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-safe-02",
+      "language": "csharp",
+      "vulnerable": false,
+      "scenario": "A stored procedure receives a postcode as a typed input parameter",
+      "files": {
+        "src/DeliveryZones.cs": "using System;\nusing System.Data;\nusing Microsoft.Data.SqlClient;\npublic static class DeliveryZones {\n    public static int Lookup(SqlConnection connection, string postcode) {\n        if (postcode.Length > 16) throw new ArgumentException(\"postcode\");\n        using var command = new SqlCommand(\"dbo.LookupDeliveryZone\", connection);\n        command.CommandType = CommandType.StoredProcedure;\n        command.Parameters.Add(\"@postcode\", SqlDbType.NVarChar, 16).Value = postcode;\n        object value = command.ExecuteScalar();\n        return value == null || value == DBNull.Value ? -1 : Convert.ToInt32(value);\n    }\n}\n",
+        "db/LookupDeliveryZone.sql": "CREATE PROCEDURE dbo.LookupDeliveryZone @postcode NVARCHAR(16)\nAS\nBEGIN\n    SET NOCOUNT ON;\n    SELECT ZoneId FROM dbo.DeliveryZones WHERE Postcode = @postcode;\nEND;\n"
+      },
+      "expected_findings": [],
+      "rationale": "The client selects a fixed stored procedure and binds the full postcode as data. The included procedure performs a static equality query and contains no dynamic EXEC.",
+      "remediation_constraints": [
+        "Preserve the fixed procedure and typed binding.",
+        "Keep the no-result convention and static procedure body."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. Microsoft.Data.SqlClient 5.2.2; SQL Server 2022; open connection; Postcode is unique NVARCHAR(16)."
+      },
+      "operation_contract": {
+        "purpose": "Return the zone for an exact postcode or -1 when absent.",
+        "trust_boundary": "An end user controls postcode; procedure identity and database schema are trusted.",
+        "legitimate_examples": [
+          {
+            "input": "Postcode O'NEIL",
+            "expected": "Treat the apostrophe literally and return the stored mapping if present."
+          },
+          {
+            "input": "Unknown postcode",
+            "expected": "Return -1."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve the fixed procedure and typed binding.",
+          "Keep the no-result convention and static procedure body."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A parameterized call would not by itself prove a dynamic SQL procedure safe; the body is included here.",
+        "Do not truncate postcodes silently."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "SQL execution, including the included static stored procedure; no source-only assumption about hidden dynamic SQL.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-fixed-delivery-procedure",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A safe procedure call includes the downstream SQL body to make the trust boundary reviewable rather than assuming parameterization across unknown server code. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-safe-03",
+      "language": "csharp",
+      "vulnerable": false,
+      "scenario": "Model service health request keeps platform certificate verification",
+      "files": {
+        "src/ModelHealth.cs": "using System;\nusing System.Net.Http;\nusing System.Threading.Tasks;\npublic static class ModelHealth {\n    public static async Task<bool> ReadyAsync() {\n        using var handler = new HttpClientHandler { AllowAutoRedirect = false };\n        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };\n        using var request = new HttpRequestMessage(HttpMethod.Head, \"https://models.example.org/health\");\n        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);\n        return response.IsSuccessStatusCode;\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The request uses default platform chain and hostname verification, a fixed HTTPS origin, no redirects and no response body consumption.",
+      "remediation_constraints": [
+        "Retain default TLS verification and redirect refusal.",
+        "Preserve the short deadline and HEAD semantics."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. Linux OS trust store is maintained; the destination is a fixed operator-managed host."
+      },
+      "operation_contract": {
+        "purpose": "Check whether the configured model service returns a successful health status.",
+        "trust_boundary": "The network is untrusted; users cannot change the destination or request headers.",
+        "legitimate_examples": [
+          {
+            "input": "Valid certificate and HTTP 204",
+            "expected": "Return true."
+          },
+          {
+            "input": "Wrong-host certificate",
+            "expected": "Raise a transport error rather than returning readiness."
+          }
+        ],
+        "permitted_changes": [
+          "Retain default TLS verification and redirect refusal.",
+          "Preserve the short deadline and HEAD semantics."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A readiness check still needs authenticated transport.",
+        "Swallowing all transport errors as a successful health response changes the meaning."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "TLS authentication and fixed-destination request policy.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-model-head-health",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A headers-only health check has a distinct output and transport contract from downloading update metadata. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-safe-04",
+      "language": "csharp",
+      "vulnerable": false,
+      "scenario": "Tenant preferences use a sealed JSON DTO with bounded fields",
+      "files": {
+        "src/Preferences.cs": "using System;\nusing System.Text.Json;\npublic sealed record Preferences(string Theme, int PageSize);\npublic static class PreferenceImport {\n    public static Preferences Read(string json) {\n        if (json.Length > 4096) throw new ArgumentException(\"json\");\n        var options = new JsonSerializerOptions { MaxDepth = 8, PropertyNameCaseInsensitive = false };\n        var value = JsonSerializer.Deserialize<Preferences>(json, options) ?? throw new FormatException(\"preferences\");\n        if (value.Theme != \"light\" && value.Theme != \"dark\") throw new FormatException(\"theme\");\n        if (value.PageSize < 10 || value.PageSize > 100) throw new FormatException(\"page size\");\n        return value;\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The JSON deserializer targets one sealed data record with no polymorphic resolver or arbitrary runtime type metadata, and validates both accepted fields.",
+      "remediation_constraints": [
+        "Keep explicit DTO selection, depth bound and field validation.",
+        "Do not enable arbitrary type-name resolution to support extra metadata."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. System.Text.Json shipped with .NET 8; no custom converters or polymorphic configuration are registered. Unknown JSON members are intentionally ignored."
+      },
+      "operation_contract": {
+        "purpose": "Import a theme and page-size preference from a small JSON document.",
+        "trust_boundary": "The tenant controls JSON bytes but may select only documented preference values.",
+        "legitimate_examples": [
+          {
+            "input": "{\"Theme\":\"dark\",\"PageSize\":25}",
+            "expected": "Return those exact values."
+          },
+          {
+            "input": "{\"Theme\":\"dark\",\"PageSize\":100000}",
+            "expected": "Reject the page size."
+          }
+        ],
+        "permitted_changes": [
+          "Keep explicit DTO selection, depth bound and field validation.",
+          "Do not enable arbitrary type-name resolution to support extra metadata."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "The mere word Deserialize does not make data-only JSON parsing equivalent to BinaryFormatter.",
+        "Removing validation while changing serializers broadens allowed settings."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Deserialization and bounded settings validation.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-sealed-preferences-json",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This safe data import has explicit primitive fields and validation and is not a byte-for-byte safe twin of an object-graph import. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-safe-05",
+      "language": "csharp",
+      "vulnerable": false,
+      "scenario": "Support diagnostics launch a fixed binary without accepting executable text",
+      "files": {
+        "src/RuntimeReport.cs": "using System;\nusing System.Diagnostics;\npublic static class RuntimeReport {\n    public static string Read() {\n        var start = new ProcessStartInfo(\"/usr/bin/dotnet\") { UseShellExecute = false, RedirectStandardOutput = true };\n        start.ArgumentList.Add(\"--info\");\n        using var process = Process.Start(start) ?? throw new InvalidOperationException(\"spawn\");\n        string result = process.StandardOutput.ReadToEnd();\n        process.WaitForExit();\n        if (process.ExitCode != 0) throw new InvalidOperationException(\"runtime report\");\n        return result;\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The executable and sole argument are fixed application code, and no shell or user string reaches process construction.",
+      "remediation_constraints": [
+        "Keep the fixed executable/argument pair and capture/reap behavior.",
+        "Restrict report access to operators."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. /usr/bin/dotnet is an administrator-owned installation; environment and working directory are sanitized; caller enforces a deadline and small output bound."
+      },
+      "operation_contract": {
+        "purpose": "Return the installed runtime diagnostic report to an authenticated operator.",
+        "trust_boundary": "Users may request the report but cannot choose its command, arguments, environment or executable location.",
+        "legitimate_examples": [
+          {
+            "input": "Authorized report request",
+            "expected": "Return the trusted dotnet --info output."
+          },
+          {
+            "input": "Tool exits unsuccessfully",
+            "expected": "Throw rather than returning success."
+          }
+        ],
+        "permitted_changes": [
+          "Keep the fixed executable/argument pair and capture/reap behavior.",
+          "Restrict report access to operators."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A process API alone is not command injection.",
+        "Adding a user-provided suffix to a shell command would change the trust model."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Process-injection false-positive control for a zero-input diagnostic command.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-fixed-runtime-inventory",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This process operation has no attacker-controlled command components and an explicit operator-only observation contract. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-csharp-safe-06",
+      "language": "csharp",
+      "vulnerable": false,
+      "scenario": "An outgoing contact record uses XML text APIs for untrusted values",
+      "files": {
+        "src/ContactXml.cs": "using System;\nusing System.Text;\nusing System.Xml;\npublic static class ContactXml {\n    public static string Write(string name, string city) {\n        if (name.Length > 120 || city.Length > 80) throw new ArgumentException(\"contact\");\n        var text = new StringBuilder();\n        var settings = new XmlWriterSettings { OmitXmlDeclaration = true, ConformanceLevel = ConformanceLevel.Document };\n        using (var writer = XmlWriter.Create(text, settings)) {\n            writer.WriteStartElement(\"contact\");\n            writer.WriteElementString(\"name\", name);\n            writer.WriteElementString(\"city\", city);\n            writer.WriteEndElement();\n        }\n        return text.ToString();\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Untrusted contact values are written through WriteElementString, which treats them as XML text and escapes markup characters. No parser or external resolver consumes user input in this operation.",
+      "remediation_constraints": [
+        "Retain structured writer APIs and exact decoded string values.",
+        "Do not replace text writes with WriteRaw or manual markup concatenation."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; C# 12",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Linux x86-64 unless a case explicitly says Windows",
+        "setup": "Methods are invoked by the described authenticated service ingress; service configuration and injected connections are trusted. .NET 8 XmlWriter; inputs contain only valid XML 1.0 characters, enforced at ingress; the downstream CRM consumes a fixed contact schema without interpreting element text as code."
+      },
+      "operation_contract": {
+        "purpose": "Create an XML contact record for a downstream data-only CRM API.",
+        "trust_boundary": "A user controls name and city strings but may not add elements, attributes or entity declarations.",
+        "legitimate_examples": [
+          {
+            "input": "name=A & B, city=<Paris>",
+            "expected": "Produce contact XML whose decoded name is A & B and city is <Paris>, with both values escaped as text."
+          },
+          {
+            "input": "A string containing an XML closing-tag sequence",
+            "expected": "Keep the sequence in element text rather than changing document structure."
+          }
+        ],
+        "permitted_changes": [
+          "Retain structured writer APIs and exact decoded string values.",
+          "Do not replace text writes with WriteRaw or manual markup concatenation."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "XML-related code is not inherently an entity-resolution sink; this code only writes text.",
+        "Discarding punctuation to avoid escaping changes legitimate contact data."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Structured XML output and injection false-positive control; no external entity parsing occurs.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "csharp-contact-xml-text-writer",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This safe case constructs an outgoing document using text APIs, rather than toggling resolver settings on a vulnerable reader sibling. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.argumentlist",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca3075"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

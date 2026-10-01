@@ -1,0 +1,5 @@
+import java.sql.Statement
+import javax.xml.parsers.DocumentBuilderFactory
+object Example { def handle(stmt: Statement, input: String, factory: DocumentBuilderFactory): Unit = {
+factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+} }

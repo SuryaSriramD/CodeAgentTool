@@ -1,0 +1,345 @@
+{
+  "schema_version": "2.0",
+  "job_id": "420289f0-b25d-427b-b3fe-ac5268d5591f",
+  "meta": {
+    "duration_ms": 4633,
+    "generated_at": "2026-09-25T14:45:46.038425+00:00",
+    "labels": [
+      "corpus-v2",
+      "authoring-validation",
+      "unapproved"
+    ],
+    "repo": {
+      "baseline": {
+        "job_id": "726726d2-dc0d-4a1b-8bd7-528210828bda",
+        "report_hash": "402129fa7a50be580ab1b15aea1f4e99be178975f77d0ba215e47344e35acdb1"
+      },
+      "commit": null,
+      "digest": "91e213032501f6e8a424c372bfa9d00f9f8c5bed4f6854a4250514531ddc5b05",
+      "filename": "v2-c-vulnerable-02.zip",
+      "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+      "snapshot_id": "420289f0-b25d-427b-b3fe-ac5268d5591f",
+      "source": "zip",
+      "stream": "default"
+    },
+    "rulepack_version": "2.0.0-candidate",
+    "snapshot": {
+      "digest": "91e213032501f6e8a424c372bfa9d00f9f8c5bed4f6854a4250514531ddc5b05",
+      "excluded_files": [],
+      "files": {
+        "src/quota_probe.c": "7e9499be66927879dadc86d978561bafddc800866f29d5147fe39d7398cc8f38"
+      },
+      "id": "420289f0-b25d-427b-b3fe-ac5268d5591f",
+      "ingestion_version": 2,
+      "inventory_complete": true,
+      "source": {
+        "baseline": {
+          "job_id": "726726d2-dc0d-4a1b-8bd7-528210828bda",
+          "report_hash": "402129fa7a50be580ab1b15aea1f4e99be178975f77d0ba215e47344e35acdb1"
+        },
+        "commit": null,
+        "digest": "91e213032501f6e8a424c372bfa9d00f9f8c5bed4f6854a4250514531ddc5b05",
+        "filename": "v2-c-vulnerable-02.zip",
+        "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+        "snapshot_id": "420289f0-b25d-427b-b3fe-ac5268d5591f",
+        "source": "zip",
+        "stream": "default"
+      },
+      "source_inventory": [
+        "src/quota_probe.c"
+      ],
+      "warnings": []
+    },
+    "tool_runs": [
+      {
+        "duration_ms": 2967,
+        "name": "semgrep",
+        "status": "completed",
+        "version": "1.178.0"
+      },
+      {
+        "duration_ms": 0,
+        "name": "bandit",
+        "status": "skipped",
+        "version": "bandit 1.9.4"
+      },
+      {
+        "duration_ms": 0,
+        "name": "dotnet",
+        "status": "skipped",
+        "version": "codeagent-dotnet 1.1.0"
+      },
+      {
+        "duration_ms": 0,
+        "name": "depcheck",
+        "status": "skipped",
+        "version": "Version: 0.74.0"
+      }
+    ],
+    "tools": [
+      "semgrep",
+      "bandit",
+      "dotnet",
+      "depcheck"
+    ]
+  },
+  "summary": {
+    "critical": 0,
+    "high": 1,
+    "low": 0,
+    "medium": 0
+  },
+  "files": [
+    {
+      "path": "src/quota_probe.c",
+      "issues": [
+        {
+          "id": "322098adf0bc096109c4733d",
+          "tool": "semgrep",
+          "type": "codeagent.c.shell-injection.v2",
+          "message": "Shell injection security pattern; validate untrusted input and prefer safe API configuration.",
+          "severity": "high",
+          "file": "src/quota_probe.c",
+          "line": 9,
+          "rule_id": "codeagent.c.shell-injection.v2",
+          "source_hash": "7e9499be66927879dadc86d978561bafddc800866f29d5147fe39d7398cc8f38",
+          "suggestion": null,
+          "fingerprint": "v1:1aaea100054b51af5e122e0d6dd666c68f452e6c0c0fec43f88def06dbf52155",
+          "logical_id": "7fce372e-dea8-4a32-b906-28db2c6f8436",
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "analysis_kind": "structural",
+          "end_line": 9,
+          "rule_digest": "6a70bfcededb875c0b17aade117babb7ffaf0640abe2b3e5299d31a353c7bd16",
+          "dependency": null,
+          "end_column": 33,
+          "evidence": [
+            {
+              "end_line": 9,
+              "file": "src/quota_probe.c",
+              "kind": "source_span",
+              "line": 9
+            }
+          ],
+          "evidence_digest": "bf296c562d4ea5e505628668b46dfa59c0798408a0db209c8408c408165a0c64",
+          "rule_revision": "2",
+          "tracking_ambiguous": false,
+          "tracking_supported": true
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "tool": "semgrep",
+      "status": "completed",
+      "files_discovered": 1,
+      "files_scanned": 1,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "1.178.0",
+      "languages": [
+        "c"
+      ],
+      "path_outcomes": [
+        {
+          "language": "c",
+          "path": "src/quota_probe.c",
+          "rule_ids": [
+            "codeagent.c.security.v1",
+            "codeagent.c.format-string.v2",
+            "codeagent.c.shell-injection.v2"
+          ],
+          "status": "completed"
+        }
+      ],
+      "profile": "security-v2",
+      "rule_ids": [
+        "codeagent.bash.dynamic-evaluation.v2",
+        "codeagent.bash.security.v1",
+        "codeagent.bash.tls-validation.v2",
+        "codeagent.c.format-string.v2",
+        "codeagent.c.security.v1",
+        "codeagent.c.shell-injection.v2",
+        "codeagent.cpp.format-string.v2",
+        "codeagent.cpp.security.v1",
+        "codeagent.cpp.shell-injection.v2",
+        "codeagent.dockerfile.security.v1",
+        "codeagent.go.security.v1",
+        "codeagent.go.sql-injection.v2",
+        "codeagent.go.ssrf.v2",
+        "codeagent.go.tls-validation.v2",
+        "codeagent.html.security.v1",
+        "codeagent.java.security.v1",
+        "codeagent.java.sql-injection.v2",
+        "codeagent.java.unsafe-xml.v2",
+        "codeagent.javascript.path-traversal.v2",
+        "codeagent.javascript.security.v1",
+        "codeagent.javascript.shell-injection.v2",
+        "codeagent.javascript.ssrf.v2",
+        "codeagent.json.security.v1",
+        "codeagent.kotlin.security.v1",
+        "codeagent.kotlin.sql-injection.v2",
+        "codeagent.kotlin.unsafe-xml.v2",
+        "codeagent.php.path-traversal.v2",
+        "codeagent.php.security.v1",
+        "codeagent.php.sql-injection.v2",
+        "codeagent.python.path-traversal.v2",
+        "codeagent.python.security.v1",
+        "codeagent.python.sql-injection.v2",
+        "codeagent.python.ssrf.v2",
+        "codeagent.ruby.security.v1",
+        "codeagent.ruby.sql-injection.v2",
+        "codeagent.ruby.unsafe-deserialization.v2",
+        "codeagent.rust.security.v1",
+        "codeagent.rust.sql-injection.v2",
+        "codeagent.rust.tls-validation.v2",
+        "codeagent.scala.security.v1",
+        "codeagent.scala.sql-injection.v2",
+        "codeagent.scala.unsafe-xml.v2",
+        "codeagent.swift.security.v1",
+        "codeagent.swift.tls-validation.v2",
+        "codeagent.swift.unsafe-deserialization.v2",
+        "codeagent.typescript.path-traversal.v2",
+        "codeagent.typescript.security.v1",
+        "codeagent.typescript.shell-injection.v2",
+        "codeagent.typescript.ssrf.v2",
+        "codeagent.xml.security.v1",
+        "codeagent.yaml.security.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": [
+        "src/quota_probe.c"
+      ]
+    },
+    {
+      "tool": "bandit",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "bandit 1.9.4",
+      "languages": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "dotnet",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "codeagent-dotnet 1.1.0",
+      "languages": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [
+        "dotnet.binary-formatter.v1",
+        "dotnet.shell-injection.v2",
+        "dotnet.sql-injection.v2",
+        "dotnet.tls-validation.v1",
+        "dotnet.weak-crypto.v1",
+        "dotnet.xml-dtd.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "depcheck",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "Version: 0.74.0",
+      "languages": [],
+      "ecosystems": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    }
+  ],
+  "ai_analysis": null,
+  "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+  "stream": "default",
+  "profiles": {
+    "config": "a4fe670958b7e7e5211507e6eedd06b7a9529657e36cdfb695bc3b240b722e50",
+    "dependency": "506ced042a7c4d394e4645ff697a57003bef4f09ef6163ccd46a31fb6b69955d",
+    "name": "security-v2",
+    "source": "ba3ad3aa99b3ed698cad695e5fde69d3636effb1eac852347458d7daa70dff56",
+    "tools": {
+      "bandit": "f9eeff7a1ad667596326358c2d2b95c3ae7beb0bded3a68724212ecadaded9fb",
+      "depcheck": "506ced042a7c4d394e4645ff697a57003bef4f09ef6163ccd46a31fb6b69955d",
+      "dotnet": "5931ae9b9a311d36013df95db06efe91d42f4db9264a785c84424464f5109df4",
+      "semgrep": "6a70bfcededb875c0b17aade117babb7ffaf0640abe2b3e5299d31a353c7bd16"
+    }
+  },
+  "baseline": {
+    "job_id": "726726d2-dc0d-4a1b-8bd7-528210828bda",
+    "report_hash": "402129fa7a50be580ab1b15aea1f4e99be178975f77d0ba215e47344e35acdb1"
+  },
+  "report_hash": "1cf0286650ddec210bca65c731541a026dafb8b03d797b8692940d74530c4e84",
+  "errors": [],
+  "profile_digests": {
+    "dependency": "b2a78d8167fb4b467bc3674bccf022ff4ed6923e17e86ffa68b5921f4312644b",
+    "dependency_details": {
+      "adapter": "ca0f18d2ad98c3d5dc9aa76369f1ed5b04575bd24191157a3b4b9fffe8ede749",
+      "database": {
+        "metadata_hash": "5b57f7738d885f1a1d506eb717e5e1dc1eb743fe99e18791b3e5d474a4d06eea",
+        "next_update": "2026-09-26T06:36:11.019457213Z",
+        "ready": true,
+        "updated_at": "2026-09-25T06:36:11.019457553Z"
+      },
+      "expected_version": "0.74.0",
+      "version": "Version: 0.74.0"
+    },
+    "source": "addb5891684c529093e5e3dbb181becb30ba3db4909989a95666609a2fbd076e",
+    "source_details": {
+      "adapters": {
+        "bandit_runner.py": "ded1e85cc29baeb6fd5e9429eaee84762b4a458f1c8355d6533e5f0c943f66fd",
+        "common.py": "9746e28ee5e07e3df08846b4ef48f5c185ab8cc85ac055ad8f21bbb05a597a49",
+        "dotnet_runner.py": "bda87fedcfcd8b72b40b58b6478d4a8f8e4113cdbb296cabe372f6068035a5bf",
+        "semgrep_runner.py": "f621ba6e2097b6dd4a6e7d045bb826d8c6f62a0eba25391b213c73f15a38af7d"
+      },
+      "dotnet": {
+        "Program.fs": "78dd7da6bf86a8fb03fa2f100b9542b787725d94acb3ef6ade36adf7366c85c6",
+        "Roslyn/Analyzer.cs": "fee1df8cef9b41638c0b4f9a615c8ac60f54dd5e9991057526da22863ef2fd33"
+      },
+      "effective_tools": [
+        {
+          "name": "semgrep",
+          "version": "1.178.0"
+        },
+        {
+          "name": "bandit",
+          "version": "bandit 1.9.4"
+        },
+        {
+          "name": "dotnet",
+          "version": "codeagent-dotnet 1.1.0"
+        }
+      ],
+      "profile": "security-v2",
+      "rules": "661bd24355ffd634f28fa7abe17f56c17598b7d39832a8d1c47a93fc181b633f",
+      "versions": {
+        "bandit": "1.9.4",
+        "dotnet_analyzer": "1.1.0",
+        "dotnet_sdk": "10.0.401",
+        "fsharp_compiler_service": "43.12.401",
+        "roslyn": "5.9.0",
+        "rulepack": "1.0.0",
+        "semgrep": "1.178.0"
+      }
+    }
+  },
+  "profile_reproducibility": "pinned",
+  "status": "completed",
+  "warnings": []
+}

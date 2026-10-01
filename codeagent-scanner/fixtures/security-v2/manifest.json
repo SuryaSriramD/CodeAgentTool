@@ -1,0 +1,1830 @@
+{
+  "version": "security-v2",
+  "purpose": "rule-regression; never held-out evaluation",
+  "cases": [
+    {
+      "path": "python/sql-injection/vulnerable-1.py",
+      "language": "python",
+      "family": "sql-injection",
+      "rule_id": "codeagent.python.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "python/sql-injection/vulnerable-2.py",
+      "language": "python",
+      "family": "sql-injection",
+      "rule_id": "codeagent.python.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "python/sql-injection/vulnerable-3.py",
+      "language": "python",
+      "family": "sql-injection",
+      "rule_id": "codeagent.python.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "python/sql-injection/safe-1.py",
+      "language": "python",
+      "family": "sql-injection",
+      "rule_id": "codeagent.python.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "python/sql-injection/safe-2.py",
+      "language": "python",
+      "family": "sql-injection",
+      "rule_id": "codeagent.python.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "python/sql-injection/safe-3.py",
+      "language": "python",
+      "family": "sql-injection",
+      "rule_id": "codeagent.python.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "python/path-traversal/vulnerable-1.py",
+      "language": "python",
+      "family": "path-traversal",
+      "rule_id": "codeagent.python.path-traversal.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "python/path-traversal/vulnerable-2.py",
+      "language": "python",
+      "family": "path-traversal",
+      "rule_id": "codeagent.python.path-traversal.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "python/path-traversal/vulnerable-3.py",
+      "language": "python",
+      "family": "path-traversal",
+      "rule_id": "codeagent.python.path-traversal.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "python/path-traversal/safe-1.py",
+      "language": "python",
+      "family": "path-traversal",
+      "rule_id": "codeagent.python.path-traversal.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "python/path-traversal/safe-2.py",
+      "language": "python",
+      "family": "path-traversal",
+      "rule_id": "codeagent.python.path-traversal.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "python/path-traversal/safe-3.py",
+      "language": "python",
+      "family": "path-traversal",
+      "rule_id": "codeagent.python.path-traversal.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "python/ssrf/vulnerable-1.py",
+      "language": "python",
+      "family": "ssrf",
+      "rule_id": "codeagent.python.ssrf.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "python/ssrf/vulnerable-2.py",
+      "language": "python",
+      "family": "ssrf",
+      "rule_id": "codeagent.python.ssrf.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "python/ssrf/vulnerable-3.py",
+      "language": "python",
+      "family": "ssrf",
+      "rule_id": "codeagent.python.ssrf.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "python/ssrf/safe-1.py",
+      "language": "python",
+      "family": "ssrf",
+      "rule_id": "codeagent.python.ssrf.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "python/ssrf/safe-2.py",
+      "language": "python",
+      "family": "ssrf",
+      "rule_id": "codeagent.python.ssrf.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "python/ssrf/safe-3.py",
+      "language": "python",
+      "family": "ssrf",
+      "rule_id": "codeagent.python.ssrf.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "javascript/shell-injection/vulnerable-1.js",
+      "language": "javascript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.javascript.shell-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "javascript/shell-injection/vulnerable-2.js",
+      "language": "javascript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.javascript.shell-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "javascript/shell-injection/vulnerable-3.js",
+      "language": "javascript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.javascript.shell-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "javascript/shell-injection/safe-1.js",
+      "language": "javascript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.javascript.shell-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "javascript/shell-injection/safe-2.js",
+      "language": "javascript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.javascript.shell-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "javascript/shell-injection/safe-3.js",
+      "language": "javascript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.javascript.shell-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "javascript/path-traversal/vulnerable-1.js",
+      "language": "javascript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.javascript.path-traversal.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "javascript/path-traversal/vulnerable-2.js",
+      "language": "javascript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.javascript.path-traversal.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "javascript/path-traversal/vulnerable-3.js",
+      "language": "javascript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.javascript.path-traversal.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "javascript/path-traversal/safe-1.js",
+      "language": "javascript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.javascript.path-traversal.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "javascript/path-traversal/safe-2.js",
+      "language": "javascript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.javascript.path-traversal.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "javascript/path-traversal/safe-3.js",
+      "language": "javascript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.javascript.path-traversal.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "javascript/ssrf/vulnerable-1.js",
+      "language": "javascript",
+      "family": "ssrf",
+      "rule_id": "codeagent.javascript.ssrf.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "javascript/ssrf/vulnerable-2.js",
+      "language": "javascript",
+      "family": "ssrf",
+      "rule_id": "codeagent.javascript.ssrf.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "javascript/ssrf/vulnerable-3.js",
+      "language": "javascript",
+      "family": "ssrf",
+      "rule_id": "codeagent.javascript.ssrf.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "javascript/ssrf/safe-1.js",
+      "language": "javascript",
+      "family": "ssrf",
+      "rule_id": "codeagent.javascript.ssrf.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "javascript/ssrf/safe-2.js",
+      "language": "javascript",
+      "family": "ssrf",
+      "rule_id": "codeagent.javascript.ssrf.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "javascript/ssrf/safe-3.js",
+      "language": "javascript",
+      "family": "ssrf",
+      "rule_id": "codeagent.javascript.ssrf.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "typescript/shell-injection/vulnerable-1.ts",
+      "language": "typescript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.typescript.shell-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "typescript/shell-injection/vulnerable-2.ts",
+      "language": "typescript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.typescript.shell-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "typescript/shell-injection/vulnerable-3.ts",
+      "language": "typescript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.typescript.shell-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "typescript/shell-injection/safe-1.ts",
+      "language": "typescript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.typescript.shell-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "typescript/shell-injection/safe-2.ts",
+      "language": "typescript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.typescript.shell-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "typescript/shell-injection/safe-3.ts",
+      "language": "typescript",
+      "family": "shell-injection",
+      "rule_id": "codeagent.typescript.shell-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "typescript/path-traversal/vulnerable-1.ts",
+      "language": "typescript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.typescript.path-traversal.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "typescript/path-traversal/vulnerable-2.ts",
+      "language": "typescript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.typescript.path-traversal.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "typescript/path-traversal/vulnerable-3.ts",
+      "language": "typescript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.typescript.path-traversal.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "typescript/path-traversal/safe-1.ts",
+      "language": "typescript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.typescript.path-traversal.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "typescript/path-traversal/safe-2.ts",
+      "language": "typescript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.typescript.path-traversal.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "typescript/path-traversal/safe-3.ts",
+      "language": "typescript",
+      "family": "path-traversal",
+      "rule_id": "codeagent.typescript.path-traversal.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "typescript/ssrf/vulnerable-1.ts",
+      "language": "typescript",
+      "family": "ssrf",
+      "rule_id": "codeagent.typescript.ssrf.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "typescript/ssrf/vulnerable-2.ts",
+      "language": "typescript",
+      "family": "ssrf",
+      "rule_id": "codeagent.typescript.ssrf.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "typescript/ssrf/vulnerable-3.ts",
+      "language": "typescript",
+      "family": "ssrf",
+      "rule_id": "codeagent.typescript.ssrf.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "typescript/ssrf/safe-1.ts",
+      "language": "typescript",
+      "family": "ssrf",
+      "rule_id": "codeagent.typescript.ssrf.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "typescript/ssrf/safe-2.ts",
+      "language": "typescript",
+      "family": "ssrf",
+      "rule_id": "codeagent.typescript.ssrf.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "typescript/ssrf/safe-3.ts",
+      "language": "typescript",
+      "family": "ssrf",
+      "rule_id": "codeagent.typescript.ssrf.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "java/sql-injection/vulnerable-1.java",
+      "language": "java",
+      "family": "sql-injection",
+      "rule_id": "codeagent.java.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "java/sql-injection/vulnerable-2.java",
+      "language": "java",
+      "family": "sql-injection",
+      "rule_id": "codeagent.java.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "java/sql-injection/vulnerable-3.java",
+      "language": "java",
+      "family": "sql-injection",
+      "rule_id": "codeagent.java.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "java/sql-injection/safe-1.java",
+      "language": "java",
+      "family": "sql-injection",
+      "rule_id": "codeagent.java.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "java/sql-injection/safe-2.java",
+      "language": "java",
+      "family": "sql-injection",
+      "rule_id": "codeagent.java.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "java/sql-injection/safe-3.java",
+      "language": "java",
+      "family": "sql-injection",
+      "rule_id": "codeagent.java.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "java/unsafe-xml/vulnerable-1.java",
+      "language": "java",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.java.unsafe-xml.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "java/unsafe-xml/vulnerable-2.java",
+      "language": "java",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.java.unsafe-xml.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "java/unsafe-xml/vulnerable-3.java",
+      "language": "java",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.java.unsafe-xml.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "java/unsafe-xml/safe-1.java",
+      "language": "java",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.java.unsafe-xml.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "java/unsafe-xml/safe-2.java",
+      "language": "java",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.java.unsafe-xml.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "java/unsafe-xml/safe-3.java",
+      "language": "java",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.java.unsafe-xml.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "kotlin/sql-injection/vulnerable-1.kt",
+      "language": "kotlin",
+      "family": "sql-injection",
+      "rule_id": "codeagent.kotlin.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "kotlin/sql-injection/vulnerable-2.kt",
+      "language": "kotlin",
+      "family": "sql-injection",
+      "rule_id": "codeagent.kotlin.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "kotlin/sql-injection/vulnerable-3.kt",
+      "language": "kotlin",
+      "family": "sql-injection",
+      "rule_id": "codeagent.kotlin.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "kotlin/sql-injection/safe-1.kt",
+      "language": "kotlin",
+      "family": "sql-injection",
+      "rule_id": "codeagent.kotlin.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "kotlin/sql-injection/safe-2.kt",
+      "language": "kotlin",
+      "family": "sql-injection",
+      "rule_id": "codeagent.kotlin.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "kotlin/sql-injection/safe-3.kt",
+      "language": "kotlin",
+      "family": "sql-injection",
+      "rule_id": "codeagent.kotlin.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "kotlin/unsafe-xml/vulnerable-1.kt",
+      "language": "kotlin",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.kotlin.unsafe-xml.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "kotlin/unsafe-xml/vulnerable-2.kt",
+      "language": "kotlin",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.kotlin.unsafe-xml.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "kotlin/unsafe-xml/vulnerable-3.kt",
+      "language": "kotlin",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.kotlin.unsafe-xml.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "kotlin/unsafe-xml/safe-1.kt",
+      "language": "kotlin",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.kotlin.unsafe-xml.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "kotlin/unsafe-xml/safe-2.kt",
+      "language": "kotlin",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.kotlin.unsafe-xml.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "kotlin/unsafe-xml/safe-3.kt",
+      "language": "kotlin",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.kotlin.unsafe-xml.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "scala/sql-injection/vulnerable-1.scala",
+      "language": "scala",
+      "family": "sql-injection",
+      "rule_id": "codeagent.scala.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "scala/sql-injection/vulnerable-2.scala",
+      "language": "scala",
+      "family": "sql-injection",
+      "rule_id": "codeagent.scala.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "scala/sql-injection/vulnerable-3.scala",
+      "language": "scala",
+      "family": "sql-injection",
+      "rule_id": "codeagent.scala.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "scala/sql-injection/safe-1.scala",
+      "language": "scala",
+      "family": "sql-injection",
+      "rule_id": "codeagent.scala.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "scala/sql-injection/safe-2.scala",
+      "language": "scala",
+      "family": "sql-injection",
+      "rule_id": "codeagent.scala.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "scala/sql-injection/safe-3.scala",
+      "language": "scala",
+      "family": "sql-injection",
+      "rule_id": "codeagent.scala.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "scala/unsafe-xml/vulnerable-1.scala",
+      "language": "scala",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.scala.unsafe-xml.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "scala/unsafe-xml/vulnerable-2.scala",
+      "language": "scala",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.scala.unsafe-xml.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "scala/unsafe-xml/vulnerable-3.scala",
+      "language": "scala",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.scala.unsafe-xml.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "scala/unsafe-xml/safe-1.scala",
+      "language": "scala",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.scala.unsafe-xml.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "scala/unsafe-xml/safe-2.scala",
+      "language": "scala",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.scala.unsafe-xml.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "scala/unsafe-xml/safe-3.scala",
+      "language": "scala",
+      "family": "unsafe-xml",
+      "rule_id": "codeagent.scala.unsafe-xml.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "go/sql-injection/vulnerable-1.go",
+      "language": "go",
+      "family": "sql-injection",
+      "rule_id": "codeagent.go.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "go/sql-injection/vulnerable-2.go",
+      "language": "go",
+      "family": "sql-injection",
+      "rule_id": "codeagent.go.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "go/sql-injection/vulnerable-3.go",
+      "language": "go",
+      "family": "sql-injection",
+      "rule_id": "codeagent.go.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "go/sql-injection/safe-1.go",
+      "language": "go",
+      "family": "sql-injection",
+      "rule_id": "codeagent.go.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "go/sql-injection/safe-2.go",
+      "language": "go",
+      "family": "sql-injection",
+      "rule_id": "codeagent.go.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "go/sql-injection/safe-3.go",
+      "language": "go",
+      "family": "sql-injection",
+      "rule_id": "codeagent.go.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "go/ssrf/vulnerable-1.go",
+      "language": "go",
+      "family": "ssrf",
+      "rule_id": "codeagent.go.ssrf.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "go/ssrf/vulnerable-2.go",
+      "language": "go",
+      "family": "ssrf",
+      "rule_id": "codeagent.go.ssrf.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "go/ssrf/vulnerable-3.go",
+      "language": "go",
+      "family": "ssrf",
+      "rule_id": "codeagent.go.ssrf.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "go/ssrf/safe-1.go",
+      "language": "go",
+      "family": "ssrf",
+      "rule_id": "codeagent.go.ssrf.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "go/ssrf/safe-2.go",
+      "language": "go",
+      "family": "ssrf",
+      "rule_id": "codeagent.go.ssrf.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "go/ssrf/safe-3.go",
+      "language": "go",
+      "family": "ssrf",
+      "rule_id": "codeagent.go.ssrf.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "go/tls-validation/vulnerable-1.go",
+      "language": "go",
+      "family": "tls-validation",
+      "rule_id": "codeagent.go.tls-validation.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "go/tls-validation/vulnerable-2.go",
+      "language": "go",
+      "family": "tls-validation",
+      "rule_id": "codeagent.go.tls-validation.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "go/tls-validation/vulnerable-3.go",
+      "language": "go",
+      "family": "tls-validation",
+      "rule_id": "codeagent.go.tls-validation.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "go/tls-validation/safe-1.go",
+      "language": "go",
+      "family": "tls-validation",
+      "rule_id": "codeagent.go.tls-validation.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "go/tls-validation/safe-2.go",
+      "language": "go",
+      "family": "tls-validation",
+      "rule_id": "codeagent.go.tls-validation.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "go/tls-validation/safe-3.go",
+      "language": "go",
+      "family": "tls-validation",
+      "rule_id": "codeagent.go.tls-validation.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "c/format-string/vulnerable-1.c",
+      "language": "c",
+      "family": "format-string",
+      "rule_id": "codeagent.c.format-string.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "c/format-string/vulnerable-2.c",
+      "language": "c",
+      "family": "format-string",
+      "rule_id": "codeagent.c.format-string.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "c/format-string/vulnerable-3.c",
+      "language": "c",
+      "family": "format-string",
+      "rule_id": "codeagent.c.format-string.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "c/format-string/safe-1.c",
+      "language": "c",
+      "family": "format-string",
+      "rule_id": "codeagent.c.format-string.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "c/format-string/safe-2.c",
+      "language": "c",
+      "family": "format-string",
+      "rule_id": "codeagent.c.format-string.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "c/format-string/safe-3.c",
+      "language": "c",
+      "family": "format-string",
+      "rule_id": "codeagent.c.format-string.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "c/shell-injection/vulnerable-1.c",
+      "language": "c",
+      "family": "shell-injection",
+      "rule_id": "codeagent.c.shell-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "c/shell-injection/vulnerable-2.c",
+      "language": "c",
+      "family": "shell-injection",
+      "rule_id": "codeagent.c.shell-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "c/shell-injection/vulnerable-3.c",
+      "language": "c",
+      "family": "shell-injection",
+      "rule_id": "codeagent.c.shell-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "c/shell-injection/safe-1.c",
+      "language": "c",
+      "family": "shell-injection",
+      "rule_id": "codeagent.c.shell-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "c/shell-injection/safe-2.c",
+      "language": "c",
+      "family": "shell-injection",
+      "rule_id": "codeagent.c.shell-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "c/shell-injection/safe-3.c",
+      "language": "c",
+      "family": "shell-injection",
+      "rule_id": "codeagent.c.shell-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "cpp/format-string/vulnerable-1.cpp",
+      "language": "cpp",
+      "family": "format-string",
+      "rule_id": "codeagent.cpp.format-string.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "cpp/format-string/vulnerable-2.cpp",
+      "language": "cpp",
+      "family": "format-string",
+      "rule_id": "codeagent.cpp.format-string.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "cpp/format-string/vulnerable-3.cpp",
+      "language": "cpp",
+      "family": "format-string",
+      "rule_id": "codeagent.cpp.format-string.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "cpp/format-string/safe-1.cpp",
+      "language": "cpp",
+      "family": "format-string",
+      "rule_id": "codeagent.cpp.format-string.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "cpp/format-string/safe-2.cpp",
+      "language": "cpp",
+      "family": "format-string",
+      "rule_id": "codeagent.cpp.format-string.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "cpp/format-string/safe-3.cpp",
+      "language": "cpp",
+      "family": "format-string",
+      "rule_id": "codeagent.cpp.format-string.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "cpp/shell-injection/vulnerable-1.cpp",
+      "language": "cpp",
+      "family": "shell-injection",
+      "rule_id": "codeagent.cpp.shell-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "cpp/shell-injection/vulnerable-2.cpp",
+      "language": "cpp",
+      "family": "shell-injection",
+      "rule_id": "codeagent.cpp.shell-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "cpp/shell-injection/vulnerable-3.cpp",
+      "language": "cpp",
+      "family": "shell-injection",
+      "rule_id": "codeagent.cpp.shell-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "cpp/shell-injection/safe-1.cpp",
+      "language": "cpp",
+      "family": "shell-injection",
+      "rule_id": "codeagent.cpp.shell-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "cpp/shell-injection/safe-2.cpp",
+      "language": "cpp",
+      "family": "shell-injection",
+      "rule_id": "codeagent.cpp.shell-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "cpp/shell-injection/safe-3.cpp",
+      "language": "cpp",
+      "family": "shell-injection",
+      "rule_id": "codeagent.cpp.shell-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "ruby/sql-injection/vulnerable-1.rb",
+      "language": "ruby",
+      "family": "sql-injection",
+      "rule_id": "codeagent.ruby.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "ruby/sql-injection/vulnerable-2.rb",
+      "language": "ruby",
+      "family": "sql-injection",
+      "rule_id": "codeagent.ruby.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "ruby/sql-injection/vulnerable-3.rb",
+      "language": "ruby",
+      "family": "sql-injection",
+      "rule_id": "codeagent.ruby.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "ruby/sql-injection/safe-1.rb",
+      "language": "ruby",
+      "family": "sql-injection",
+      "rule_id": "codeagent.ruby.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "ruby/sql-injection/safe-2.rb",
+      "language": "ruby",
+      "family": "sql-injection",
+      "rule_id": "codeagent.ruby.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "ruby/sql-injection/safe-3.rb",
+      "language": "ruby",
+      "family": "sql-injection",
+      "rule_id": "codeagent.ruby.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "ruby/unsafe-deserialization/vulnerable-1.rb",
+      "language": "ruby",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.ruby.unsafe-deserialization.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "ruby/unsafe-deserialization/vulnerable-2.rb",
+      "language": "ruby",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.ruby.unsafe-deserialization.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "ruby/unsafe-deserialization/vulnerable-3.rb",
+      "language": "ruby",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.ruby.unsafe-deserialization.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "ruby/unsafe-deserialization/safe-1.rb",
+      "language": "ruby",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.ruby.unsafe-deserialization.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "ruby/unsafe-deserialization/safe-2.rb",
+      "language": "ruby",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.ruby.unsafe-deserialization.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "ruby/unsafe-deserialization/safe-3.rb",
+      "language": "ruby",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.ruby.unsafe-deserialization.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "php/sql-injection/vulnerable-1.php",
+      "language": "php",
+      "family": "sql-injection",
+      "rule_id": "codeagent.php.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "php/sql-injection/vulnerable-2.php",
+      "language": "php",
+      "family": "sql-injection",
+      "rule_id": "codeagent.php.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "php/sql-injection/vulnerable-3.php",
+      "language": "php",
+      "family": "sql-injection",
+      "rule_id": "codeagent.php.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "php/sql-injection/safe-1.php",
+      "language": "php",
+      "family": "sql-injection",
+      "rule_id": "codeagent.php.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "php/sql-injection/safe-2.php",
+      "language": "php",
+      "family": "sql-injection",
+      "rule_id": "codeagent.php.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "php/sql-injection/safe-3.php",
+      "language": "php",
+      "family": "sql-injection",
+      "rule_id": "codeagent.php.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "php/path-traversal/vulnerable-1.php",
+      "language": "php",
+      "family": "path-traversal",
+      "rule_id": "codeagent.php.path-traversal.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "php/path-traversal/vulnerable-2.php",
+      "language": "php",
+      "family": "path-traversal",
+      "rule_id": "codeagent.php.path-traversal.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "php/path-traversal/vulnerable-3.php",
+      "language": "php",
+      "family": "path-traversal",
+      "rule_id": "codeagent.php.path-traversal.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "php/path-traversal/safe-1.php",
+      "language": "php",
+      "family": "path-traversal",
+      "rule_id": "codeagent.php.path-traversal.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "php/path-traversal/safe-2.php",
+      "language": "php",
+      "family": "path-traversal",
+      "rule_id": "codeagent.php.path-traversal.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "php/path-traversal/safe-3.php",
+      "language": "php",
+      "family": "path-traversal",
+      "rule_id": "codeagent.php.path-traversal.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "swift/tls-validation/vulnerable-1.swift",
+      "language": "swift",
+      "family": "tls-validation",
+      "rule_id": "codeagent.swift.tls-validation.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "swift/tls-validation/vulnerable-2.swift",
+      "language": "swift",
+      "family": "tls-validation",
+      "rule_id": "codeagent.swift.tls-validation.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "swift/tls-validation/vulnerable-3.swift",
+      "language": "swift",
+      "family": "tls-validation",
+      "rule_id": "codeagent.swift.tls-validation.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "swift/tls-validation/safe-1.swift",
+      "language": "swift",
+      "family": "tls-validation",
+      "rule_id": "codeagent.swift.tls-validation.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "swift/tls-validation/safe-2.swift",
+      "language": "swift",
+      "family": "tls-validation",
+      "rule_id": "codeagent.swift.tls-validation.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "swift/tls-validation/safe-3.swift",
+      "language": "swift",
+      "family": "tls-validation",
+      "rule_id": "codeagent.swift.tls-validation.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "swift/unsafe-deserialization/vulnerable-1.swift",
+      "language": "swift",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.swift.unsafe-deserialization.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "swift/unsafe-deserialization/vulnerable-2.swift",
+      "language": "swift",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.swift.unsafe-deserialization.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "swift/unsafe-deserialization/vulnerable-3.swift",
+      "language": "swift",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.swift.unsafe-deserialization.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "swift/unsafe-deserialization/safe-1.swift",
+      "language": "swift",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.swift.unsafe-deserialization.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "swift/unsafe-deserialization/safe-2.swift",
+      "language": "swift",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.swift.unsafe-deserialization.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "swift/unsafe-deserialization/safe-3.swift",
+      "language": "swift",
+      "family": "unsafe-deserialization",
+      "rule_id": "codeagent.swift.unsafe-deserialization.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "rust/sql-injection/vulnerable-1.rs",
+      "language": "rust",
+      "family": "sql-injection",
+      "rule_id": "codeagent.rust.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "rust/sql-injection/vulnerable-2.rs",
+      "language": "rust",
+      "family": "sql-injection",
+      "rule_id": "codeagent.rust.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "rust/sql-injection/vulnerable-3.rs",
+      "language": "rust",
+      "family": "sql-injection",
+      "rule_id": "codeagent.rust.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "rust/sql-injection/safe-1.rs",
+      "language": "rust",
+      "family": "sql-injection",
+      "rule_id": "codeagent.rust.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "rust/sql-injection/safe-2.rs",
+      "language": "rust",
+      "family": "sql-injection",
+      "rule_id": "codeagent.rust.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "rust/sql-injection/safe-3.rs",
+      "language": "rust",
+      "family": "sql-injection",
+      "rule_id": "codeagent.rust.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "rust/tls-validation/vulnerable-1.rs",
+      "language": "rust",
+      "family": "tls-validation",
+      "rule_id": "codeagent.rust.tls-validation.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "rust/tls-validation/vulnerable-2.rs",
+      "language": "rust",
+      "family": "tls-validation",
+      "rule_id": "codeagent.rust.tls-validation.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "rust/tls-validation/vulnerable-3.rs",
+      "language": "rust",
+      "family": "tls-validation",
+      "rule_id": "codeagent.rust.tls-validation.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "rust/tls-validation/safe-1.rs",
+      "language": "rust",
+      "family": "tls-validation",
+      "rule_id": "codeagent.rust.tls-validation.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "rust/tls-validation/safe-2.rs",
+      "language": "rust",
+      "family": "tls-validation",
+      "rule_id": "codeagent.rust.tls-validation.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "rust/tls-validation/safe-3.rs",
+      "language": "rust",
+      "family": "tls-validation",
+      "rule_id": "codeagent.rust.tls-validation.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "bash/dynamic-evaluation/vulnerable-1.sh",
+      "language": "bash",
+      "family": "dynamic-evaluation",
+      "rule_id": "codeagent.bash.dynamic-evaluation.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "bash/dynamic-evaluation/vulnerable-2.sh",
+      "language": "bash",
+      "family": "dynamic-evaluation",
+      "rule_id": "codeagent.bash.dynamic-evaluation.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "bash/dynamic-evaluation/vulnerable-3.sh",
+      "language": "bash",
+      "family": "dynamic-evaluation",
+      "rule_id": "codeagent.bash.dynamic-evaluation.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "bash/dynamic-evaluation/safe-1.sh",
+      "language": "bash",
+      "family": "dynamic-evaluation",
+      "rule_id": "codeagent.bash.dynamic-evaluation.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "bash/dynamic-evaluation/safe-2.sh",
+      "language": "bash",
+      "family": "dynamic-evaluation",
+      "rule_id": "codeagent.bash.dynamic-evaluation.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "bash/dynamic-evaluation/safe-3.sh",
+      "language": "bash",
+      "family": "dynamic-evaluation",
+      "rule_id": "codeagent.bash.dynamic-evaluation.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "bash/tls-validation/vulnerable-1.sh",
+      "language": "bash",
+      "family": "tls-validation",
+      "rule_id": "codeagent.bash.tls-validation.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "bash/tls-validation/vulnerable-2.sh",
+      "language": "bash",
+      "family": "tls-validation",
+      "rule_id": "codeagent.bash.tls-validation.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "bash/tls-validation/vulnerable-3.sh",
+      "language": "bash",
+      "family": "tls-validation",
+      "rule_id": "codeagent.bash.tls-validation.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "bash/tls-validation/safe-1.sh",
+      "language": "bash",
+      "family": "tls-validation",
+      "rule_id": "codeagent.bash.tls-validation.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "bash/tls-validation/safe-2.sh",
+      "language": "bash",
+      "family": "tls-validation",
+      "rule_id": "codeagent.bash.tls-validation.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "bash/tls-validation/safe-3.sh",
+      "language": "bash",
+      "family": "tls-validation",
+      "rule_id": "codeagent.bash.tls-validation.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "csharp/sql-injection/vulnerable-1.cs",
+      "language": "csharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "csharp/sql-injection/vulnerable-2.cs",
+      "language": "csharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "csharp/sql-injection/vulnerable-3.cs",
+      "language": "csharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "csharp/sql-injection/safe-1.cs",
+      "language": "csharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "csharp/sql-injection/safe-2.cs",
+      "language": "csharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "csharp/sql-injection/safe-3.cs",
+      "language": "csharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "csharp/shell-injection/vulnerable-1.cs",
+      "language": "csharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "csharp/shell-injection/vulnerable-2.cs",
+      "language": "csharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "csharp/shell-injection/vulnerable-3.cs",
+      "language": "csharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "csharp/shell-injection/safe-1.cs",
+      "language": "csharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "csharp/shell-injection/safe-2.cs",
+      "language": "csharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "csharp/shell-injection/safe-3.cs",
+      "language": "csharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "vb/sql-injection/vulnerable-1.vb",
+      "language": "vb",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "vb/sql-injection/vulnerable-2.vb",
+      "language": "vb",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "vb/sql-injection/vulnerable-3.vb",
+      "language": "vb",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "vb/sql-injection/safe-1.vb",
+      "language": "vb",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "vb/sql-injection/safe-2.vb",
+      "language": "vb",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "vb/sql-injection/safe-3.vb",
+      "language": "vb",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "vb/shell-injection/vulnerable-1.vb",
+      "language": "vb",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "vb/shell-injection/vulnerable-2.vb",
+      "language": "vb",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "vb/shell-injection/vulnerable-3.vb",
+      "language": "vb",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "vb/shell-injection/safe-1.vb",
+      "language": "vb",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "vb/shell-injection/safe-2.vb",
+      "language": "vb",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "vb/shell-injection/safe-3.vb",
+      "language": "vb",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "fsharp/sql-injection/vulnerable-1.fs",
+      "language": "fsharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "fsharp/sql-injection/vulnerable-2.fs",
+      "language": "fsharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "fsharp/sql-injection/vulnerable-3.fs",
+      "language": "fsharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "fsharp/sql-injection/safe-1.fs",
+      "language": "fsharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "fsharp/sql-injection/safe-2.fs",
+      "language": "fsharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "fsharp/sql-injection/safe-3.fs",
+      "language": "fsharp",
+      "family": "sql-injection",
+      "rule_id": "dotnet.sql-injection.v2",
+      "expected": false,
+      "case": 3
+    },
+    {
+      "path": "fsharp/shell-injection/vulnerable-1.fs",
+      "language": "fsharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 1
+    },
+    {
+      "path": "fsharp/shell-injection/vulnerable-2.fs",
+      "language": "fsharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 2
+    },
+    {
+      "path": "fsharp/shell-injection/vulnerable-3.fs",
+      "language": "fsharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": true,
+      "case": 3
+    },
+    {
+      "path": "fsharp/shell-injection/safe-1.fs",
+      "language": "fsharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 1
+    },
+    {
+      "path": "fsharp/shell-injection/safe-2.fs",
+      "language": "fsharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 2
+    },
+    {
+      "path": "fsharp/shell-injection/safe-3.fs",
+      "language": "fsharp",
+      "family": "shell-injection",
+      "rule_id": "dotnet.shell-injection.v2",
+      "expected": false,
+      "case": 3
+    }
+  ]
+}

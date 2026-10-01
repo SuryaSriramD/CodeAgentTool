@@ -1,0 +1,1061 @@
+{
+  "language": "bash",
+  "cases": [
+    {
+      "id": "v2-bash-vulnerable-01",
+      "language": "bash",
+      "vulnerable": true,
+      "scenario": "Job dispatcher sources a tenant-uploaded environment manifest",
+      "files": {
+        "bin/dispatch-job.sh": "#!/usr/bin/env bash\nset -euo pipefail\nmanifest=/srv/jobs/current.env\nif [[ ! -f \"$manifest\" ]]; then\n    printf '%s\\n' 'job manifest missing' >&2\n    exit 2\nfi\nsource \"$manifest\"\n: \"${TENANT:?tenant missing}\"\n: \"${REGION:?region missing}\"\ncase \"$REGION\" in eu|us) ;; *) exit 2 ;; esac\nprintf 'tenant=%s region=%s\\n' \"$TENANT\" \"$REGION\"\n"
+      },
+      "expected_findings": [
+        {
+          "family": "dynamic-evaluation",
+          "cwe": "CWE-95",
+          "path": "bin/dispatch-job.sh",
+          "line_start": 8,
+          "line_end": 8
+        }
+      ],
+      "rationale": "The uploaded file is a data manifest, but source executes it as Bash under the dispatcher account before checking any values.",
+      "remediation_constraints": [
+        "Parse the two documented keys as data; allow tenant IDs [A-Za-z0-9_-]{1,32} and region eu or us.",
+        "Reject duplicates, unknown keys and missing required fields before output."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. Manifest is at most 1 KiB, UTF-8 ASCII subset, and a private immutable snapshot supplied by the upload service. Its format is key=value lines with no quoting or expansion."
+      },
+      "operation_contract": {
+        "purpose": "Read a job manifest containing exactly TENANT and REGION key/value fields and emit a dispatch record.",
+        "trust_boundary": "A tenant can upload manifest content but cannot execute worker code or modify the trusted manifest pathname.",
+        "legitimate_examples": [
+          {
+            "input": "TENANT=acme followed by REGION=eu",
+            "expected": "Emit tenant=acme region=eu."
+          },
+          {
+            "input": "A line containing shell substitution",
+            "expected": "Reject as invalid manifest data without evaluating it."
+          }
+        ],
+        "permitted_changes": [
+          "Parse the two documented keys as data; allow tenant IDs [A-Za-z0-9_-]{1,32} and region eu or us.",
+          "Reject duplicates, unknown keys and missing required fields before output."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Checking REGION after sourcing is too late to prevent execution.",
+        "Do not replace source with eval of the same text."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Dynamic evaluation of a source-controlled manifest file.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-untrusted-env-manifest-source",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The unsafe boundary is a configuration file treated as a program, with an explicit finite data grammar and post-execution checks. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-vulnerable-02",
+      "language": "bash",
+      "vulnerable": true,
+      "scenario": "Tag exporter builds an array by evaluating a comma-separated request",
+      "files": {
+        "bin/export-tags.sh": "#!/usr/bin/env bash\nset -euo pipefail\nif (( $# != 1 )) || (( ${#1} > 256 )); then\n    exit 2\nfi\nselection=${1//,/ }\nlabels=()\neval \"labels=($selection)\"\nif (( ${#labels[@]} == 0 || ${#labels[@]} > 10 )); then\n    exit 2\nfi\nfor label in \"${labels[@]}\"; do\n    printf 'tag=%s\\n' \"$label\"\ndone\n"
+      },
+      "expected_findings": [
+        {
+          "family": "dynamic-evaluation",
+          "cwe": "CWE-95",
+          "path": "bin/export-tags.sh",
+          "line_start": 8,
+          "line_end": 8
+        }
+      ],
+      "rationale": "Comma replacement does not restrict the resulting shell language. eval performs substitutions and executes syntax while building what should be a list of literal identifiers.",
+      "remediation_constraints": [
+        "Split on commas without eval and validate each identifier against [A-Za-z0-9_-]{1,32}.",
+        "Preserve order and duplicate tags; reject invalid input atomically before output."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. The API contract is comma-delimited ASCII identifiers without whitespace or escaping; bounds are enforced in the script."
+      },
+      "operation_contract": {
+        "purpose": "Emit one tag record for each of up to ten comma-separated tag identifiers.",
+        "trust_boundary": "A dashboard user supplies the tag selection string, not a Bash array expression.",
+        "legitimate_examples": [
+          {
+            "input": "east,stable",
+            "expected": "Emit tag=east then tag=stable on separate lines."
+          },
+          {
+            "input": "An empty tag between commas",
+            "expected": "Reject the entire request without partial output."
+          }
+        ],
+        "permitted_changes": [
+          "Split on commas without eval and validate each identifier against [A-Za-z0-9_-]{1,32}.",
+          "Preserve order and duplicate tags; reject invalid input atomically before output."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Changing eval quoting cannot make arbitrary array source into safe data.",
+        "Using read without preserving empty fields can silently accept malformed lists."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Dynamic evaluation during collection construction.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-comma-list-evaluated-array",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A collection parser accidentally invokes the shell language; its valid grammar, empty-item handling and duplicate behavior are explicit. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-vulnerable-03",
+      "language": "bash",
+      "vulnerable": true,
+      "scenario": "A remote ticket lookup passes a local argument into an SSH shell command",
+      "files": {
+        "bin/remote-ticket.sh": "#!/usr/bin/env bash\nset -euo pipefail\nif (( $# != 1 )); then exit 2; fi\nticket=$1\nif (( ${#ticket} == 0 || ${#ticket} > 80 )); then\n    printf '%s\\n' 'invalid ticket length' >&2\n    exit 2\nfi\nremote_user=report\nremote_host=reports.internal.example\n/usr/bin/ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -- \\\n    \"$remote_user@$remote_host\" /usr/local/bin/ticket-summary \"$ticket\"\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "bin/remote-ticket.sh",
+          "line_start": 12,
+          "line_end": 12
+        }
+      ],
+      "rationale": "Local quoting preserves one local ssh argument, but SSH concatenates command arguments for execution by the remote shell. The untrusted ticket value can therefore become remote shell syntax.",
+      "remediation_constraints": [
+        "Use a fixed remote command with length-delimited data on stdin or a documented correctly encoded protocol.",
+        "Retain strict host-key verification and propagate the helper exit status."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. OpenSSH 9.6; a pinned known_hosts entry and service-owned SSH key are installed; the remote account has a normal POSIX shell and no forced-command defense. The helper treats ticket data literally."
+      },
+      "operation_contract": {
+        "purpose": "Return a remote summary for one literal ticket reference.",
+        "trust_boundary": "A support user supplies a ticket reference and is authorized for summaries only; the SSH account may execute the trusted query helper but not arbitrary user programs by policy.",
+        "legitimate_examples": [
+          {
+            "input": "Ticket CASE-204",
+            "expected": "Return the helper summary for CASE-204."
+          },
+          {
+            "input": "Ticket Owner's followup",
+            "expected": "Pass the apostrophe and space literally to the remote helper."
+          }
+        ],
+        "permitted_changes": [
+          "Use a fixed remote command with length-delimited data on stdin or a documented correctly encoded protocol.",
+          "Retain strict host-key verification and propagate the helper exit status."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Double-quoting the local variable does not preserve an argument boundary through the remote shell.",
+        "Disabling host-key checking to make automation work is a separate regression."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Remote shell construction across SSH, including the second parsing boundary.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-ssh-remote-command-argument",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The injection occurs on a second host after local argv construction, distinguishing it from local eval and unquoted-shell examples. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://man.openbsd.org/ssh.1",
+          "https://www.gnu.org/software/bash/manual/bash.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-vulnerable-04",
+      "language": "bash",
+      "vulnerable": true,
+      "scenario": "Production inventory download explicitly disables certificate verification",
+      "files": {
+        "bin/fetch-inventory.sh": "#!/usr/bin/env bash\nset -euo pipefail\noutput=/srv/inventory/current.json\nstaging=$(/usr/bin/mktemp /srv/inventory/pending.XXXXXX)\ntrap '/usr/bin/rm -f -- \"$staging\"' EXIT\noptions=(--fail --silent --show-error --max-time 20)\noptions+=(--proto '=https' --proto-redir '=https')\noptions+=(--insecure)\n/usr/bin/curl \"${options[@]}\" \\\n    https://inventory.example.org/current.json --output \"$staging\"\n/usr/bin/mv -- \"$staging\" \"$output\"\nprintf '%s\\n' 'inventory updated'\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "bin/fetch-inventory.sh",
+          "line_start": 8,
+          "line_end": 8
+        }
+      ],
+      "rationale": "HTTPS-only protocol restrictions and atomic replacement do not authenticate the server when --insecure disables certificate and hostname checks.",
+      "remediation_constraints": [
+        "Remove insecure verification bypass and use the maintained system CA store or an explicitly managed private CA.",
+        "Keep HTTPS restrictions, deadline, failure handling and atomic replacement."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. curl 8.5; private service-owned /srv/inventory directory on one filesystem; files are bounded by a caller download quota; JSON is data and never sourced or evaluated."
+      },
+      "operation_contract": {
+        "purpose": "Download authenticated inventory metadata and replace the current copy only after transport success.",
+        "trust_boundary": "An active network attacker must not substitute inventory content; the URL and destination are operator-owned.",
+        "legitimate_examples": [
+          {
+            "input": "A valid HTTPS endpoint returns JSON",
+            "expected": "Replace current.json after a successful transfer."
+          },
+          {
+            "input": "Endpoint presents an untrusted certificate",
+            "expected": "Fail and preserve the previous current.json."
+          }
+        ],
+        "permitted_changes": [
+          "Remove insecure verification bypass and use the maintained system CA store or an explicitly managed private CA.",
+          "Keep HTTPS restrictions, deadline, failure handling and atomic replacement."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Switching to HTTP avoids certificate errors by removing authentication entirely.",
+        "Writing directly to current.json can destroy the last good copy on transfer failure."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "TLS verification and update atomicity, not the inventory application schema.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-inventory-tls-atomic-download",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A seemingly careful download pipeline already has staging and protocol restrictions, isolating the remaining certificate-verification failure. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-vulnerable-05",
+      "language": "bash",
+      "vulnerable": true,
+      "scenario": "Tenant branding text becomes the builtin printf program",
+      "files": {
+        "bin/status-banner.sh": "#!/usr/bin/env bash\nset -euo pipefail\nif (( $# != 2 )); then exit 2; fi\nbrand=$1\nstate=$2\nif (( ${#brand} > 80 )); then exit 2; fi\ncase \"$state\" in ready|busy|offline) ;; *) exit 2 ;; esac\nprintf '%s' 'status: '\nprintf \"$brand\"\nprintf ' [%s]\\n' \"$state\"\n"
+      },
+      "expected_findings": [
+        {
+          "family": "format-string",
+          "cwe": "CWE-134",
+          "path": "bin/status-banner.sh",
+          "line_start": 9,
+          "line_end": 9
+        }
+      ],
+      "rationale": "The tenant brand is interpreted as a Bash printf format, so percent sequences change output or trigger formatting errors instead of remaining literal. This is an output-integrity issue, not a claim of C-style arbitrary memory writes.",
+      "remediation_constraints": [
+        "Use a fixed %s format for branding.",
+        "Preserve every accepted brand character and the validated state layout."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. Branding contains no CR/LF or NUL and is rendered as terminal plain text; ingress also rejects terminal escape/control characters."
+      },
+      "operation_contract": {
+        "purpose": "Render a literal bounded tenant brand followed by a validated status label.",
+        "trust_boundary": "Tenants control display branding but not formatting directives or status values.",
+        "legitimate_examples": [
+          {
+            "input": "Brand 100% Studio, state ready",
+            "expected": "Print status: 100% Studio [ready] and newline."
+          },
+          {
+            "input": "Brand %s%s, state busy",
+            "expected": "Print those percent sequences literally."
+          }
+        ],
+        "permitted_changes": [
+          "Use a fixed %s format for branding.",
+          "Preserve every accepted brand character and the validated state layout."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Do not claim that Bash printf has the same memory-corruption impact as C printf.",
+        "Escaping only a subset of percent sequences leaves format interpretation."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Bash builtin formatting and literal output integrity; severity must reflect actual shell-builtin behavior.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-branding-printf-output-integrity",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The effect is a bounded shell-builtin output violation with constrained severity, independent of variadic C memory hazards. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-vulnerable-06",
+      "language": "bash",
+      "vulnerable": true,
+      "scenario": "A certificate-expiry job interpolates a domain into an arithmetic shell command",
+      "files": {
+        "bin/certificate-days.sh": "#!/usr/bin/env bash\nset -euo pipefail\nif (( $# != 1 )); then exit 2; fi\ndomain=$1\nif (( ${#domain} > 253 )); then exit 2; fi\ncase \"$domain\" in\n    *$'\\n'*|*'/'*) printf '%s\\n' 'invalid domain' >&2; exit 2 ;;\nesac\ncommand=\"/usr/bin/openssl x509 -enddate -noout -in /srv/certificates/$domain.pem\"\nresult=$(/bin/sh -c \"$command\")\nprintf '%s\\n' \"$result\"\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "bin/certificate-days.sh",
+          "line_start": 10,
+          "line_end": 10
+        }
+      ],
+      "rationale": "The path separator and newline checks do not constrain the domain to DNS-label characters. Shell substitutions and operators can survive into the second shell despite the fixed path prefix and suffix.",
+      "remediation_constraints": [
+        "Validate the documented DNS-name grammar and invoke openssl directly with separate arguments.",
+        "Preserve fixed root/suffix selection and propagate certificate parse errors."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. OpenSSL 3.0; ASCII DNS names only with labels 1..63 chars, no leading/trailing hyphen, total at most 253; caller authorizes the exact name; private certificate directory is stable and has no symlinks."
+      },
+      "operation_contract": {
+        "purpose": "Return the notAfter field for a certificate selected by an authorized ASCII DNS name.",
+        "trust_boundary": "An operator with certificate-view permission supplies a domain name but may not execute service-account commands.",
+        "legitimate_examples": [
+          {
+            "input": "Domain api.example.org",
+            "expected": "Read only /srv/certificates/api.example.org.pem and return its expiry line."
+          },
+          {
+            "input": "Domain containing shell punctuation outside DNS-name grammar",
+            "expected": "Reject before invoking a helper."
+          }
+        ],
+        "permitted_changes": [
+          "Validate the documented DNS-name grammar and invoke openssl directly with separate arguments.",
+          "Preserve fixed root/suffix selection and propagate certificate parse errors."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Rejecting slash prevents one path escape but not shell expansion.",
+        "Do not accept an arbitrary certificate path or change the operation into network retrieval."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Shell construction from a constrained identifier whose current validation is incomplete.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-certificate-identifier-shell-validation",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The case concerns incomplete validation of a DNS identifier mapped to a local certificate, with a closed root and exact certificate-view permission rather than free-form log search. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-safe-01",
+      "language": "bash",
+      "vulnerable": false,
+      "scenario": "Image resize options are selected by a closed mode and sent as argv",
+      "files": {
+        "bin/thumbnail-mode.sh": "#!/usr/bin/env bash\nset -euo pipefail\nif (( $# != 1 )); then exit 2; fi\ncase \"$1\" in\n    avatar) geometry='96x96>' ;;\n    preview) geometry='640x480>' ;;\n    *) printf '%s\\n' 'unknown mode' >&2; exit 2 ;;\nesac\ninput=/srv/images/current.png\noutput=/srv/images/thumb.png\narguments=(\"$input\" -resize \"$geometry\" \"$output\")\n/usr/bin/convert \"${arguments[@]}\"\n"
+      },
+      "expected_findings": [],
+      "rationale": "Only fixed geometry values are selected, and the array preserves argument boundaries without eval or a shell program string. Filenames are private service constants.",
+      "remediation_constraints": [
+        "Keep closed mode mapping, quoted array expansion and fixed paths.",
+        "Preserve greater-than resize semantics, which avoid enlarging already smaller images."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. ImageMagick 6.9 convert is trusted; the caller stages a valid bounded PNG in a private directory and imposes processing limits."
+      },
+      "operation_contract": {
+        "purpose": "Resize a fixed staged image according to one of two public thumbnail modes.",
+        "trust_boundary": "A user selects avatar or preview but cannot supply geometry syntax, executable names or paths.",
+        "legitimate_examples": [
+          {
+            "input": "Mode avatar",
+            "expected": "Invoke conversion with the exact 96x96> geometry argument."
+          },
+          {
+            "input": "Mode preview;id",
+            "expected": "Reject before invoking convert."
+          }
+        ],
+        "permitted_changes": [
+          "Keep closed mode mapping, quoted array expansion and fixed paths.",
+          "Preserve greater-than resize semantics, which avoid enlarging already smaller images."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Unquoted array expansion could split or reinterpret arguments.",
+        "The > inside a quoted argument is data, not shell redirection."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Process argument construction; image decoder correctness is outside this source case.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-closed-geometry-argv",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A shell-looking redirection character is legitimately part of a fixed downstream geometry argument and must not be mistaken for evaluated shell syntax. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-safe-02",
+      "language": "bash",
+      "vulnerable": false,
+      "scenario": "TLS health check uses an explicit private CA and refuses redirect downgrades",
+      "files": {
+        "bin/check-service.sh": "#!/usr/bin/env bash\nset -euo pipefail\nca=/etc/codeagent/team-ca.pem\nif [[ ! -r \"$ca\" ]]; then\n    printf '%s\\n' 'team CA unavailable' >&2\n    exit 2\nfi\n/usr/bin/curl --fail --silent --show-error --max-time 5 \\\n    --proto '=https' --proto-redir '=https' \\\n    --cacert \"$ca\" --head \\\n    https://scanner.internal.example/health >/dev/null\nprintf '%s\\n' 'reachable'\n"
+      },
+      "expected_findings": [],
+      "rationale": "The trusted CA file narrows certificate trust without disabling verification. HTTPS protocol restrictions, a fixed hostname and no -L redirect following retain authenticated transport.",
+      "remediation_constraints": [
+        "Retain certificate and hostname verification and the deadline.",
+        "Fail when the CA file is unavailable; do not fall back to insecure mode."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. curl 8.5 with its normal TLS backend; the CA file is a nonempty administrator-owned PEM trust bundle."
+      },
+      "operation_contract": {
+        "purpose": "Confirm the fixed team scanner health endpoint is reachable over verified HTTPS.",
+        "trust_boundary": "The network is untrusted; the CA file and hostname are administrator-controlled.",
+        "legitimate_examples": [
+          {
+            "input": "Trusted endpoint returns HTTP 204",
+            "expected": "Print reachable and exit 0."
+          },
+          {
+            "input": "Wrong-host or untrusted certificate",
+            "expected": "Exit nonzero without printing reachable."
+          }
+        ],
+        "permitted_changes": [
+          "Retain certificate and hostname verification and the deadline.",
+          "Fail when the CA file is unavailable; do not fall back to insecure mode."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A private CA is not equivalent to --insecure.",
+        "Printing success after suppressing curl failure misrepresents readiness."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "TLS configuration and explicit synthetic health request semantics.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-private-ca-head-check",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The safe case uses a deliberately private trust root with a HEAD request rather than replacing verification with an unconditional bypass. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-safe-03",
+      "language": "bash",
+      "vulnerable": false,
+      "scenario": "Artifact names are NUL-delimited data in a shell loop",
+      "files": {
+        "bin/list-artifacts.sh": "#!/usr/bin/env bash\nset -euo pipefail\nroot=/srv/artifacts/public\nif [[ ! -d \"$root\" ]]; then exit 2; fi\ncount=0\nwhile IFS= read -r -d '' name; do\n    printf '%s\\0' \"${name##*/}\"\n    ((count+=1))\ndone < <(/usr/bin/find \"$root\" -maxdepth 1 -type f -print0)\nprintf 'listed=%d\\n' \"$count\" >&2\n"
+      },
+      "expected_findings": [],
+      "rationale": "Filenames are consumed as NUL-delimited bytes with read -r and printed as data through a fixed format. Whitespace, backslashes and shell-looking names are never evaluated.",
+      "remediation_constraints": [
+        "Preserve NUL-delimited output, depth one and regular-file filtering.",
+        "Keep filename data out of eval or format positions."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. GNU findutils 4.9; root exists on a stable readable local filesystem, and no permission/read errors occur during this bounded operation."
+      },
+      "operation_contract": {
+        "purpose": "List basenames of direct regular public artifacts as a NUL-delimited stream and report the count on stderr.",
+        "trust_boundary": "Uploaders may choose artifact names but cannot modify the private root directory or insert symlinks during this listing.",
+        "legitimate_examples": [
+          {
+            "input": "Files named a b and $(note)",
+            "expected": "Emit both literal names separated by NUL, with listed=2 on stderr."
+          },
+          {
+            "input": "A nested directory containing a file",
+            "expected": "Do not list the nested file."
+          }
+        ],
+        "permitted_changes": [
+          "Preserve NUL-delimited output, depth one and regular-file filtering.",
+          "Keep filename data out of eval or format positions."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Line-delimited parsing would corrupt names containing newline.",
+        "The count diagnostic must stay off the machine-readable stdout stream."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Safe filename data handling; snapshot availability failures are excluded explicitly.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-nul-filename-enumeration",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The operation handles arbitrary filename characters using NUL framing and separate diagnostic output rather than attempting ad hoc escaping. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-safe-04",
+      "language": "bash",
+      "vulnerable": false,
+      "scenario": "A numeric batch size is validated before decimal arithmetic",
+      "files": {
+        "bin/batch-window.sh": "#!/usr/bin/env bash\nset -euo pipefail\nif (( $# != 1 )); then exit 2; fi\nvalue=$1\nif [[ ! \"$value\" =~ ^[0-9]{1,3}$ ]]; then\n    printf '%s\\n' 'decimal batch size required' >&2\n    exit 2\nfi\nsize=$((10#$value))\nif (( size < 1 || size > 200 )); then exit 2; fi\nfor ((start=0; start<1000; start+=size)); do\n    end=$((start+size))\n    if (( end > 1000 )); then end=1000; fi\n    printf '%d:%d\\n' \"$start\" \"$end\"\ndone\n"
+      },
+      "expected_findings": [],
+      "rationale": "The anchored digit-only grammar limits length before arithmetic evaluation, and 10# explicitly chooses decimal. Arbitrary Bash arithmetic expressions cannot reach the evaluator.",
+      "remediation_constraints": [
+        "Keep strict grammar before arithmetic and explicit decimal interpretation.",
+        "Preserve nonoverlapping half-open windows and clamp the final endpoint to 1000."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. GNU Bash 5.2 integer arithmetic; all values remain under 1200 and cannot overflow machine integers."
+      },
+      "operation_contract": {
+        "purpose": "Emit half-open batch windows covering exactly the integer interval 0..1000.",
+        "trust_boundary": "A caller controls one decimal batch-size string between 1 and 200.",
+        "legitimate_examples": [
+          {
+            "input": "008",
+            "expected": "Treat as decimal eight and begin with 0:8."
+          },
+          {
+            "input": "1+2",
+            "expected": "Reject as nondecimal input rather than evaluate an expression."
+          }
+        ],
+        "permitted_changes": [
+          "Keep strict grammar before arithmetic and explicit decimal interpretation.",
+          "Preserve nonoverlapping half-open windows and clamp the final endpoint to 1000."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Removing 10# changes leading-zero values to octal.",
+        "Bash arithmetic is an evaluator; the preceding narrow grammar is part of the safety proof."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Validated arithmetic input and shell evaluation false-positive control.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-decimal-batch-arithmetic",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A legitimate arithmetic evaluator is safe only because its input grammar and numeric range are established before use. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-safe-05",
+      "language": "bash",
+      "vulnerable": false,
+      "scenario": "A configuration reader handles literal key/value text without sourcing",
+      "files": {
+        "bin/read-theme.sh": "#!/usr/bin/env bash\nset -euo pipefail\nfile=/srv/preferences/theme.conf\ntheme=\nwhile IFS='=' read -r key value || [[ -n \"$key$value\" ]]; do\n    if [[ \"$key\" != theme || -n \"$theme\" ]]; then exit 2; fi\n    case \"$value\" in light|dark) theme=$value ;; *) exit 2 ;; esac\ndone < \"$file\"\nif [[ -z \"$theme\" ]]; then exit 2; fi\nprintf '%s\\n' \"$theme\"\n"
+      },
+      "expected_findings": [],
+      "rationale": "The reader treats the file as data, accepts exactly one theme key with a closed value set, and never sources or evaluates its content.",
+      "remediation_constraints": [
+        "Retain one-key/one-value validation and non-evaluating parsing.",
+        "Preserve support for a missing final newline."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. The private file is an immutable snapshot of at most 64 bytes, contains ASCII without NUL, and is readable by the service."
+      },
+      "operation_contract": {
+        "purpose": "Read exactly one persisted theme preference, including a final line without a newline.",
+        "trust_boundary": "A user can update the preference file contents through a size-limited save API; the path is fixed.",
+        "legitimate_examples": [
+          {
+            "input": "theme=dark without a trailing newline",
+            "expected": "Print dark."
+          },
+          {
+            "input": "Two theme lines or an unknown key",
+            "expected": "Reject without output."
+          }
+        ],
+        "permitted_changes": [
+          "Retain one-key/one-value validation and non-evaluating parsing.",
+          "Preserve support for a missing final newline."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Replacing the parser with source gives data file contents command privileges.",
+        "A while-read loop without the EOF condition drops the last unterminated line."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Data-only configuration parsing and duplicate-key rejection.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-single-preference-data-reader",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This is a single explicit application preference grammar, not a safe twin of the multi-field job dispatch manifest. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-bash-safe-06",
+      "language": "bash",
+      "vulnerable": false,
+      "scenario": "An HTTPS package checksum is compared as data after a trusted download",
+      "files": {
+        "bin/check-local-digest.sh": "#!/usr/bin/env bash\nset -euo pipefail\nif (( $# != 1 )); then exit 2; fi\nexpected=$1\nif [[ ! \"$expected\" =~ ^[0-9a-f]{64}$ ]]; then\n    printf '%s\\n' 'invalid digest' >&2\n    exit 2\nfi\nresult=$(/usr/bin/sha256sum -- /srv/packages/staged.bin)\nactual=${result%% *}\nif [[ \"$actual\" != \"$expected\" ]]; then\n    printf '%s\\n' 'digest mismatch' >&2\n    exit 1\nfi\nprintf '%s\\n' 'digest matched'\n"
+      },
+      "expected_findings": [],
+      "rationale": "The expected digest has a strict hexadecimal grammar and is compared as text to a SHA-256 result. No downloaded content or digest text is executed; authenticity comes from the separately authenticated metadata channel.",
+      "remediation_constraints": [
+        "Retain SHA-256 and the authenticated expected-digest origin.",
+        "Keep fixed file selection and separate mismatch versus malformed-input results."
+      ],
+      "runtime_assumptions": {
+        "runtime": "GNU Bash 5.2",
+        "libraries": [
+          "GNU coreutils 9.4"
+        ],
+        "platform": "Linux x86-64",
+        "setup": "The service launches the script with a fixed trusted PATH, sanitized environment and arguments described by the contract. Service-owned files and executable paths are not writable by the requester. GNU sha256sum/coreutils 9.4; staged.bin is a stable private regular file, at most 64 MiB; authenticated metadata retrieval is an explicit caller precondition."
+      },
+      "operation_contract": {
+        "purpose": "Confirm that a fixed staged file matches its trusted expected content digest.",
+        "trust_boundary": "The package bytes may be attacker-modified, but the expected digest is obtained from authenticated operator metadata rather than the same untrusted file.",
+        "legitimate_examples": [
+          {
+            "input": "Correct lowercase SHA-256 digest",
+            "expected": "Print digest matched and exit 0."
+          },
+          {
+            "input": "Well-formed but wrong digest",
+            "expected": "Print a mismatch to stderr and exit 1."
+          }
+        ],
+        "permitted_changes": [
+          "Retain SHA-256 and the authenticated expected-digest origin.",
+          "Keep fixed file selection and separate mismatch versus malformed-input results."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A hash does not authenticate anything when its expected value comes from the attacker too.",
+        "Do not interpret expected text as a checksum command line or filename."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Content-integrity comparison with a trusted reference; metadata-channel implementation is outside this snippet.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "bash-trusted-digest-file-comparison",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This safe hash use has a concrete trusted reference and file-identity contract, distinct from using an unkeyed digest as sender authentication. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/bash/manual/bash.html",
+          "https://curl.se/docs/manpage.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

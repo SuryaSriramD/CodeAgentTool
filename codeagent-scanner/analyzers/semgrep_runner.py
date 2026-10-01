@@ -1,252 +1,156 @@
-"""Semgrep security analyzer runner."""
-
+"""Semgrep with our versioned local rules: no registry, account or metrics."""
 import json
 import os
-import subprocess
-import tempfile
 import time
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from .base import BaseAnalyzer, Issue, analyzer_registry, AnalysisCancelled
+from .common import ROOT, LANGUAGE_EXTENSIONS, DOTNET_LANGUAGES, inventory, executable, tool_version, result
+from .parser_evidence import evidence, parse_statistics, from_statistics, audit_ast
 
-from .base import BaseAnalyzer, AnalyzerResult, Issue, Severity, analyzer_registry
+SEMGREP_LANGUAGES = set(LANGUAGE_EXTENSIONS) - DOTNET_LANGUAGES
 
+def semgrep_core():
+    configured = executable('semgrep-core')
+    if configured: return configured
+    wrapper = executable('semgrep')
+    if not wrapper: return None
+    root = Path(wrapper).resolve().parent.parent
+    candidates = list(root.glob('lib/python*/site-packages/semgrep/bin/semgrep-core'))
+    candidates += [root / 'Lib/site-packages/semgrep/bin/semgrep-core.exe']
+    return next((str(p) for p in candidates if p.is_file() and os.access(p, os.X_OK)), None)
 
 class SemgrepAnalyzer(BaseAnalyzer):
-    """Semgrep static analysis security scanner."""
-    
-    def __init__(self, timeout_sec: int = 300, rulesets: Optional[List[str]] = None):
-        super().__init__(timeout_sec)
-        self.rulesets = rulesets or ["p/owasp-top-ten", "p/security-audit"]
-        
+    def __init__(self, timeout_sec=300, rulesets=None, cancel=None, profile="security-v1"):
+        super().__init__(timeout_sec, cancel)
+        # Remote / repository-provided rule configs are intentionally not accepted.
+        from .profiles import validate_profile
+        self.profile = validate_profile(profile)
+        self.rules = ROOT / "rules" / f"{self.profile}.yaml"
+
     @property
-    def name(self) -> str:
-        return "semgrep"
-    
+    def name(self): return "semgrep"
+
     @property
-    def version(self) -> str:
-        """Get Semgrep version."""
+    def version(self): return tool_version("semgrep")
+
+    def is_applicable(self, workspace_path):
+        return bool(inventory(workspace_path, SEMGREP_LANGUAGES))
+
+    def run_analysis(self, workspace_path, **kwargs):
+        start = time.monotonic()
+        self._command_deadline = start + self.timeout_sec
+        files = inventory(workspace_path, SEMGREP_LANGUAGES)
+        version = tool_version("semgrep", runner=self._run_command)
+        parser_evidence = {path: evidence("Native parser was not run") for path, _ in files}
+
+        def finish(scanned=(), issues=(), errors=()):
+            output = result(self.name, start, files, scanned, issues, errors, version)
+            for outcome in output.coverage['path_outcomes']:
+                outcome['parser'] = parser_evidence[outcome['path']]
+            return output
+
+        if not files: return result(self.name, start, files, version=version)
+        binary = executable("semgrep")
+        if not binary or not semgrep_core():
+            return finish(errors=["Semgrep wrapper or bundled parser executable is not installed"])
         try:
-            result = subprocess.run(
-                ["semgrep", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                # Parse version from output like "1.81.0"
-                version_line = result.stdout.strip().split('\n')[0]
-                return version_line
-            return "unknown"
-        except Exception:
-            return "unknown"
-    
-    def is_applicable(self, workspace_path: str) -> bool:
-        """Check if Semgrep should run on this workspace."""
-        # Semgrep supports many languages, check for common source file extensions
-        supported_extensions = {
-            '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go',
-            '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp',
-            '.rb', '.php', '.scala', '.kt', '.swift', '.cs',
-            '.yaml', '.yml', '.json', '.dockerfile'
-        }
-        
-        try:
-            for root, dirs, files in os.walk(workspace_path):
-                # Skip common ignore directories
-                dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', '__pycache__']]
-                
-                for file in files:
-                    _, ext = os.path.splitext(file)
-                    if ext.lower() in supported_extensions:
-                        return True
-            return False
-        except Exception as e:
-            self.logger.error(f"Error checking workspace applicability: {e}")
-            return False
-    
-    def run_analysis(self, workspace_path: str, **kwargs) -> AnalyzerResult:
-        """Run Semgrep analysis on the workspace."""
-        start_time = time.time()
-        issues = []
-        error_message = None
-        
-        try:
-            # Create temporary file for output
-            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp_file:
-                output_file = tmp_file.name
-            
-            # Build Semgrep command
-            cmd = [
-                "semgrep",
-                "--config=auto",  # Use registry rules
-                "--json",
-                f"--output={output_file}",
-                "--quiet",
-                "--no-git-ignore",  # We handle ignores ourselves
-                workspace_path
-            ]
-            
-            # Add custom rulesets if specified
-            if self.rulesets:
-                cmd = [
-                    "semgrep",
-                    "--json", 
-                    f"--output={output_file}",
-                    "--quiet",
-                    "--no-git-ignore"
-                ]
-                
-                for ruleset in self.rulesets:
-                    cmd.extend(["--config", ruleset])
-                
-                cmd.append(workspace_path)
-            
-            self.logger.info(f"Running Semgrep with command: {' '.join(cmd)}")
-            
-            # Run Semgrep
-            result = self._run_command(cmd, workspace_path, capture_output=True)
-            
-            # Parse results
-            if os.path.exists(output_file):
-                issues = self._parse_semgrep_output(output_file, workspace_path)
-                os.unlink(output_file)  # Clean up temp file
-            
-            # Semgrep returns non-zero when findings are found, which is expected
-            success = result.returncode in [0, 1]  # 0 = no findings, 1 = findings found
-            
-            if result.returncode > 1:
-                error_message = f"Semgrep failed with code {result.returncode}: {result.stderr}"
-                success = False
-            
-        except subprocess.TimeoutExpired:
-            error_message = f"Semgrep analysis timed out after {self.timeout_sec} seconds"
-            success = False
-        except Exception as e:
-            error_message = f"Semgrep analysis failed: {str(e)}"
-            success = False
-        finally:
-            # Clean up temp file if it exists
-            if 'output_file' in locals() and os.path.exists(output_file):
+            cmd = [binary, "scan", "--config", str(self.rules), "--json", "--metrics=off",
+                   "--disable-version-check", "--no-git-ignore", "--no-rewrite-rule-ids",
+                   "--disable-nosem", "--jobs", "2", "--quiet", "--exclude", "._*",
+                   "--max-target-bytes", "0", "--optimizations", "none", "--oss-only"]
+            # Explicit files avoid scanning dependencies, symlinks, generated output or
+            # repository rules. Tool-level skips are still reported as coverage gaps.
+            cmd.extend(str(Path(workspace_path, path).resolve()) for path, _ in files)
+            env = {k:v for k,v in os.environ.items() if not k.startswith("SEMGREP_")}
+            env.update({"SEMGREP_SEND_METRICS": "off", "SEMGREP_ENABLE_VERSION_CHECK": "0"})
+            # The CLI counts prefiltered files as scanned even when it never parses
+            # them. Independently force the pinned native parser across every target.
+            parse_errors, parsed_paths = [], set()
+            language_aliases = {'javascript':'js','typescript':'ts','kotlin':'kt'}
+            for language in sorted({lang for _,lang in files}):
+                targets = [p for p,lang in files if lang == language]
+                parser_cmd = [semgrep_core(), '-json', '-lang', language_aliases.get(language,language), '-parsing_stats']
+                parser_cmd.extend(str(Path(workspace_path,path).resolve()) for path in targets)
                 try:
-                    os.unlink(output_file)
-                except Exception:
-                    pass
-        
-        duration_ms = int((time.time() - start_time) * 1000)
-        
-        return AnalyzerResult(
-            tool_name=self.name,
-            success=success,
-            issues=issues,
-            duration_ms=duration_ms,
-            error_message=error_message
-        )
-    
-    def _parse_semgrep_output(self, output_file: str, workspace_path: str) -> List[Issue]:
-        """Parse Semgrep JSON output into normalized Issues."""
-        issues = []
-        
-        try:
-            with open(output_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            # Semgrep JSON format has 'results' array
-            results = data.get('results', [])
-            
-            for finding in results:
-                try:
-                    issue = self._convert_semgrep_finding(finding, workspace_path)
-                    if issue:
-                        issues.append(issue)
-                except Exception as e:
-                    self.logger.warning(f"Failed to parse Semgrep finding: {e}")
+                    parsed = self._run_command(parser_cmd, workspace_path, env=env)
+                    if parsed.returncode != 0:
+                        raise ValueError(f'Native parser exited {parsed.returncode}')
+                    stats = parse_statistics(json.loads(parsed.stdout), targets,
+                        lambda path: self._normalize_file_path(path, workspace_path))
+                except AnalysisCancelled:
+                    raise
+                except Exception as exc:
+                    message = str(exc) if isinstance(exc, ValueError) and not isinstance(exc, json.JSONDecodeError) else type(exc).__name__
+                    for path in targets:
+                        parser_evidence[path] = evidence(message)
+                        parse_errors.append(f'{path}: {message}')
                     continue
-        
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse Semgrep JSON output: {e}")
-        except Exception as e:
-            self.logger.error(f"Error reading Semgrep output: {e}")
-        
-        return issues
-    
-    def _convert_semgrep_finding(self, finding: Dict[str, Any], workspace_path: str) -> Optional[Issue]:
-        """Convert a single Semgrep finding to normalized Issue."""
-        try:
-            # Extract basic information
-            check_id = finding.get('check_id', 'unknown')
-            message = finding.get('message', 'Security issue detected')
-            
-            # Get file path and line number
-            path = finding.get('path', '')
-            start_line = finding.get('start', {}).get('line', 1)
-            
-            # Normalize file path
-            normalized_path = self._normalize_file_path(path, workspace_path)
-            
-            # Determine severity from metadata or rule ID
-            severity = self._determine_semgrep_severity(finding)
-            
-            # Extract suggestion from fix if available
-            suggestion = None
-            fix_info = finding.get('extra', {}).get('fix')
-            if fix_info:
-                suggestion = f"Fix: {fix_info}"
-            
-            return Issue(
-                tool="semgrep",
-                type=check_id,
-                message=message,
-                severity=severity,
-                file=normalized_path,
-                line=start_line,
-                rule_id=check_id,
-                suggestion=suggestion
-            )
-            
-        except Exception as e:
-            self.logger.warning(f"Error converting Semgrep finding: {e}")
-            return None
-    
-    def _determine_semgrep_severity(self, finding: Dict[str, Any]) -> Severity:
-        """Determine severity from Semgrep finding."""
-        # Try to get severity from metadata
-        extra = finding.get('extra', {})
-        
-        # Check for explicit severity
-        if 'severity' in extra:
-            raw_severity = extra['severity']
-            return self._parse_severity(str(raw_severity))
-        
-        # Check metadata for severity indicators
-        metadata = extra.get('metadata', {})
-        if 'severity' in metadata:
-            raw_severity = metadata['severity']
-            return self._parse_severity(str(raw_severity))
-        
-        # Infer from rule ID patterns
-        check_id = finding.get('check_id', '').lower()
-        
-        # High severity patterns
-        if any(pattern in check_id for pattern in [
-            'sql-injection', 'xss', 'command-injection', 'path-traversal',
-            'deserialization', 'crypto', 'hardcoded-password', 'rce'
-        ]):
-            return Severity.HIGH
-        
-        # Critical patterns
-        if any(pattern in check_id for pattern in [
-            'critical', 'remote-code-execution', 'authentication-bypass'
-        ]):
-            return Severity.CRITICAL
-        
-        # Low severity patterns  
-        if any(pattern in check_id for pattern in [
-            'info', 'debug', 'comment', 'todo', 'unused'
-        ]):
-            return Severity.LOW
-        
-        # Default to medium
-        return Severity.MEDIUM
+                for path, entry in stats.items():
+                    item = parser_evidence[path] = from_statistics(entry)
+                    if not item['errors'] and entry['untranslated_node_count']:
+                        try:
+                            ast_cmd = [semgrep_core(), '-json', '-lang', language_aliases.get(language,language),
+                                       '-dump_ast', str(Path(workspace_path,path).resolve())]
+                            dumped = self._run_command(ast_cmd, workspace_path, env=env)
+                            if dumped.returncode != 0:
+                                raise ValueError(f'Generic AST parser exited {dumped.returncode}')
+                            audited, unsupported, errors = audit_ast(json.loads(dumped.stdout), language,
+                                entry['untranslated_node_count'], version)
+                            item.update(audited_metadata_counts=audited, unsupported_node_counts=unsupported)
+                            item['errors'].extend(errors)
+                            if not errors:
+                                item['status'] = 'completed'
+                        except AnalysisCancelled:
+                            raise
+                        except Exception as exc:
+                            item['errors'].append('Generic AST audit failed: ' + type(exc).__name__)
+                    if item['status'] == 'completed':
+                        parsed_paths.add(path)
+                    else:
+                        parse_errors.extend(f'{path}: {error}' for error in item['errors'])
+            proc = self._run_command(cmd, workspace_path, env=env)
+            data = json.loads(proc.stdout)
+            if not isinstance(data, dict) or "results" not in data:
+                raise ValueError("Semgrep returned an invalid report")
+            errors = parse_errors + [str(e.get("message", e)) for e in data.get("errors", [])]
+            bad_paths = {self._normalize_file_path(e["path"], workspace_path) for e in data.get("errors", []) if e.get("path")}
+            scanned = {self._normalize_file_path(p, workspace_path) for p in data.get("paths", {}).get("scanned", [])} - bad_paths
+            scanned &= parsed_paths
+            issues = [self._convert_semgrep_finding(f, workspace_path) for f in data["results"]]
+            if proc.returncode not in (0, 1):
+                errors.append(f"Semgrep exited {proc.returncode}: {proc.stderr[-1000:]}")
+            missing = {p for p, _ in files} - scanned
+            if missing: errors.append(f"{len(missing)} source files were skipped or did not parse: " + ", ".join(sorted(missing)[:10]))
+            return finish(scanned, issues, errors)
+        except AnalysisCancelled:
+            raise
+        except Exception as exc:
+            return finish(errors=[str(exc)])
 
+    def _convert_semgrep_finding(self, finding, workspace_path):
+        extra = finding.get("extra", {})
+        legacy={"python":("shell-injection","CWE-78"),"javascript":("dynamic-evaluation","CWE-95"),
+                "typescript":("dynamic-evaluation","CWE-95"),"java":("weak-crypto","CWE-327"),
+                "go":("shell-injection","CWE-78"),"c":("buffer-overflow","CWE-120"),"cpp":("buffer-overflow","CWE-120"),
+                "ruby":("dynamic-evaluation","CWE-95"),"php":("dynamic-evaluation","CWE-95"),
+                "scala":("weak-crypto","CWE-327"),"kotlin":("weak-crypto","CWE-327"),"swift":("weak-crypto","CWE-327"),
+                "rust":("shell-injection","CWE-78"),"bash":("unverified-code-execution","CWE-494"),
+                "yaml":("excessive-privilege","CWE-250"),"json":("tls-validation","CWE-295"),
+                "xml":("insecure-cookie","CWE-614"),"html":("weak-sandbox","CWE-693"),"dockerfile":("excessive-privilege","CWE-250")}
+        parts=finding.get("check_id","").split(".")
+        fallback=legacy.get(parts[1],(None,None)) if len(parts)>1 else (None,None)
+        return Issue(self.name, finding.get("check_id", "unknown"),
+                     extra.get("message", finding.get("message", "Security pattern detected")),
+                     self._parse_severity(extra.get("severity", "warning")),
+                     self._normalize_file_path(finding["path"], workspace_path),
+                     int(finding.get("start", {}).get("line", 1)), finding.get("check_id", "unknown"),
+                     extra.get("fix"), family=extra.get("metadata",{}).get("family",fallback[0]),
+                     cwe=extra.get("metadata",{}).get("cwe",fallback[1]),
+                     analysis_kind=extra.get("metadata",{}).get("analysis_kind","structural"),
+                     end_line=finding.get("end",{}).get("line"), end_column=finding.get("end",{}).get("col"),
+                     rule_revision=extra.get("metadata",{}).get("rule_revision","1"),
+                     evidence=[{"kind":"source_span","file":self._normalize_file_path(finding["path"],workspace_path),
+                                "line":finding.get("start",{}).get("line",1),"end_line":finding.get("end",{}).get("line",1)}]
+                              + ([{"kind":"dataflow_trace","trace":extra["dataflow_trace"]}] if extra.get("dataflow_trace") else []))
 
-# Register the analyzer
 analyzer_registry.register(SemgrepAnalyzer)

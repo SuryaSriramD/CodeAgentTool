@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>Exe</OutputType><DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference><_FSharpCoreLibraryPacksFolder>$(MSBuildProjectDirectory)/.disabled-sdk-packages</_FSharpCoreLibraryPacksFolder><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><TargetFramework>net10.0</TargetFramework><GenerateDocumentationFile>false</GenerateDocumentationFile></PropertyGroup>
+<ItemGroup><Compile Include="Program.fs" /></ItemGroup>
+<ItemGroup><ProjectReference Include="Roslyn/CodeAgent.Roslyn.csproj" /><PackageReference Include="FSharp.Core" Version="[10.1.401]" /><PackageReference Include="FSharp.Compiler.Service" Version="43.12.401" /></ItemGroup>
+</Project>

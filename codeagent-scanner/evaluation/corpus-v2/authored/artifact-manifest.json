@@ -1,0 +1,23 @@
+{
+  "corpus.json": "e5ae196b5fdb4d4c93dbbd984fd60262f3e40ff0284d390bd9000ff657f8b113",
+  "unsigned-review-manifest.json": "e6ddad6d38c7bdb9470630ccd42f7de746a3e6490aab8813df5d5b1e651e2a21",
+  "review/bash.md": "b8a5552211caf0874d0d18dc2ec9dd037140fea0c14fe2545457f4f1058d929b",
+  "review/c.md": "8bf2307101f5a9d31b11d4a33cb355939ed93b7648d7a9616640c42054ce95ba",
+  "review/cpp.md": "1266d34d661e1deb5fc7cf2f271f54cce032895b48b98bf0118fc95bf540907f",
+  "review/csharp.md": "f47f2eda8432152b3f9c6706655c3d85941723fd29fecf0cf3454c5b3eef7380",
+  "review/fsharp.md": "171f7a0b4179969bf2c33da05f3201fc241b0c9d711557d23ee8966ce86b6517",
+  "review/go.md": "f3e176b9f683126fcad30414f4c55c90a3849c4ee8dfd70ad8e57a5f6520aeba",
+  "review/java.md": "5ca69afb6a031ba19b11a4a298038e5480ae6b227f30be821c06a0e8b567f1e2",
+  "review/javascript.md": "25231f4de67fda8b6e2d15a1cc2494ca5293d6ff671691e221d8f39b346696f9",
+  "review/kotlin.md": "c1adb2dbffc9bfe51d7c8cf9ecbe420e3462881efea6d9594c4706cc3b46e6d2",
+  "review/php.md": "29f83b0b57efe9de2ec35ac05e09816e9ca385ca3521d957d1f9d3ae666fe2c1",
+  "review/python.md": "e9136f44254f906bc8782fcc5c39ad3e639bc1752a55b5cea97ca9622d5458fa",
+  "review/ruby.md": "c2130193da0b1478ebeb7d2b7d73498314d73f6be269e6635fa1649f40ac34d7",
+  "review/rust.md": "e477ba90939ed7f4202c3968aaa9ec319fb3ed5a1e061e1af380ac74c65a4124",
+  "review/scala.md": "3ec6510bd6fb0d5f8d94a153d39198151fe9e66a7f97b37688ebbed5572c7400",
+  "review/swift.md": "72071895e1918656d91e2c421e3455082751442d4b6d7e13cc64f2d686323fed",
+  "review/typescript.md": "da943793be07070d77f4ddfd461b019ebea90cbd1483d024639e80392abbcce8",
+  "review/visualbasic.md": "81d458ed440b261480e9f062bca60da5478af149471e36b2c091f306ef9591d8",
+  "authoring-register.csv": "10efb278b94fda853804faafa014eb25f46ff57e7b8acfe2174f0c29fe34250a",
+  "audit.json": "8bd1cd12b497cfb9518e6e7b94120bd9142ea249cce4f8a4f5ea2ecbdd3acddf"
+}

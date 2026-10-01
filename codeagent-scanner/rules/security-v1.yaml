@@ -1,0 +1,289 @@
+{
+  "rules": [
+    {
+      "id": "codeagent.python.security.v1",
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "message": "Running a command through a shell requires careful input validation.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "subprocess.run(..., shell=True, ...)"
+    },
+    {
+      "id": "codeagent.javascript.security.v1",
+      "languages": [
+        "javascript"
+      ],
+      "severity": "WARNING",
+      "message": "Dynamic evaluation can execute untrusted code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "eval($CODE)"
+    },
+    {
+      "id": "codeagent.typescript.security.v1",
+      "languages": [
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "message": "Dynamic evaluation can execute untrusted code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "eval($CODE)"
+    },
+    {
+      "id": "codeagent.java.security.v1",
+      "languages": [
+        "java"
+      ],
+      "severity": "WARNING",
+      "message": "MD5 must not be used for a security-sensitive digest.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "MessageDigest.getInstance(\"MD5\")"
+    },
+    {
+      "id": "codeagent.go.security.v1",
+      "languages": [
+        "go"
+      ],
+      "severity": "WARNING",
+      "message": "Shell command execution exposes shell interpretation.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "exec.Command(\"sh\", \"-c\", ...)"
+    },
+    {
+      "id": "codeagent.c.security.v1",
+      "languages": [
+        "c"
+      ],
+      "severity": "WARNING",
+      "message": "Unbounded string copying can overflow the destination.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "strcpy(...)"
+    },
+    {
+      "id": "codeagent.cpp.security.v1",
+      "languages": [
+        "cpp"
+      ],
+      "severity": "WARNING",
+      "message": "Unbounded string copying can overflow the destination.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "strcpy(...)"
+    },
+    {
+      "id": "codeagent.ruby.security.v1",
+      "languages": [
+        "ruby"
+      ],
+      "severity": "WARNING",
+      "message": "Dynamic evaluation can execute untrusted code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "eval(...)"
+    },
+    {
+      "id": "codeagent.php.security.v1",
+      "languages": [
+        "php"
+      ],
+      "severity": "WARNING",
+      "message": "Dynamic evaluation can execute untrusted code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "eval(...)"
+    },
+    {
+      "id": "codeagent.scala.security.v1",
+      "languages": [
+        "scala"
+      ],
+      "severity": "WARNING",
+      "message": "MD5 must not be used for a security-sensitive digest.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "java.security.MessageDigest.getInstance(\"MD5\")"
+    },
+    {
+      "id": "codeagent.kotlin.security.v1",
+      "languages": [
+        "kotlin"
+      ],
+      "severity": "WARNING",
+      "message": "MD5 must not be used for a security-sensitive digest.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "MessageDigest.getInstance(\"MD5\")"
+    },
+    {
+      "id": "codeagent.swift.security.v1",
+      "languages": [
+        "swift"
+      ],
+      "severity": "WARNING",
+      "message": "MD5 must not be used for a security-sensitive digest.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "CC_MD5(...)"
+    },
+    {
+      "id": "codeagent.rust.security.v1",
+      "languages": [
+        "rust"
+      ],
+      "severity": "WARNING",
+      "message": "Shell command execution exposes shell interpretation.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "std::process::Command::new(\"sh\").arg(\"-c\")"
+    },
+    {
+      "id": "codeagent.bash.security.v1",
+      "languages": [
+        "bash"
+      ],
+      "severity": "WARNING",
+      "message": "Piping downloaded content directly into a shell executes unverified code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "curl $URL | bash"
+    },
+    {
+      "id": "codeagent.yaml.security.v1",
+      "languages": [
+        "yaml"
+      ],
+      "severity": "WARNING",
+      "message": "A privileged container bypasses normal container isolation.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "securityContext:\n  privileged: true\n"
+    },
+    {
+      "id": "codeagent.json.security.v1",
+      "languages": [
+        "json"
+      ],
+      "severity": "WARNING",
+      "message": "This TLS option disables server certificate verification.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "{ \"rejectUnauthorized\": false }"
+    },
+    {
+      "id": "codeagent.xml.security.v1",
+      "languages": [
+        "xml"
+      ],
+      "severity": "WARNING",
+      "message": "Authentication cookies should require HTTPS.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "<httpCookies requireSSL=\"false\" />"
+    },
+    {
+      "id": "codeagent.html.security.v1",
+      "languages": [
+        "html"
+      ],
+      "severity": "WARNING",
+      "message": "Combining scripts and same-origin weakens sandbox isolation for same-origin iframe content.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "<iframe sandbox=\"allow-scripts allow-same-origin\" ...>...</iframe>"
+    },
+    {
+      "id": "codeagent.dockerfile.security.v1",
+      "languages": [
+        "dockerfile"
+      ],
+      "severity": "WARNING",
+      "message": "Run application containers as an unprivileged user.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "USER root"
+    }
+  ]
+}

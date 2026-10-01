@@ -1,0 +1,415 @@
+{
+  "schema_version": "2.0",
+  "job_id": "7e7c114d-5142-4150-8971-f7b98b1a329f",
+  "meta": {
+    "duration_ms": 4660,
+    "generated_at": "2026-09-30T20:15:20.328683+00:00",
+    "labels": [
+      "corpus-v2",
+      "authoring-validation",
+      "unapproved"
+    ],
+    "repo": {
+      "baseline": {
+        "job_id": "d3541047-47e3-4db6-aecd-01ed38febe31",
+        "report_hash": "9bb1505d45ac6cd8a63162d8b2e71f3738c7fcadb93fc55dd3ed4be7d798784b"
+      },
+      "commit": null,
+      "digest": "9ed4d4244cb70ad128a502f2f1725bace9ef946cae4053f0977ed199dd0fc693",
+      "filename": "v2-python-safe-04.zip",
+      "project_id": "7b816b41-cdbe-4922-9a4e-3b8501d4afc9",
+      "snapshot_id": "7e7c114d-5142-4150-8971-f7b98b1a329f",
+      "source": "zip",
+      "stream": "default"
+    },
+    "rulepack_version": "2.0.0-candidate",
+    "snapshot": {
+      "digest": "9ed4d4244cb70ad128a502f2f1725bace9ef946cae4053f0977ed199dd0fc693",
+      "excluded_files": [],
+      "files": {
+        "object_info.py": "50c3546deaf77cd8b6376e88fbd316eb819390c189b8061c5a3762b932939ea1"
+      },
+      "id": "7e7c114d-5142-4150-8971-f7b98b1a329f",
+      "ingestion_version": 3,
+      "inventory_complete": true,
+      "source": {
+        "baseline": {
+          "job_id": "d3541047-47e3-4db6-aecd-01ed38febe31",
+          "report_hash": "9bb1505d45ac6cd8a63162d8b2e71f3738c7fcadb93fc55dd3ed4be7d798784b"
+        },
+        "commit": null,
+        "digest": "9ed4d4244cb70ad128a502f2f1725bace9ef946cae4053f0977ed199dd0fc693",
+        "filename": "v2-python-safe-04.zip",
+        "project_id": "7b816b41-cdbe-4922-9a4e-3b8501d4afc9",
+        "snapshot_id": "7e7c114d-5142-4150-8971-f7b98b1a329f",
+        "source": "zip",
+        "stream": "default"
+      },
+      "source_inventory": [
+        "object_info.py"
+      ],
+      "source_policy_version": 3,
+      "warnings": []
+    },
+    "tool_runs": [
+      {
+        "duration_ms": 2538,
+        "name": "semgrep",
+        "status": "completed",
+        "version": "1.178.0"
+      },
+      {
+        "duration_ms": 454,
+        "name": "bandit",
+        "status": "completed",
+        "version": "bandit 1.9.4"
+      },
+      {
+        "duration_ms": 0,
+        "name": "dotnet",
+        "status": "skipped",
+        "version": "codeagent-dotnet 1.1.0"
+      },
+      {
+        "duration_ms": 0,
+        "name": "depcheck",
+        "status": "skipped",
+        "version": "Version: 0.74.0"
+      }
+    ],
+    "tools": [
+      "semgrep",
+      "bandit",
+      "dotnet",
+      "depcheck"
+    ]
+  },
+  "summary": {
+    "critical": 0,
+    "high": 0,
+    "low": 2,
+    "medium": 0
+  },
+  "files": [
+    {
+      "path": "object_info.py",
+      "issues": [
+        {
+          "id": "c7da65e27bf561f8d3daa7b4",
+          "tool": "bandit",
+          "type": "B404",
+          "message": "Consider possible security implications associated with the subprocess module.",
+          "severity": "low",
+          "file": "object_info.py",
+          "line": 2,
+          "rule_id": "B404",
+          "source_hash": "50c3546deaf77cd8b6376e88fbd316eb819390c189b8061c5a3762b932939ea1",
+          "suggestion": "See: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess",
+          "fingerprint": "v1:518fa949ca8953aa1ff1042e457bdfdb4c25ce47e80cab72a1bb31c6737cd7dc",
+          "logical_id": "f81d5378-2918-4f92-b011-3a7c6ab9ffd9",
+          "family": "blacklist",
+          "cwe": "CWE-78",
+          "analysis_kind": "structural",
+          "end_line": 2,
+          "rule_digest": "3f610a8c70683c0a11dc074a835b34f3cc70a7d9f73b2c1fed4c26ec163ab042",
+          "dependency": null,
+          "end_column": null,
+          "evidence": [
+            {
+              "file": "object_info.py",
+              "kind": "source_span",
+              "line": 2,
+              "text": "1 import re\n2 import subprocess\n3 OBJECT_ID = re.compile(r'[0-9a-f]{40}\\Z')\n"
+            }
+          ],
+          "evidence_digest": "ffe45dc9d07a24cf0efe328fa2e80e7074e2660bd74afdd99c3f01aa24b83316",
+          "rule_revision": "1",
+          "tracking_ambiguous": false,
+          "tracking_supported": true
+        },
+        {
+          "id": "426f7fd2f48b4f8798d49db1",
+          "tool": "bandit",
+          "type": "B603",
+          "message": "subprocess call - check for execution of untrusted input.",
+          "severity": "low",
+          "file": "object_info.py",
+          "line": 10,
+          "rule_id": "B603",
+          "source_hash": "50c3546deaf77cd8b6376e88fbd316eb819390c189b8061c5a3762b932939ea1",
+          "suggestion": "See: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+          "fingerprint": "v1:95fd0cf6c39aa642aec0afc53f99f5a3fbca8654455ab9519f5ed591282d03d4",
+          "logical_id": "11421790-831f-4919-9530-f1d832362bc3",
+          "family": "subprocess_without_shell_equals_true",
+          "cwe": "CWE-78",
+          "analysis_kind": "structural",
+          "end_line": 11,
+          "rule_digest": "3f610a8c70683c0a11dc074a835b34f3cc70a7d9f73b2c1fed4c26ec163ab042",
+          "dependency": null,
+          "end_column": null,
+          "evidence": [
+            {
+              "file": "object_info.py",
+              "kind": "source_span",
+              "line": 10,
+              "text": "9                              'cat-file', '-s', oid], check=True,\n10                             shell=False, capture_output=True, text=True,\n11                             timeout=2, env={'PATH': '/usr/bin:/bin'})\n12     return {'object': oid, 'bytes': int(result.stdout.strip())}\n13 \n14 def handle_object_query(query):\n"
+            }
+          ],
+          "evidence_digest": "270f66063f7957a35adbdbfb4dcb4f711951f20aff68a587eb90720caf05d321",
+          "rule_revision": "1",
+          "tracking_ambiguous": false,
+          "tracking_supported": true
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "tool": "semgrep",
+      "status": "completed",
+      "files_discovered": 1,
+      "files_scanned": 1,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "1.178.0",
+      "languages": [
+        "python"
+      ],
+      "path_outcomes": [
+        {
+          "language": "python",
+          "parser": {
+            "audited_metadata_counts": {},
+            "error_lines": 0,
+            "errors": [],
+            "policy": "native-parser-evidence/2",
+            "status": "completed",
+            "syntax_error_files": 0,
+            "unsupported_node_counts": {},
+            "untranslated_node_count": 0,
+            "untranslated_nodes": 0
+          },
+          "path": "object_info.py",
+          "rule_ids": [
+            "codeagent.python.security.v1",
+            "codeagent.python.sql-injection.v2",
+            "codeagent.python.path-traversal.v2",
+            "codeagent.python.ssrf.v2"
+          ],
+          "status": "completed"
+        }
+      ],
+      "profile": "security-v2",
+      "rule_ids": [
+        "codeagent.bash.dynamic-evaluation.v2",
+        "codeagent.bash.security.v1",
+        "codeagent.bash.tls-validation.v2",
+        "codeagent.c.format-string.v2",
+        "codeagent.c.security.v1",
+        "codeagent.c.shell-injection.v2",
+        "codeagent.cpp.format-string.v2",
+        "codeagent.cpp.security.v1",
+        "codeagent.cpp.shell-injection.v2",
+        "codeagent.dockerfile.security.v1",
+        "codeagent.go.security.v1",
+        "codeagent.go.sql-injection.v2",
+        "codeagent.go.ssrf.v2",
+        "codeagent.go.tls-validation.v2",
+        "codeagent.html.security.v1",
+        "codeagent.java.security.v1",
+        "codeagent.java.sql-injection.v2",
+        "codeagent.java.unsafe-xml.v2",
+        "codeagent.javascript.path-traversal.v2",
+        "codeagent.javascript.security.v1",
+        "codeagent.javascript.shell-injection.v2",
+        "codeagent.javascript.ssrf.v2",
+        "codeagent.json.security.v1",
+        "codeagent.kotlin.security.v1",
+        "codeagent.kotlin.sql-injection.v2",
+        "codeagent.kotlin.unsafe-xml.v2",
+        "codeagent.php.path-traversal.v2",
+        "codeagent.php.security.v1",
+        "codeagent.php.sql-injection.v2",
+        "codeagent.python.path-traversal.v2",
+        "codeagent.python.security.v1",
+        "codeagent.python.sql-injection.v2",
+        "codeagent.python.ssrf.v2",
+        "codeagent.ruby.security.v1",
+        "codeagent.ruby.sql-injection.v2",
+        "codeagent.ruby.unsafe-deserialization.v2",
+        "codeagent.rust.security.v1",
+        "codeagent.rust.sql-injection.v2",
+        "codeagent.rust.tls-validation.v2",
+        "codeagent.scala.security.v1",
+        "codeagent.scala.sql-injection.v2",
+        "codeagent.scala.unsafe-xml.v2",
+        "codeagent.swift.security.v1",
+        "codeagent.swift.tls-validation.v2",
+        "codeagent.swift.unsafe-deserialization.v2",
+        "codeagent.typescript.path-traversal.v2",
+        "codeagent.typescript.security.v1",
+        "codeagent.typescript.shell-injection.v2",
+        "codeagent.typescript.ssrf.v2",
+        "codeagent.xml.security.v1",
+        "codeagent.yaml.security.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": [
+        "object_info.py"
+      ]
+    },
+    {
+      "tool": "bandit",
+      "status": "completed",
+      "files_discovered": 1,
+      "files_scanned": 1,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "bandit 1.9.4",
+      "languages": [
+        "python"
+      ],
+      "path_outcomes": [
+        {
+          "language": "python",
+          "path": "object_info.py",
+          "rule_ids": [],
+          "status": "completed"
+        }
+      ],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": [
+        "object_info.py"
+      ]
+    },
+    {
+      "tool": "dotnet",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "codeagent-dotnet 1.1.0",
+      "languages": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [
+        "dotnet.binary-formatter.v1",
+        "dotnet.shell-injection.v2",
+        "dotnet.sql-injection.v2",
+        "dotnet.tls-validation.v1",
+        "dotnet.weak-crypto.v1",
+        "dotnet.xml-dtd.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "depcheck",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "Version: 0.74.0",
+      "languages": [],
+      "ecosystems": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    }
+  ],
+  "ai_analysis": null,
+  "project_id": "7b816b41-cdbe-4922-9a4e-3b8501d4afc9",
+  "stream": "default",
+  "profiles": {
+    "config": "fb7742d632e6e817e0c861e2f56b7daf1df95625f771803f26f8ffb510ef7610",
+    "dependency": "d3c5734bddfcacededc7c3637200246a6e4d2c3cd4f8667f9b83c1cc62a1fc59",
+    "name": "security-v2",
+    "source": "3d3fd6e83481e5a8d8ba22433c12f5af685aa7cb028f738b423fb2883b39dbee",
+    "tools": {
+      "bandit": "3f610a8c70683c0a11dc074a835b34f3cc70a7d9f73b2c1fed4c26ec163ab042",
+      "depcheck": "d3c5734bddfcacededc7c3637200246a6e4d2c3cd4f8667f9b83c1cc62a1fc59",
+      "dotnet": "cd766f9151ae1e500aecdde0007f79c2a081d855ce91bf7e6d841cd9b548bbf5",
+      "semgrep": "a97d349acaa34380ed5fe7e3b92a4c1d3f79f6bc38d4506a8d5c6190beb953f3"
+    }
+  },
+  "baseline": {
+    "job_id": "d3541047-47e3-4db6-aecd-01ed38febe31",
+    "report_hash": "9bb1505d45ac6cd8a63162d8b2e71f3738c7fcadb93fc55dd3ed4be7d798784b"
+  },
+  "report_hash": "7a38c2567ff3d7b7f1ba06883ae3fb59b08b20a802e92c8aa88e4866e8ff08d2",
+  "errors": [],
+  "profile_digests": {
+    "dependency": "825b4d8e4f90e37819584a9154b18670e4dfe7eb6982164e688fad910cc20d36",
+    "dependency_details": {
+      "adapter": "ca0f18d2ad98c3d5dc9aa76369f1ed5b04575bd24191157a3b4b9fffe8ede749",
+      "database": {
+        "metadata_hash": "5b57f7738d885f1a1d506eb717e5e1dc1eb743fe99e18791b3e5d474a4d06eea",
+        "next_update": "2026-09-26T06:36:11.019457213Z",
+        "ready": true,
+        "updated_at": "2026-09-25T06:36:11.019457553Z"
+      },
+      "expected_version": "0.74.0",
+      "ingestion": {
+        "policy.py": "aee09539e944d79bcd2157f7c2f0b64a0601b29ef0e83279341cd684b50730f9",
+        "snapshots.py": "fbea9d4f41a1b3734f087570ab6ce6130ed91a1b32b175c9527b01c0dbf14780"
+      },
+      "inventory": "ebe207fa1b63e329e83224271a0d4143eb136fa30bbf465aaa4f275905bcb7d6",
+      "version": "Version: 0.74.0"
+    },
+    "source": "221377c54607dc61fe0f2097c0a4f8f87557847ed2ee877cd743a889a9c82d21",
+    "source_details": {
+      "adapters": {
+        "bandit_runner.py": "ded1e85cc29baeb6fd5e9429eaee84762b4a458f1c8355d6533e5f0c943f66fd",
+        "common.py": "ebe207fa1b63e329e83224271a0d4143eb136fa30bbf465aaa4f275905bcb7d6",
+        "dotnet_runner.py": "bda87fedcfcd8b72b40b58b6478d4a8f8e4113cdbb296cabe372f6068035a5bf",
+        "parser_evidence.py": "145b7556d3efa6e7a9ae8c313f9cd332005324987670b981e25ba5c40190b8e0",
+        "semgrep_runner.py": "e92e9c3fa9e0f43d48d575bbbfc600faa1f23e6e65be9ccdfe5f95d4d15e321e",
+        "service.py": "1992f4600e0ec6ce032b59e1ee5d6e0f73a66d472e4ea20d6a5cf7803f644971",
+        "validation.py": "811610fbd8ec75463eb2e0dcfa9f2bd0868d8aded42dd6106f8a4f4161a38c9a"
+      },
+      "coverage_contract": "native-parser-evidence/2",
+      "dotnet": {
+        "Program.fs": "78dd7da6bf86a8fb03fa2f100b9542b787725d94acb3ef6ade36adf7366c85c6",
+        "Roslyn/Analyzer.cs": "fee1df8cef9b41638c0b4f9a615c8ac60f54dd5e9991057526da22863ef2fd33"
+      },
+      "effective_tools": [
+        {
+          "name": "semgrep",
+          "version": "1.178.0"
+        },
+        {
+          "name": "bandit",
+          "version": "bandit 1.9.4"
+        },
+        {
+          "name": "dotnet",
+          "version": "codeagent-dotnet 1.1.0"
+        }
+      ],
+      "ingestion": {
+        "policy.py": "aee09539e944d79bcd2157f7c2f0b64a0601b29ef0e83279341cd684b50730f9",
+        "snapshots.py": "fbea9d4f41a1b3734f087570ab6ce6130ed91a1b32b175c9527b01c0dbf14780"
+      },
+      "profile": "security-v2",
+      "rules": "661bd24355ffd634f28fa7abe17f56c17598b7d39832a8d1c47a93fc181b633f",
+      "versions": {
+        "bandit": "1.9.4",
+        "dotnet_analyzer": "1.1.0",
+        "dotnet_sdk": "10.0.401",
+        "fsharp_compiler_service": "43.12.401",
+        "roslyn": "5.9.0",
+        "rulepack": "1.0.0",
+        "semgrep": "1.178.0"
+      }
+    }
+  },
+  "profile_reproducibility": "pinned",
+  "status": "completed",
+  "warnings": []
+}

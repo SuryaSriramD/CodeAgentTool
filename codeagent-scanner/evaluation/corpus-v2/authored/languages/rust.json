@@ -1,0 +1,969 @@
+{
+  "language": "rust",
+  "cases": [
+    {
+      "id": "v2-rust-safe-01",
+      "language": "rust",
+      "vulnerable": false,
+      "scenario": "inventory-upsert-bound-sqlite",
+      "files": {
+        "inventory.rs": "use rusqlite::{params, Connection, Result};\npub fn reserve(db: &Connection, sku: &str, amount: i64) -> Result<usize> {\n    if !(1..=50).contains(&amount) || sku.len()>80 {\n        return Err(rusqlite::Error::InvalidParameterName(\"invalid reservation\".into()));\n    }\n    db.execute(\n        \"INSERT INTO reservations(sku,quantity) VALUES (?1,?2) ON CONFLICT(sku) DO UPDATE SET quantity=quantity+excluded.quantity\",\n        params![sku,amount],\n    )\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "A nontrivial INSERT/ON CONFLICT statement remains safe because user data is bound. SQL keywords in the SKU cannot alter either insert or update behavior.",
+      "remediation_constraints": [
+        "Add a bounded reservation quantity for one exact SKU using an atomic upsert.",
+        "Retain binding, atomic upsert and amount bounds.",
+        "Do not replace accumulation with assignment or split the operation into a racy read/write pair."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "rusqlite0.32.1; SQLite schema reservations(sku TEXT PRIMARY KEY,quantity INTEGER NOT NULL). Server has already authorized caller to reserve these public SKUs; this function has no payment or stock-depletion authority."
+      },
+      "operation_contract": {
+        "purpose": "Add a bounded reservation quantity for one exact SKU using an atomic upsert.",
+        "trust_boundary": "Untrusted SKU is bound separately from a constant SQL program with a legitimate conflict-update clause.",
+        "legitimate_examples": [
+          {
+            "input": "sku=artist's-kit, amount=2",
+            "expected": "Exact SKU reservation increments by2"
+          },
+          {
+            "input": "amount=0",
+            "expected": "Error, no update"
+          }
+        ],
+        "permitted_changes": [
+          "Retain binding, atomic upsert and amount bounds."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not replace accumulation with assignment or split the operation into a racy read/write pair."
+        ]
+      },
+      "regression_traps": [
+        "Do not replace accumulation with assignment or split the operation into a racy read/write pair."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Authorization and stock accounting are separate explicit contracts; SQL execution does not concatenate SKU text."
+        ]
+      },
+      "derivation": {
+        "group": "inventory-upsert-bound-sqlite",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around add a bounded reservation quantity for one exact sku using an atomic upsert. Boundary: Untrusted SKU is bound separately from a constant SQL program with a legitimate conflict-update clause. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.rs/rusqlite/latest/rusqlite/struct.Connection.html#method.execute"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-safe-02",
+      "language": "rust",
+      "vulnerable": false,
+      "scenario": "search-pagination-sqlx-bound-query",
+      "files": {
+        "search.rs": "use sqlx::{PgPool, Row};\npub async fn page(pool: &PgPool, term: &str, offset: i64) -> Result<Vec<String>, sqlx::Error> {\n    if term.len()>100 || !(0..=1000).contains(&offset) { return Err(sqlx::Error::Protocol(\"invalid search\".into())); }\n    let rows=sqlx::query(\"SELECT title FROM public_notes WHERE strpos(title,$1)>0 ORDER BY id LIMIT 20 OFFSET $2\")\n        .bind(term).bind(offset).fetch_all(pool).await?;\n    rows.into_iter().map(|row| row.try_get::<String,_>(\"title\")).collect()\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The query is constant and both values are bound. Using strpos also preserves literal punctuation without a misleading wildcard-escaping contract.",
+      "remediation_constraints": [
+        "Page public notes containing an exact literal substring.",
+        "Keep literal substring semantics, bounded offset and stable ID order.",
+        "Do not switch to wildcard LIKE matching or interpolate pagination text."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "sqlx0.8.3 features postgres,runtime-tokio-rustls, PostgreSQL16; public_notes(id,title) contains public text only. strpos provides literal substring matching, including percent/underscore."
+      },
+      "operation_contract": {
+        "purpose": "Page public notes containing an exact literal substring.",
+        "trust_boundary": "User search text and offset enter PostgreSQL bound parameters, not query grammar or LIKE patterns.",
+        "legitimate_examples": [
+          {
+            "input": "term=50%_done",
+            "expected": "Matches that literal substring"
+          },
+          {
+            "input": "term=author's note",
+            "expected": "Apostrophe retained as data"
+          }
+        ],
+        "permitted_changes": [
+          "Keep literal substring semantics, bounded offset and stable ID order."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not switch to wildcard LIKE matching or interpolate pagination text."
+        ]
+      },
+      "regression_traps": [
+        "Do not switch to wildcard LIKE matching or interpolate pagination text."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Only public note titles are returned and later serialized as JSON; HTML escaping belongs to the UI consumer."
+        ]
+      },
+      "derivation": {
+        "group": "search-pagination-sqlx-bound-query",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around page public notes containing an exact literal substring. Boundary: User search text and offset enter PostgreSQL bound parameters, not query grammar or LIKE patterns. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.rs/sqlx/latest/sqlx/fn.query.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-safe-03",
+      "language": "rust",
+      "vulnerable": false,
+      "scenario": "bookmark-origin-display-without-fetch",
+      "files": {
+        "bookmark.rs": "use url::Url;\npub struct BookmarkSummary { pub host:String, pub port:Option<u16>, pub path:String }\npub fn summarize(untrusted_url:&str) -> Result<BookmarkSummary,String> {\n    if untrusted_url.len()>2048 { return Err(\"bookmark too long\".into()); }\n    let url=Url::parse(untrusted_url).map_err(|_|\"invalid URL\")?;\n    if !matches!(url.scheme(),\"https\"|\"http\") { return Err(\"unsupported bookmark scheme\".into()); }\n    let host=url.host_str().ok_or(\"host required\")?.to_owned();\n    Ok(BookmarkSummary{host,port:url.port(),path:url.path().to_owned()})\n}\n",
+        "panel.rs": "mod bookmark;\npub fn origin_label(text:&str) -> Result<String,String> {\n    let summary=bookmark::summarize(text)?;\n    Ok(match summary.port {\n        Some(port)=>format!(\"{}:{}\",summary.host,port),\n        None=>summary.host,\n    })\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "URL parsing is not fetching. This operation intentionally permits arbitrary HTTP bookmark origins for display, with no privileged networking sink or HTML interpretation.",
+      "remediation_constraints": [
+        "Display the parsed origin of a user bookmark without contacting it.",
+        "Keep the operation free of implicit fetch/navigation and render origin text literally.",
+        "Do not add background health checks or reject local bookmarks as though displaying one performs SSRF."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "url2.5.4; the bookmark panel renders returned strings as text and performs no network I/O, DNS resolution, automatic navigation or filesystem access. Internal/loopback bookmarks are intentionally allowed as display data."
+      },
+      "operation_contract": {
+        "purpose": "Display the parsed origin of a user bookmark without contacting it.",
+        "trust_boundary": "Untrusted URL syntax is parsed into inert display fields and never becomes an outbound request.",
+        "legitimate_examples": [
+          {
+            "input": "https://notes.example.org:8443/a",
+            "expected": "notes.example.org:8443"
+          },
+          {
+            "input": "http://127.0.0.1:8080/admin",
+            "expected": "127.0.0.1:8080 displayed; no connection"
+          }
+        ],
+        "permitted_changes": [
+          "Keep the operation free of implicit fetch/navigation and render origin text literally."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not add background health checks or reject local bookmarks as though displaying one performs SSRF."
+        ]
+      },
+      "regression_traps": [
+        "Do not add background health checks or reject local bookmarks as though displaying one performs SSRF."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "A separate explicit user navigation action would have its own trust model; it is absent from this panel and must not be invented by the reviewer."
+        ]
+      },
+      "derivation": {
+        "group": "bookmark-origin-display-without-fetch",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around display the parsed origin of a user bookmark without contacting it. Boundary: Untrusted URL syntax is parsed into inert display fields and never becomes an outbound request. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.rs/url/latest/url/struct.Url.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-safe-04",
+      "language": "rust",
+      "vulnerable": false,
+      "scenario": "pdf-metadata-direct-process",
+      "files": {
+        "pdf_metadata.rs": "use std::io;\nuse std::path::Path;\nuse std::process::{Command, Output};\npub fn metadata(owned_pdf: &Path) -> io::Result<Output> {\n    if !owned_pdf.is_absolute() { return Err(io::Error::new(io::ErrorKind::InvalidInput,\"absolute owned path required\")); }\n    Command::new(\"/usr/bin/pdfinfo\").arg(owned_pdf).env_clear().env(\"LC_ALL\",\"C\").output()\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Command uses a fixed binary and one literal argument, with no shell. Absolute server-assigned paths cannot be mistaken for a leading option. Returning Output preserves error evidence.",
+      "remediation_constraints": [
+        "Collect metadata for an accepted owned PDF and preserve stdout/stderr/status.",
+        "Keep fixed executable, literal argv and full process result.",
+        "Do not invoke sh -c, drop stderr/status, or narrow accepted filenames by deleting spaces."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "Poppler24.02 pdfinfo; ingestion assigns an absolute path inside a private directory and has bounded/prevalidated the PDF. Caller cannot choose an arbitrary host file. Executable and file are immutable for the operation."
+      },
+      "operation_contract": {
+        "purpose": "Collect metadata for an accepted owned PDF and preserve stdout/stderr/status.",
+        "trust_boundary": "The server-assigned absolute file path is one process argument, not shell source or an option.",
+        "legitimate_examples": [
+          {
+            "input": "Owned path containing spaces",
+            "expected": "Metadata for that one PDF"
+          },
+          {
+            "input": "Owned path containing semicolon",
+            "expected": "No extra command is executed"
+          }
+        ],
+        "permitted_changes": [
+          "Keep fixed executable, literal argv and full process result."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not invoke sh -c, drop stderr/status, or narrow accepted filenames by deleting spaces."
+        ]
+      },
+      "regression_traps": [
+        "Do not invoke sh -c, drop stderr/status, or narrow accepted filenames by deleting spaces."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "PDF implementation bugs are outside source ground truth; ingestion and process resource limits are deployment prerequisites."
+        ]
+      },
+      "derivation": {
+        "group": "pdf-metadata-direct-process",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around collect metadata for an accepted owned pdf and preserve stdout/stderr/status. Boundary: The server-assigned absolute file path is one process argument, not shell source or an option. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://doc.rust-lang.org/std/process/struct.Command.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-safe-05",
+      "language": "rust",
+      "vulnerable": false,
+      "scenario": "typed-json-device-screen-config",
+      "files": {
+        "screen.rs": "use serde::Deserialize;\n#[derive(Deserialize)]\n#[serde(deny_unknown_fields)]\npub struct Screen { pub title:String, pub columns:u8 }\npub fn import(bytes:&[u8]) -> Result<Screen,String> {\n    if bytes.len()>4096 { return Err(\"config too large\".into()); }\n    let screen:Screen=serde_json::from_slice(bytes).map_err(|_| \"invalid config\")?;\n    if screen.title.len()>100 || !(1..=4).contains(&screen.columns) { return Err(\"invalid screen layout\".into()); }\n    Ok(screen)\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Serde decodes a fixed data model; no dynamic object activation is present. Unknown fields and out-of-range dimensions are rejected, preserving a data-only import.",
+      "remediation_constraints": [
+        "Import a bounded device-screen layout into a fixed struct.",
+        "Keep the typed schema and layout bounds.",
+        "Do not turn title into an executable action or ignore validation on decode errors."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "serde1.0.217 derive, serde_json1.0.138. Parsed configuration controls display text and column count only; title is rendered as text and does not select commands, classes or HTML."
+      },
+      "operation_contract": {
+        "purpose": "Import a bounded device-screen layout into a fixed struct.",
+        "trust_boundary": "Network JSON is decoded into explicit scalar fields with no class/type dispatch.",
+        "legitimate_examples": [
+          {
+            "input": "{title:Night shift,columns:2}",
+            "expected": "Two-column Night shift model"
+          },
+          {
+            "input": "Additional class or command field",
+            "expected": "Rejected unknown field"
+          }
+        ],
+        "permitted_changes": [
+          "Keep the typed schema and layout bounds."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not turn title into an executable action or ignore validation on decode errors."
+        ]
+      },
+      "regression_traps": [
+        "Do not turn title into an executable action or ignore validation on decode errors."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Template rendering uses plain text per consumer contract; parser depth and input limits are bounded by the stated small schema."
+        ]
+      },
+      "derivation": {
+        "group": "typed-json-device-screen-config",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around import a bounded device-screen layout into a fixed struct. Boundary: Network JSON is decoded into explicit scalar fields with no class/type dispatch. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://serde.rs/attributes.html",
+          "https://docs.rs/serde_json/latest/serde_json/fn.from_slice.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-safe-06",
+      "language": "rust",
+      "vulnerable": false,
+      "scenario": "immutable-build-record-sha256-address",
+      "files": {
+        "build_record.rs": "use sha2::{Digest,Sha256};\nuse std::fmt::Write;\npub struct Record { pub id:String, pub bytes:Vec<u8> }\npub fn identify(public_manifest:&[u8]) -> Result<Record,&'static str> {\n    if public_manifest.len()>65536 { return Err(\"manifest too large\"); }\n    let digest=Sha256::digest(public_manifest);\n    let mut id=String::with_capacity(64);\n    for byte in digest { write!(&mut id,\"{:02x}\",byte).map_err(|_|\"format failure\")?; }\n    Ok(Record{id,bytes:public_manifest.to_vec()})\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "SHA-256 is appropriate for bounded content addressing, and the returned bytes are exactly those hashed. Predictability of a public digest is not an authentication weakness when it grants no access.",
+      "remediation_constraints": [
+        "Create a full SHA-256 content address paired with the exact public manifest bytes.",
+        "Preserve full digest and exact-byte association.",
+        "Do not truncate identifiers into security tokens or canonicalize bytes after hashing."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "sha2 0.10.8; records are public immutable build manifests. A trusted append-only store uses the full digest as content address and compares stored bytes before treating duplicate IDs as the same record. No authentication/authorization decision relies on public IDs."
+      },
+      "operation_contract": {
+        "purpose": "Create a full SHA-256 content address paired with the exact public manifest bytes.",
+        "trust_boundary": "Untrusted manifest bytes affect a collision-resistant public identifier, not a bearer secret.",
+        "legitimate_examples": [
+          {
+            "input": "Same manifest twice",
+            "expected": "Same64-hex ID and identical bytes"
+          },
+          {
+            "input": "Manifest with changed byte",
+            "expected": "Different content address except negligible collision probability"
+          }
+        ],
+        "permitted_changes": [
+          "Preserve full digest and exact-byte association."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not truncate identifiers into security tokens or canonicalize bytes after hashing."
+        ]
+      },
+      "regression_traps": [
+        "Do not truncate identifiers into security tokens or canonicalize bytes after hashing."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The content address is not a signature; public-store authenticity is not claimed by this function."
+        ]
+      },
+      "derivation": {
+        "group": "immutable-build-record-sha256-address",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around create a full sha-256 content address paired with the exact public manifest bytes. Boundary: Untrusted manifest bytes affect a collision-resistant public identifier, not a bearer secret. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.rs/sha2/latest/sha2/"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-vulnerable-01",
+      "language": "rust",
+      "vulnerable": true,
+      "scenario": "offline-journal-rusqlite-batch-prune",
+      "files": {
+        "prune.rs": "use rusqlite::{Connection, Result};\npub fn prune_source(db: &Connection, imported_source: &str) -> Result<()> {\n    let sql = format!(\"DELETE FROM journal_entries WHERE source = '{}';\", imported_source);\n    db.execute_batch(&sql)\n}\npub fn confirm_cleanup(db: &Connection, selected_import_source: &str) -> Result<()> {\n    if selected_import_source.len() > 100 { return Err(rusqlite::Error::InvalidParameterName(\"source too long\".into())); }\n    prune_source(db, selected_import_source)\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "prune.rs"
+        }
+      ],
+      "rationale": "A second-order label reaches an API that executes SQL text, including multiple statements. User confirmation of cleanup does not authorize label-supplied SQL.",
+      "remediation_constraints": [
+        "Prune entries from exactly the selected imported journal source.",
+        "Execute one prepared DELETE with a bound source parameter and retain failure reporting.",
+        "Do not clear the entire journal, reject all punctuation, or replace cleanup with a no-op."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "rusqlite0.32.1 with bundled SQLite; journal_entries(id,source,body) in a local app-owned database. Imported source labels are untrusted; user explicitly confirms pruning one source, not all journal entries."
+      },
+      "operation_contract": {
+        "purpose": "Prune entries from exactly the selected imported journal source.",
+        "trust_boundary": "A stored untrusted import label is interpolated into execute_batch at a later cleanup action.",
+        "legitimate_examples": [
+          {
+            "input": "source=travel-journal",
+            "expected": "Delete only travel-journal entries"
+          },
+          {
+            "input": "source=editor's notebook",
+            "expected": "Exact apostrophe-containing source can be pruned"
+          }
+        ],
+        "permitted_changes": [
+          "Execute one prepared DELETE with a bound source parameter and retain failure reporting."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not clear the entire journal, reject all punctuation, or replace cleanup with a no-op."
+        ]
+      },
+      "regression_traps": [
+        "Do not clear the entire journal, reject all punctuation, or replace cleanup with a no-op."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The database is local and trusted; importing arbitrary label text does not grant execution authority."
+        ]
+      },
+      "derivation": {
+        "group": "offline-journal-rusqlite-batch-prune",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around prune entries from exactly the selected imported journal source. Boundary: A stored untrusted import label is interpolated into execute_batch at a later cleanup action. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.rs/rusqlite/latest/rusqlite/struct.Connection.html#method.execute_batch"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-vulnerable-02",
+      "language": "rust",
+      "vulnerable": true,
+      "scenario": "work-queue-sqlx-sort-expression",
+      "files": {
+        "queue.rs": "use sqlx::{PgPool, Row};\npub async fn page(pool: &PgPool, owner: i64, sort_from_query: &str) -> Result<Vec<i64>, sqlx::Error> {\n    let sql = format!(\"SELECT id FROM tasks WHERE owner=$1 ORDER BY {}, id LIMIT 50\", sort_from_query);\n    let rows = sqlx::query(&sql).bind(owner).fetch_all(pool).await?;\n    rows.into_iter().map(|row| row.try_get::<i64,_>(\"id\")).collect()\n}\n",
+        "handler.rs": "use sqlx::PgPool;\nmod queue;\npub async fn list(pool: &PgPool, authenticated_owner: i64, sort: Option<&str>) -> Result<Vec<i64>, sqlx::Error> {\n    queue::page(pool, authenticated_owner, sort.unwrap_or(\"created_at\")).await\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "queue.rs"
+        }
+      ],
+      "rationale": "Binding owner does not protect the interpolated ORDER BY grammar. The user can supply arbitrary SQL expressions rather than one published sort key; prepared query execution does not parameterize that fragment.",
+      "remediation_constraints": [
+        "List an authenticated user work queue in one of two published orders.",
+        "Select trusted sort-expression literals from the two supported keys and include the documented id tie-break.",
+        "Do not bind a column name as a string constant, drop owner filtering, or return every user queue."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "sqlx0.8.3 features postgres,runtime-tokio-rustls; Tokio1.42; PostgreSQL16 tasks(id bigint,owner bigint,created_at timestamptz,priority integer). Public API promises sort keys created_at or priority, ascending with stable id tie-break."
+      },
+      "operation_contract": {
+        "purpose": "List an authenticated user work queue in one of two published orders.",
+        "trust_boundary": "Untrusted sort text becomes an SQL expression even though the owner value is bound correctly.",
+        "legitimate_examples": [
+          {
+            "input": "sort=priority",
+            "expected": "At most50 task IDs ordered by priority then id"
+          },
+          {
+            "input": "sort=created_at",
+            "expected": "At most50 task IDs ordered by creation time then id"
+          }
+        ],
+        "permitted_changes": [
+          "Select trusted sort-expression literals from the two supported keys and include the documented id tie-break."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not bind a column name as a string constant, drop owner filtering, or return every user queue."
+        ]
+      },
+      "regression_traps": [
+        "Do not bind a column name as a string constant, drop owner filtering, or return every user queue."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Multiple-statement execution is not assumed under the PostgreSQL extended protocol; arbitrary expressions within one statement are sufficient for the injection label."
+        ]
+      },
+      "derivation": {
+        "group": "work-queue-sqlx-sort-expression",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around list an authenticated user work queue in one of two published orders. Boundary: Untrusted sort text becomes an SQL expression even though the owner value is bound correctly. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.rs/sqlx/latest/sqlx/fn.query.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-vulnerable-03",
+      "language": "rust",
+      "vulnerable": true,
+      "scenario": "update-channel-reqwest-invalid-certs",
+      "files": {
+        "channel.rs": "use reqwest::blocking::Client;\nuse reqwest::redirect::Policy;\nuse std::time::Duration;\npub fn latest_version() -> Result<String, reqwest::Error> {\n    let client = Client::builder()\n        .danger_accept_invalid_certs(true)\n        .redirect(Policy::none())\n        .timeout(Duration::from_secs(4))\n        .build()?;\n    client.get(\"https://updates.example.org/channel/stable\")\n        .send()?.error_for_status()?.text()\n}\npub fn displayed_update() -> Result<String, reqwest::Error> {\n    Ok(format!(\"Available version: {}\", latest_version()?.trim()))\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "channel.rs"
+        }
+      ],
+      "rationale": "The builder disables chain validation on the actual client used by the channel consumer. Refusing redirects does not authenticate the initial TLS peer.",
+      "remediation_constraints": [
+        "Fetch an authenticated stable-channel version label for the update UI.",
+        "Use normal validation or a correctly configured private root store without insecure fallback.",
+        "Do not fabricate a current version, silently ignore TLS failures, or switch to HTTP."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "reqwest0.12.12 features blocking,rustls-tls with default-features=false. The application trusts channel metadata to select an update offered to the user; no separate signature authenticates channel labels."
+      },
+      "operation_contract": {
+        "purpose": "Fetch an authenticated stable-channel version label for the update UI.",
+        "trust_boundary": "An on-path attacker can supply an arbitrary certificate and body to a client configured to accept invalid certificates.",
+        "legitimate_examples": [
+          {
+            "input": "Trusted channel returns2.4.0",
+            "expected": "Available version: 2.4.0"
+          },
+          {
+            "input": "Untrusted peer certificate",
+            "expected": "Must fail after remediation"
+          }
+        ],
+        "permitted_changes": [
+          "Use normal validation or a correctly configured private root store without insecure fallback."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not fabricate a current version, silently ignore TLS failures, or switch to HTTP."
+        ]
+      },
+      "regression_traps": [
+        "Do not fabricate a current version, silently ignore TLS failures, or switch to HTTP."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Deployment bounds the channel body through its reverse proxy; this case labels transport authenticity rather than guaranteeing protection against malicious authenticated update servers."
+        ]
+      },
+      "derivation": {
+        "group": "update-channel-reqwest-invalid-certs",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around fetch an authenticated stable-channel version label for the update ui. Boundary: An on-path attacker can supply an arbitrary certificate and body to a client configured to accept invalid certificates. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.rs/reqwest/latest/reqwest/struct.ClientBuilder.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-vulnerable-04",
+      "language": "rust",
+      "vulnerable": true,
+      "scenario": "billing-api-native-tls-hostname-bypass",
+      "files": {
+        "billing.rs": "use reqwest::blocking::Client;\nuse std::time::Duration;\npub fn send_receipt(receipt: Vec<u8>) -> Result<u16, reqwest::Error> {\n    let client = Client::builder()\n        .danger_accept_invalid_hostnames(true)\n        .redirect(reqwest::redirect::Policy::none())\n        .timeout(Duration::from_secs(3))\n        .build()?;\n    let response = client.post(\"https://billing.example.org/receipts\")\n        .body(receipt).send()?;\n    Ok(response.status().as_u16())\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "billing.rs"
+        }
+      ],
+      "rationale": "The native-TLS hostname bypass accepts another domain identity even when the certificate chain is valid. The protected asset is an outbound private body, not merely public fetched text.",
+      "remediation_constraints": [
+        "Send a receipt only to the authenticated billing origin and return HTTP status.",
+        "Restore hostname checks while preserving trusted CA validation and exact billing destination.",
+        "Do not suppress failures, remove receipt upload, or send the body before authenticating the host."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "reqwest0.12.12 features blocking,native-tls with default-features=false; OpenSSL-backed native-tls on Linux. Caller supplies an authorized bounded receipt containing private billing details. Network attacker owns a certificate valid for another hostname."
+      },
+      "operation_contract": {
+        "purpose": "Send a receipt only to the authenticated billing origin and return HTTP status.",
+        "trust_boundary": "Chain validation remains active but the requested DNS identity is ignored before transmitting private receipt bytes.",
+        "legitimate_examples": [
+          {
+            "input": "Trusted billing host returns201",
+            "expected": 201
+          },
+          {
+            "input": "CA-valid certificate for unrelated.example",
+            "expected": "Must not receive receipt after remediation"
+          }
+        ],
+        "permitted_changes": [
+          "Restore hostname checks while preserving trusted CA validation and exact billing destination."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not suppress failures, remove receipt upload, or send the body before authenticating the host."
+        ]
+      },
+      "regression_traps": [
+        "Do not suppress failures, remove receipt upload, or send the body before authenticating the host."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Native-tls is explicitly selected because backend support affects reachability of this option; a generic rustls assumption would be insufficient."
+        ]
+      },
+      "derivation": {
+        "group": "billing-api-native-tls-hostname-bypass",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around send a receipt only to the authenticated billing origin and return http status. Boundary: Chain validation remains active but the requested DNS identity is ignored before transmitting private receipt bytes. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.rs/reqwest/latest/reqwest/struct.ClientBuilder.html#method.danger_accept_invalid_hostnames"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-vulnerable-05",
+      "language": "rust",
+      "vulnerable": true,
+      "scenario": "document-count-shell-glob-selector",
+      "files": {
+        "count.rs": "use std::io;\nuse std::process::{Command, Output};\npub fn count_documents(extension: &str) -> io::Result<Output> {\n    if extension.len() > 20 { return Err(io::Error::new(io::ErrorKind::InvalidInput,\"extension too long\")); }\n    let command = format!(\"find /srv/public/docs -type f -name '*.{}' | wc -l\", extension);\n    Command::new(\"/bin/sh\").arg(\"-c\").arg(command).output()\n}\n",
+        "endpoint.rs": "use std::io;\nmod count;\npub fn count_for_form(extension: &str) -> io::Result<String> {\n    let output = count::count_documents(extension)?;\n    if !output.status.success() { return Err(io::Error::other(\"count failed\")); }\n    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "count.rs"
+        }
+      ],
+      "rationale": "Length restriction does not stop a quote escaping the shell word. In addition, find wildcard semantics must not replace the declared literal-suffix contract during a repair.",
+      "remediation_constraints": [
+        "Count public documents whose filenames end in the selected literal suffix.",
+        "Use directory iteration with literal suffix matching, or a safely escaped direct find invocation and explicit pipe handling.",
+        "Do not count every file, replace the response with command text, or allow wildcard expansion to alter literal suffix meaning."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "Linux POSIX shell, GNU findutils/coreutils in trusted PATH. Public document tree is immutable and bounded. API accepts literal filename suffixes, including punctuation, not shell programs or arbitrary find expressions."
+      },
+      "operation_contract": {
+        "purpose": "Count public documents whose filenames end in the selected literal suffix.",
+        "trust_boundary": "Form suffix is interpolated inside shell quotes, then interpreted by sh -c before find receives its pattern.",
+        "legitimate_examples": [
+          {
+            "input": "extension=pdf",
+            "expected": "Count .pdf files"
+          },
+          {
+            "input": "extension=notes'old",
+            "expected": "Count literal .notes'old suffix"
+          }
+        ],
+        "permitted_changes": [
+          "Use directory iteration with literal suffix matching, or a safely escaped direct find invocation and explicit pipe handling."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not count every file, replace the response with command text, or allow wildcard expansion to alter literal suffix meaning."
+        ]
+      },
+      "regression_traps": [
+        "Do not count every file, replace the response with command text, or allow wildcard expansion to alter literal suffix meaning."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The trusted finite document tree constrains work. Command output status and literal suffix interpretation are behavior requirements beyond merely removing the shell."
+        ]
+      },
+      "derivation": {
+        "group": "document-count-shell-glob-selector",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around count public documents whose filenames end in the selected literal suffix. Boundary: Form suffix is interpolated inside shell quotes, then interpreted by sh -c before find receives its pattern. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://doc.rust-lang.org/std/process/struct.Command.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-rust-vulnerable-06",
+      "language": "rust",
+      "vulnerable": true,
+      "scenario": "support-export-world-readable-permissions",
+      "files": {
+        "export.rs": "use std::fs::{self, OpenOptions, Permissions};\nuse std::io::{self, Write};\nuse std::os::unix::fs::{OpenOptionsExt, PermissionsExt};\nuse std::path::Path;\npub fn private_export(path: &Path, customer_csv: &[u8]) -> io::Result<()> {\n    let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)?;\n    file.write_all(customer_csv)?;\n    file.sync_all()?;\n    fs::set_permissions(path, Permissions::from_mode(0o666))?;\n    Ok(())\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "insecure-permissions",
+          "cwe": "CWE-732",
+          "path": "export.rs"
+        }
+      ],
+      "rationale": "The final chmod defeats the restrictive create mode and exposes private contents to unrelated local users. The containing directory is explicitly traversable so this is reachable rather than masked by a0700 parent.",
+      "remediation_constraints": [
+        "Write a new private support export readable only by its service account.",
+        "Keep owner-only permissions and avoid broadening them after creation; preserve exclusive creation and durable-write errors.",
+        "Do not make the parent world-writable, omit the CSV, or overwrite existing exports."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Rust1.83, edition2021; Linux amd64",
+        "libraries_platform_setup": "Unix filesystem; path is server-generated beneath an application-owned directory with mode0755, traversable by other local users. Source CSV contains private customer records; intended reader is the service account only. No symlink/path attacker controls the destination."
+      },
+      "operation_contract": {
+        "purpose": "Write a new private support export readable only by its service account.",
+        "trust_boundary": "After securely creating the file, the code grants read/write permissions to every local user.",
+        "legitimate_examples": [
+          {
+            "input": "New trusted export path",
+            "expected": "CSV stored, readable by owner"
+          },
+          {
+            "input": "Existing export path",
+            "expected": "Creation fails without overwrite"
+          }
+        ],
+        "permitted_changes": [
+          "Keep owner-only permissions and avoid broadening them after creation; preserve exclusive creation and durable-write errors."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not make the parent world-writable, omit the CSV, or overwrite existing exports."
+        ]
+      },
+      "regression_traps": [
+        "Do not make the parent world-writable, omit the CSV, or overwrite existing exports."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Path generation and parent ownership are trusted. Cross-user confidentiality/integrity, not a generic chmod occurrence, establishes the label."
+        ]
+      },
+      "derivation": {
+        "group": "support-export-world-readable-permissions",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around write a new private support export readable only by its service account. Boundary: After securely creating the file, the code grants read/write permissions to every local user. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://doc.rust-lang.org/std/os/unix/fs/trait.PermissionsExt.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

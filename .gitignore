@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -47,6 +47,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.collector.lock
 cover/
 
 # Translations
@@ -145,6 +146,7 @@ cython_debug/
 *.swo
 *~
 .DS_Store
+._*
 
 # Project specific
 Logs/

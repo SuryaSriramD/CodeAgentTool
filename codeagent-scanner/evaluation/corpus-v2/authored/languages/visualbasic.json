@@ -1,0 +1,1061 @@
+{
+  "language": "visualbasic",
+  "cases": [
+    {
+      "id": "v2-visualbasic-vulnerable-01",
+      "language": "visualbasic",
+      "vulnerable": true,
+      "scenario": "Inventory grid accepts a sort expression as SQL syntax",
+      "files": {
+        "src/InventoryGrid.vb": "Option Strict On\nImports System\nImports System.Data\nImports Microsoft.Data.SqlClient\nPublic Module InventoryGrid\n    Public Function Load(connection As SqlConnection, sort As String) As DataTable\n        If sort.Length > 64 Then Throw New ArgumentException(\"sort\")\n        Dim sql = \"SELECT Sku, Quantity FROM Inventory ORDER BY \" & sort\n        Using command As New SqlCommand(sql, connection)\n            Using adapter As New SqlDataAdapter(command)\n                Dim table As New DataTable()\n                adapter.Fill(table)\n                Return table\n            End Using\n        End Using\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "src/InventoryGrid.vb",
+          "line_start": 8,
+          "line_end": 8
+        }
+      ],
+      "rationale": "The grid accepts a free-form expression in the ORDER BY grammar. Quoting a value parameter is not sufficient for an SQL identifier or ordering expression.",
+      "remediation_constraints": [
+        "Map public sort modes to fixed SQL fragments and reject unknown modes.",
+        "Keep the selected columns and deterministic tie ordering."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. Microsoft.Data.SqlClient 5.2.2; SQL Server 2022; Sku is a unique non-null NVARCHAR field. The source currently misinterprets documented public sort modes."
+      },
+      "operation_contract": {
+        "purpose": "Return inventory rows ordered by one of the product sort modes sku, quantity-asc or quantity-desc.",
+        "trust_boundary": "A dashboard user controls the requested sort mode and must not submit arbitrary SQL expressions.",
+        "legitimate_examples": [
+          {
+            "input": "Sort quantity-desc",
+            "expected": "Return rows ordered by Quantity DESC, then Sku ASC for ties."
+          },
+          {
+            "input": "Sort sku",
+            "expected": "Return rows ordered by Sku ASC."
+          }
+        ],
+        "permitted_changes": [
+          "Map public sort modes to fixed SQL fragments and reject unknown modes.",
+          "Keep the selected columns and deterministic tie ordering."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Binding the sort name as @sort does not select an SQL column.",
+        "Escaping apostrophes does not constrain an unquoted expression."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "SQL structure selection at an identifier/expression boundary.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-inventory-sort-grammar",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Repair must map a finite UI ordering language to SQL structure rather than merely parameterize a scalar value. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-vulnerable-02",
+      "language": "visualbasic",
+      "vulnerable": true,
+      "scenario": "Contact prefix filter concatenates quoted text into a LIKE expression",
+      "files": {
+        "src/ContactPrefix.vb": "Option Strict On\nImports System\nImports Microsoft.Data.SqlClient\nPublic Module ContactPrefix\n    Public Function Count(connection As SqlConnection, prefix As String) As Integer\n        If prefix.Length > 40 Then Throw New ArgumentException(\"prefix\")\n        Dim pattern = prefix & \"%\"\n        Using command As New SqlCommand()\n            command.Connection = connection\n            command.CommandText = \"SELECT COUNT(*) FROM Contacts WHERE DisplayName LIKE '\" & pattern & \"'\"\n            Return Convert.ToInt32(command.ExecuteScalar())\n        End Using\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "src/ContactPrefix.vb",
+          "line_start": 10,
+          "line_end": 10
+        }
+      ],
+      "rationale": "An apostrophe in the prefix escapes the LIKE literal and changes SQL. A correct repair must also preserve literal-prefix semantics for wildcard characters.",
+      "remediation_constraints": [
+        "Bind the pattern and escape LIKE metacharacters using an explicit ESCAPE character.",
+        "Keep the exact prefix semantics and integer count result."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. SQL Server 2022; Microsoft.Data.SqlClient 5.2.2; DisplayName is NVARCHAR(200) NOT NULL; collation-defined case sensitivity is intentional."
+      },
+      "operation_contract": {
+        "purpose": "Count contacts whose display name begins with the exact user-supplied prefix.",
+        "trust_boundary": "A user supplies arbitrary bounded display-name text, including apostrophes, percent and underscore.",
+        "legitimate_examples": [
+          {
+            "input": "Prefix O'",
+            "expected": "Count names beginning with the literal characters O followed by apostrophe."
+          },
+          {
+            "input": "Prefix 10%",
+            "expected": "Count names beginning with literal 10%, not all 10-prefixed names."
+          }
+        ],
+        "permitted_changes": [
+          "Bind the pattern and escape LIKE metacharacters using an explicit ESCAPE character.",
+          "Keep the exact prefix semantics and integer count result."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Parameterization alone removes SQL syntax injection but leaves unintended wildcard expansion.",
+        "Replacing the prefix filter with equality loses prefix search."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "SQL injection and LIKE-pattern semantic preservation.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-contact-prefix-pattern-language",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The case distinguishes query syntax from a second embedded wildcard language that a complete fix must handle. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-vulnerable-03",
+      "language": "visualbasic",
+      "vulnerable": true,
+      "scenario": "Dispatch logger puts an operator message into cmd redirection",
+      "files": {
+        "src/DispatchLog.vb": "Option Strict On\nImports System\nImports System.Diagnostics\nPublic Module DispatchLog\n    Public Function Append(message As String) As Integer\n        If message.Length > 200 OrElse message.Contains(vbCr) OrElse message.Contains(vbLf) Then Throw New ArgumentException(\"message\")\n        Dim start As New ProcessStartInfo(\"C:\\Windows\\System32\\cmd.exe\")\n        start.UseShellExecute = False\n        start.ArgumentList.Add(\"/d\")\n        start.ArgumentList.Add(\"/c\")\n        start.ArgumentList.Add(\"echo \" & message & \" >> C:\\Service\\dispatch.log\")\n        Using child = Process.Start(start)\n            If child Is Nothing Then Throw New InvalidOperationException(\"spawn\")\n            child.WaitForExit()\n            Return child.ExitCode\n        End Using\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/DispatchLog.vb",
+          "line_start": 11,
+          "line_end": 11
+        }
+      ],
+      "rationale": "Newline rejection does not neutralize cmd metacharacters. A limited operator role can inject additional commands through a message intended only for a log.",
+      "remediation_constraints": [
+        "Use a direct file append API with explicit UTF-8 encoding and serialization.",
+        "Keep literal messages, one newline and error reporting."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. Windows Server 2022; C:\\Service is not writable by operators; a caller lock serializes log writes. The desired file encoding is UTF-8 without BOM."
+      },
+      "operation_contract": {
+        "purpose": "Append the literal operator message and one Windows newline to a service-owned UTF-8 dispatch log.",
+        "trust_boundary": "Help-desk operators may append notes but cannot execute commands under the service account.",
+        "legitimate_examples": [
+          {
+            "input": "Message Ready & waiting",
+            "expected": "Append the literal ampersand text followed by CRLF."
+          },
+          {
+            "input": "Message containing a newline",
+            "expected": "Reject without appending or launching a process."
+          }
+        ],
+        "permitted_changes": [
+          "Use a direct file append API with explicit UTF-8 encoding and serialization.",
+          "Keep literal messages, one newline and error reporting."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Escaping spaces does not protect cmd operators.",
+        "Do not grant file path selection while removing the shell."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Windows shell interpretation of a bounded single-line log message.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-dispatch-log-command-redirection",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A restricted append-only operator permission accidentally becomes process execution through shell redirection. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-vulnerable-04",
+      "language": "visualbasic",
+      "vulnerable": true,
+      "scenario": "A PowerShell event query embeds an untrusted application name",
+      "files": {
+        "src/EventCount.vb": "Option Strict On\nImports System\nImports System.Diagnostics\nPublic Module EventCount\n    Public Function Read(application As String) As String\n        If application.Length > 80 Then Throw New ArgumentException(\"application\")\n        Dim script = \"(Get-WinEvent -FilterHashtable @{LogName='Application';ProviderName='\" & application & \"'} -ErrorAction Stop | Measure-Object).Count\"\n        Dim start As New ProcessStartInfo(\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\")\n        start.UseShellExecute = False\n        start.RedirectStandardOutput = True\n        start.ArgumentList.Add(\"-NoProfile\")\n        start.ArgumentList.Add(\"-Command\")\n        start.ArgumentList.Add(script)\n        Using child = Process.Start(start)\n            If child Is Nothing Then Throw New InvalidOperationException(\"spawn\")\n            Dim output = child.StandardOutput.ReadToEnd()\n            child.WaitForExit()\n            If child.ExitCode <> 0 Then Throw New InvalidOperationException(\"events\")\n            Return output.Trim()\n        End Using\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "src/EventCount.vb",
+          "line_start": 7,
+          "line_end": 7
+        }
+      ],
+      "rationale": "The provider name can close a PowerShell string in a constructed program. Passing that program with ArgumentList does not turn its embedded data into literal script arguments.",
+      "remediation_constraints": [
+        "Use a trusted parameterized script or direct Windows event-log API, retaining exact provider matching.",
+        "Preserve capture, process failure handling and a caller deadline."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. Windows PowerShell 5.1; the service can read Application events; output is one integer and bounded by the caller."
+      },
+      "operation_contract": {
+        "purpose": "Return the count of Application-log events for one exact provider name.",
+        "trust_boundary": "A support UI user controls a provider-name filter, not executable PowerShell code.",
+        "legitimate_examples": [
+          {
+            "input": "Application Contoso Agent",
+            "expected": "Count only that exact provider."
+          },
+          {
+            "input": "Application O'Brien Worker",
+            "expected": "Treat the apostrophe as provider-name data."
+          }
+        ],
+        "permitted_changes": [
+          "Use a trusted parameterized script or direct Windows event-log API, retaining exact provider matching.",
+          "Preserve capture, process failure handling and a caller deadline."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Replacing quotes without respecting PowerShell syntax is not a complete injection defense.",
+        "Do not expand the query to all providers when parsing a difficult name."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "PowerShell program construction with provider-name data; Windows event authorization is an external service policy.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-powershell-event-filter",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The embedded language is PowerShell hashtable syntax and pipeline evaluation, with an exact event-filter semantic requirement. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-vulnerable-05",
+      "language": "visualbasic",
+      "vulnerable": true,
+      "scenario": "TLS telemetry stream accepts every presented peer certificate",
+      "files": {
+        "src/TelemetryChannel.vb": "Option Strict On\nImports System\nImports System.Net.Sockets\nImports System.Net.Security\nImports System.Text\nPublic Module TelemetryChannel\n    Public Sub Send(payload As String)\n        If payload.Length > 2048 Then Throw New ArgumentException(\"payload\")\n        Using tcp As New TcpClient(\"telemetry.example.org\", 443)\n            Using tls As New SslStream(tcp.GetStream(), False, Function(sender, certificate, chain, errors) True)\n                tls.AuthenticateAsClient(\"telemetry.example.org\")\n                Dim bytes = Encoding.UTF8.GetBytes(payload & vbLf)\n                tls.Write(bytes, 0, bytes.Length)\n                tls.Flush()\n            End Using\n        End Using\n    End Sub\nEnd Module\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "src/TelemetryChannel.vb",
+          "line_start": 10,
+          "line_end": 10
+        }
+      ],
+      "rationale": "The certificate callback ignores both chain and hostname errors on the SslStream actually sending telemetry. An encrypted stream is not authenticated when every certificate is accepted.",
+      "remediation_constraints": [
+        "Use the platform validation result without bypass or remove the permissive callback.",
+        "Keep the fixed hostname, encoding, record boundary and disposal."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. The collector accepts a raw newline-delimited application protocol over TLS on port 443; ingress payload contains no newline. Caller enforces connect/read deadlines."
+      },
+      "operation_contract": {
+        "purpose": "Send one bounded telemetry record to the authenticated fixed collector.",
+        "trust_boundary": "The network can be intercepted; payload is service data and must not be disclosed to an impersonated collector.",
+        "legitimate_examples": [
+          {
+            "input": "Trusted certificate for telemetry.example.org",
+            "expected": "Write one UTF-8 line."
+          },
+          {
+            "input": "Wrong-host certificate",
+            "expected": "Fail authentication before writing the payload."
+          }
+        ],
+        "permitted_changes": [
+          "Use the platform validation result without bypass or remove the permissive callback.",
+          "Keep the fixed hostname, encoding, record boundary and disposal."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Checking certificate IsNot Nothing still accepts attacker certificates.",
+        "Changing only TLS protocol version does not restore peer identity checks."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Raw TLS peer authentication with a consuming stream.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-raw-telemetry-stream-certificate",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Unlike HTTP examples, a directly authenticated TLS stream sends sensitive records and exposes the callback-to-write dataflow. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-vulnerable-06",
+      "language": "visualbasic",
+      "vulnerable": true,
+      "scenario": "Partner order DOM enables a URL resolver on untrusted XML",
+      "files": {
+        "src/PartnerOrder.vb": "Option Strict On\nImports System\nImports System.Xml\nPublic Module PartnerOrder\n    Public Function Reference(xml As String) As String\n        If xml.Length > 32768 Then Throw New ArgumentException(\"order\")\n        Dim document As New XmlDocument()\n        document.XmlResolver = New XmlUrlResolver()\n        document.LoadXml(xml)\n        Dim node = document.SelectSingleNode(\"/order/reference\")\n        If node Is Nothing Then Throw New FormatException(\"reference\")\n        If node.InnerText.Length > 128 Then Throw New FormatException(\"reference length\")\n        Return node.InnerText\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-xml",
+          "cwe": "CWE-611",
+          "path": "src/PartnerOrder.vb",
+          "line_start": 8,
+          "line_end": 8
+        }
+      ],
+      "rationale": "The DOM is configured to resolve external entities while loading a partner-controlled document. Validating the selected text length afterward cannot prevent the resource access.",
+      "remediation_constraints": [
+        "Load through a reader with DTD prohibition and a null resolver.",
+        "Retain required-reference and output-length validation."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. .NET 8 XmlDocument; no DTD is required by the order protocol; the service may reach private network resources."
+      },
+      "operation_contract": {
+        "purpose": "Return the reference text from a bounded partner order document.",
+        "trust_boundary": "A partner controls XML and may not read service-local files or request arbitrary internal URLs.",
+        "legitimate_examples": [
+          {
+            "input": "<order><reference>PO-31</reference></order>",
+            "expected": "Return PO-31."
+          },
+          {
+            "input": "Order defining a SYSTEM entity",
+            "expected": "Reject without resolving it."
+          }
+        ],
+        "permitted_changes": [
+          "Load through a reader with DTD prohibition and a null resolver.",
+          "Retain required-reference and output-length validation."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Post-load validation happens after entity resolution.",
+        "Removing the resolver on a different unused reader does not protect the DOM load."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "External entity resolution on the actual DOM parser.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-partner-dom-postvalidation",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The case focuses on validation order after DOM expansion and the difference between configuring an unused reader and the parser actually used. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-safe-01",
+      "language": "visualbasic",
+      "vulnerable": false,
+      "scenario": "Hourly alert count binds a timestamp and returns a scalar",
+      "files": {
+        "src/AlertCount.vb": "Option Strict On\nImports System\nImports System.Data\nImports Microsoft.Data.SqlClient\nPublic Module AlertCount\n    Public Function Since(connection As SqlConnection, afterUtc As DateTime) As Integer\n        If afterUtc.Kind <> DateTimeKind.Utc Then Throw New ArgumentException(\"UTC required\")\n        Using command As New SqlCommand(\"SELECT COUNT(*) FROM Alerts WHERE CreatedAt >= @after\", connection)\n            command.Parameters.Add(\"@after\", SqlDbType.DateTime2).Value = afterUtc\n            Dim result = command.ExecuteScalar()\n            Return Convert.ToInt32(result)\n        End Using\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [],
+      "rationale": "A fixed query receives a typed UTC timestamp parameter. No request text becomes SQL grammar or a locale-formatted date literal.",
+      "remediation_constraints": [
+        "Keep typed DateTime2 binding and UTC validation.",
+        "Preserve inclusive timestamp comparison."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. SQL Server 2022; Microsoft.Data.SqlClient 5.2.2; CreatedAt is UTC DATETIME2 NOT NULL; the open connection is authorized for the alert collection."
+      },
+      "operation_contract": {
+        "purpose": "Count alerts at or after a precise UTC instant.",
+        "trust_boundary": "A user selects the instant through a validated datetime API; the connection is service-owned.",
+        "legitimate_examples": [
+          {
+            "input": "UTC 2025-01-01T00:00:00",
+            "expected": "Count rows at or later than that exact instant."
+          },
+          {
+            "input": "A DateTime with Kind=Local",
+            "expected": "Reject instead of silently reinterpreting the timezone."
+          }
+        ],
+        "permitted_changes": [
+          "Keep typed DateTime2 binding and UTC validation.",
+          "Preserve inclusive timestamp comparison."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Formatting dates into SQL strings introduces locale and injection hazards.",
+        "Changing >= to > loses boundary events."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "SQL parameterization and timestamp boundary semantics.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-alert-time-typed-parameter",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This safe query exercises a typed temporal value and boundary comparison, not a sanitized text-search sibling. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-safe-02",
+      "language": "visualbasic",
+      "vulnerable": false,
+      "scenario": "Legacy label XML allows bounded internal entities but no external resolver",
+      "files": {
+        "src/LabelText.vb": "Option Strict On\nImports System\nImports System.IO\nImports System.Xml\nPublic Module LabelText\n    Public Function Read(xml As String) As String\n        If xml.Length > 8192 Then Throw New ArgumentException(\"label\")\n        Dim settings As New XmlReaderSettings With {.DtdProcessing = DtdProcessing.Parse, .XmlResolver = Nothing, .MaxCharactersFromEntities = 256, .MaxCharactersInDocument = 8192}\n        Using input As New StringReader(xml)\n            Using reader = XmlReader.Create(input, settings)\n                reader.MoveToContent()\n                If reader.Name <> \"label\" Then Throw New FormatException(\"label root\")\n                Return reader.ReadElementContentAsString()\n            End Using\n        End Using\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [],
+      "rationale": "DTD parsing is required for a legacy internal-entity label format, but the consuming reader has no external resolver and strict expansion/document limits. DtdProcessing.Parse alone is insufficient to label this an external-entity vulnerability.",
+      "remediation_constraints": [
+        "Retain null external resolver and expansion/document limits.",
+        "Preserve legitimate internal-entity text rather than prohibiting the required format without migration."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. .NET 8 XmlReaderSettings; XmlResolver=Nothing prevents external retrieval; external-entity documents need not yield successful output and are never trusted as external content."
+      },
+      "operation_contract": {
+        "purpose": "Read small label text, including a limited set of inline internal entity abbreviations.",
+        "trust_boundary": "A partner controls the XML; it cannot resolve external files or network entities.",
+        "legitimate_examples": [
+          {
+            "input": "<!DOCTYPE label [<!ENTITY unit \"kg\">]><label>12 &unit;</label>",
+            "expected": "Return 12 kg."
+          },
+          {
+            "input": "Internal entity expansion exceeding 256 characters",
+            "expected": "Reject with a parser error."
+          }
+        ],
+        "permitted_changes": [
+          "Retain null external resolver and expansion/document limits.",
+          "Preserve legitimate internal-entity text rather than prohibiting the required format without migration."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A blanket ban on DtdProcessing.Parse would report an overbroad finding for this contract.",
+        "Increasing entity limits without a business bound broadens denial-of-service exposure."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "External entity access and bounded internal expansion.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-internal-entity-no-resolution",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "This safe XML case intentionally needs internal DTD entities, making it different from a simple Prohibit counterpart and testing policy precision. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-safe-03",
+      "language": "visualbasic",
+      "vulnerable": false,
+      "scenario": "A compact session envelope uses authenticated AES-GCM with fresh nonce",
+      "files": {
+        "src/SessionEnvelope.vb": "Option Strict On\nImports System\nImports System.Security.Cryptography\nPublic Module SessionEnvelope\n    Public Function Seal(payload As Byte(), key As Byte()) As Byte()\n        If payload.Length > 4096 OrElse key.Length <> 32 Then Throw New ArgumentException(\"envelope\")\n        Dim nonce = RandomNumberGenerator.GetBytes(12)\n        Dim ciphertext(payload.Length - 1) As Byte\n        Dim tag(15) As Byte\n        Using cipher As New AesGcm(key, 16)\n            cipher.Encrypt(nonce, payload, ciphertext, tag)\n        End Using\n        Dim output(12 + 16 + ciphertext.Length - 1) As Byte\n        Buffer.BlockCopy(nonce, 0, output, 0, 12)\n        Buffer.BlockCopy(tag, 0, output, 12, 16)\n        Buffer.BlockCopy(ciphertext, 0, output, 28, ciphertext.Length)\n        Return output\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [],
+      "rationale": "AES-GCM authenticates ciphertext using a freshly generated 96-bit nonce and a 128-bit tag. The key is supplied from trusted configuration and must be 256 bits.",
+      "remediation_constraints": [
+        "Keep authenticated encryption, fresh nonces and the exact envelope layout.",
+        "Reject invalid keys and preserve the receiver requirement to verify tags."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. .NET 8 AesGcm; payload length is 1..4096 at ingress; key is random and rotated before nonce collision risk becomes material; receiver already implements this layout."
+      },
+      "operation_contract": {
+        "purpose": "Seal a bounded nonempty session payload into nonce, tag and ciphertext bytes.",
+        "trust_boundary": "The client may observe or modify envelopes but never receives the server key; the receiver verifies the GCM tag before exposing plaintext.",
+        "legitimate_examples": [
+          {
+            "input": "One-byte payload 41 with a valid key",
+            "expected": "Return 29 bytes: 12 nonce, 16 tag and one ciphertext byte."
+          },
+          {
+            "input": "Key length 16",
+            "expected": "Reject because the protocol requires a 32-byte key."
+          }
+        ],
+        "permitted_changes": [
+          "Keep authenticated encryption, fresh nonces and the exact envelope layout.",
+          "Reject invalid keys and preserve the receiver requirement to verify tags."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A fixed nonce would destroy the stated guarantee.",
+        "Dropping the tag changes authenticated encryption into an incomplete envelope."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Modern authenticated encryption with explicit nonce and envelope contracts.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-session-aead-envelope",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The safe cryptographic case has a defined wire layout and authenticated receiver contract, independent from legacy cipher migrations. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-safe-04",
+      "language": "visualbasic",
+      "vulnerable": false,
+      "scenario": "A Windows service restart accepts only enumerated internal service names",
+      "files": {
+        "src/RestartService.vb": "Option Strict On\nImports System\nImports System.Diagnostics\nPublic Module RestartService\n    Public Function StopOne(kind As String) As Integer\n        Dim service As String\n        Select Case kind\n            Case \"collector\" : service = \"ContosoCollector\"\n            Case \"exporter\" : service = \"ContosoExporter\"\n            Case Else : Throw New ArgumentException(\"service\")\n        End Select\n        Dim start As New ProcessStartInfo(\"C:\\Windows\\System32\\sc.exe\") With {.UseShellExecute = False}\n        start.ArgumentList.Add(\"stop\")\n        start.ArgumentList.Add(service)\n        Using child = Process.Start(start)\n            If child Is Nothing Then Throw New InvalidOperationException(\"spawn\")\n            child.WaitForExit()\n            Return child.ExitCode\n        End Using\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [],
+      "rationale": "The public choice maps to one of two fixed service names passed directly to sc.exe without cmd. No caller value is accepted as an executable, command line or arbitrary service selector.",
+      "remediation_constraints": [
+        "Keep the allow-list and direct executable launch.",
+        "Preserve the asynchronous service-state semantics: a successful stop request does not claim the service is already stopped."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. Windows Server 2022; sc.exe and service registration are administrator-owned; caller authenticates and authorizes the two stop operations."
+      },
+      "operation_contract": {
+        "purpose": "Request a stop for one of two administrator-approved services and return sc.exe status.",
+        "trust_boundary": "An authorized operator chooses collector or exporter; the operation itself is privileged but explicitly permitted.",
+        "legitimate_examples": [
+          {
+            "input": "kind collector",
+            "expected": "Request sc.exe stop ContosoCollector and return its exit code."
+          },
+          {
+            "input": "kind collector & whoami",
+            "expected": "Reject before starting a process."
+          }
+        ],
+        "permitted_changes": [
+          "Keep the allow-list and direct executable launch.",
+          "Preserve the asynchronous service-state semantics: a successful stop request does not claim the service is already stopped."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Do not interpret this authorized fixed administrative operation as injection solely because it is privileged.",
+        "Returning success without checking the child code hides operational failure."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Process-injection boundary for an intentionally privileged fixed utility.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-allowlisted-service-control",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A limited administrative operation is authorized while arbitrary command and service-name selection remain forbidden. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-safe-05",
+      "language": "visualbasic",
+      "vulnerable": false,
+      "scenario": "A SQL-like saved-search label is stored only in memory",
+      "files": {
+        "src/SearchLabels.vb": "Option Strict On\nImports System\nImports System.Collections.Generic\nPublic Class SearchLabels\n    Private ReadOnly labels As New Dictionary(Of Guid, String)()\n    Public Sub Rename(id As Guid, label As String)\n        If label.Length > 120 Then Throw New ArgumentException(\"label\")\n        If Not labels.ContainsKey(id) Then Throw New KeyNotFoundException()\n        labels(id) = label\n    End Sub\n    Public Sub Add(id As Guid, label As String)\n        If label.Length > 120 Then Throw New ArgumentException(\"label\")\n        labels.Add(id, label)\n    End Sub\n    Public Function Display(id As Guid) As String\n        Return labels(id)\n    End Function\nEnd Class\n"
+      },
+      "expected_findings": [],
+      "rationale": "The saved-search label is a bounded string in a dictionary. Neither SQL syntax nor shell syntax is interpreted anywhere in this operation.",
+      "remediation_constraints": [
+        "Keep labels distinct from executable query definitions.",
+        "Preserve exact text and unknown-ID behavior."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. A single-threaded caller owns one SearchLabels instance per user and authorizes IDs; display is plain text or output-encoded by the UI."
+      },
+      "operation_contract": {
+        "purpose": "Maintain literal labels for caller-owned saved-search identifiers.",
+        "trust_boundary": "A user controls a label for identifiers already authorized by the caller; labels do not contain query definitions.",
+        "legitimate_examples": [
+          {
+            "input": "Label SELECT * FROM reports;",
+            "expected": "Store and return that exact literal label."
+          },
+          {
+            "input": "Rename an unknown identifier",
+            "expected": "Throw without creating a new record."
+          }
+        ],
+        "permitted_changes": [
+          "Keep labels distinct from executable query definitions.",
+          "Preserve exact text and unknown-ID behavior."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "Names containing Search or SQL-like content do not establish an execution sink.",
+        "Silently creating records during rename changes the ownership model."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Injection false-positive control in bounded in-memory state.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-literal-saved-search-label",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "The user controls text that resembles a query but the implementation only stores and retrieves a label in a per-user object. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-visualbasic-safe-06",
+      "language": "visualbasic",
+      "vulnerable": false,
+      "scenario": "Certificate audit evaluates errors but never overrides TLS decisions",
+      "files": {
+        "src/CertificateAudit.vb": "Option Strict On\nImports System\nImports System.Net.Security\nPublic Module CertificateAudit\n    Public Function Describe(errors As SslPolicyErrors) As String\n        If errors = SslPolicyErrors.None Then Return \"verified\"\n        Dim parts As New System.Collections.Generic.List(Of String)()\n        If (errors And SslPolicyErrors.RemoteCertificateNotAvailable) <> 0 Then parts.Add(\"missing\")\n        If (errors And SslPolicyErrors.RemoteCertificateNameMismatch) <> 0 Then parts.Add(\"name\")\n        If (errors And SslPolicyErrors.RemoteCertificateChainErrors) <> 0 Then parts.Add(\"chain\")\n        Return String.Join(\",\", parts)\n    End Function\nEnd Module\n"
+      },
+      "expected_findings": [],
+      "rationale": "This is a string-returning diagnostic formatter for an already determined validation result. It is not installed as a certificate validation callback and cannot accept a peer.",
+      "remediation_constraints": [
+        "Keep the return value diagnostic-only.",
+        "Preserve combinations of flags rather than reporting only one."
+      ],
+      "runtime_assumptions": {
+        "runtime": ".NET 8.0; Visual Basic 16.9; Option Strict On",
+        "libraries": [
+          ".NET 8 BCL"
+        ],
+        "platform": "Windows Server 2022",
+        "setup": "Methods are invoked with non-null values from the described ingress; the service configuration and database connection are trusted. The call site uses normal platform TLS validation and invokes this helper only after a failure or for logging."
+      },
+      "operation_contract": {
+        "purpose": "Render TLS policy error flags for operator diagnostics.",
+        "trust_boundary": "The runtime supplies error flags; the returned string is displayed only and never converted to an accept/reject decision.",
+        "legitimate_examples": [
+          {
+            "input": "SslPolicyErrors.None",
+            "expected": "Return verified."
+          },
+          {
+            "input": "NameMismatch Or ChainErrors",
+            "expected": "Return name,chain."
+          }
+        ],
+        "permitted_changes": [
+          "Keep the return value diagnostic-only.",
+          "Preserve combinations of flags rather than reporting only one."
+        ],
+        "forbidden_changes": [
+          "Do not delete the demonstrated operation or replace its output with a constant.",
+          "Do not change the documented ownership, return convention or accepted legitimate inputs without updating every included caller."
+        ]
+      },
+      "regression_traps": [
+        "A comparison to SslPolicyErrors.None is not automatically a TLS bypass.",
+        "Do not turn this formatter into an always-true boolean callback."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "TLS-validation false-positive control; no networking or callback registration is present.",
+        "reviewed_residual_risks": [
+          "AI-authored candidate: labels, scope and independence require human review before freezing.",
+          "Resource-exhaustion and caller authorization outside the stated bounded ingress are not claimed safe."
+        ]
+      },
+      "derivation": {
+        "group": "vb-certificate-errors-diagnostic-only",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "A certificate-related helper is deliberately nonauthoritative and has a string type rather than a trust-policy result. Independence is a proposed classification pending human review; no effective sample size is claimed."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/configuring-parameters-and-parameter-data-types",
+          "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5359"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

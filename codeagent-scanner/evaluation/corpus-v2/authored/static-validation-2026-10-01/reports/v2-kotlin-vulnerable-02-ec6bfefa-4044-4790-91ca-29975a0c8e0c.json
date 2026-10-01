@@ -1,0 +1,403 @@
+{
+  "schema_version": "2.0",
+  "job_id": "ec6bfefa-4044-4790-91ca-29975a0c8e0c",
+  "meta": {
+    "duration_ms": 4276,
+    "generated_at": "2026-09-30T19:30:52.264445+00:00",
+    "labels": [
+      "corpus-v2",
+      "authoring-validation",
+      "unapproved"
+    ],
+    "repo": {
+      "baseline": {
+        "job_id": "73c3d301-7159-4142-9a95-50afc6b13374",
+        "report_hash": "11643b15e2a0547f2669db3108f69dc2fd875d361cb27d3eb89bbae1fce19963"
+      },
+      "commit": null,
+      "digest": "6025fe3b3d10ad75d94678f835d1012ccaa54b831afde4863daf8057e1d4a32d",
+      "filename": "v2-kotlin-vulnerable-02.zip",
+      "project_id": "7b816b41-cdbe-4922-9a4e-3b8501d4afc9",
+      "snapshot_id": "ec6bfefa-4044-4790-91ca-29975a0c8e0c",
+      "source": "zip",
+      "stream": "default"
+    },
+    "rulepack_version": "2.0.0-candidate",
+    "snapshot": {
+      "digest": "6025fe3b3d10ad75d94678f835d1012ccaa54b831afde4863daf8057e1d4a32d",
+      "excluded_files": [],
+      "files": {
+        "PayrollPreview.kt": "ba69a600cb631598f198247aef5fae05a118bfe341152ff8e98fc49285b0156e"
+      },
+      "id": "ec6bfefa-4044-4790-91ca-29975a0c8e0c",
+      "ingestion_version": 3,
+      "inventory_complete": true,
+      "source": {
+        "baseline": {
+          "job_id": "73c3d301-7159-4142-9a95-50afc6b13374",
+          "report_hash": "11643b15e2a0547f2669db3108f69dc2fd875d361cb27d3eb89bbae1fce19963"
+        },
+        "commit": null,
+        "digest": "6025fe3b3d10ad75d94678f835d1012ccaa54b831afde4863daf8057e1d4a32d",
+        "filename": "v2-kotlin-vulnerable-02.zip",
+        "project_id": "7b816b41-cdbe-4922-9a4e-3b8501d4afc9",
+        "snapshot_id": "ec6bfefa-4044-4790-91ca-29975a0c8e0c",
+        "source": "zip",
+        "stream": "default"
+      },
+      "source_inventory": [
+        "PayrollPreview.kt"
+      ],
+      "source_policy_version": 3,
+      "warnings": []
+    },
+    "tool_runs": [
+      {
+        "duration_ms": 2515,
+        "name": "semgrep",
+        "status": "completed",
+        "version": "1.178.0"
+      },
+      {
+        "duration_ms": 0,
+        "name": "bandit",
+        "status": "skipped",
+        "version": "bandit 1.9.4"
+      },
+      {
+        "duration_ms": 0,
+        "name": "dotnet",
+        "status": "skipped",
+        "version": "codeagent-dotnet 1.1.0"
+      },
+      {
+        "duration_ms": 0,
+        "name": "depcheck",
+        "status": "skipped",
+        "version": "Version: 0.74.0"
+      }
+    ],
+    "tools": [
+      "semgrep",
+      "bandit",
+      "dotnet",
+      "depcheck"
+    ]
+  },
+  "summary": {
+    "critical": 0,
+    "high": 2,
+    "low": 0,
+    "medium": 0
+  },
+  "files": [
+    {
+      "path": "PayrollPreview.kt",
+      "issues": [
+        {
+          "id": "3198d3c0bccd1f1d9f5ffe00",
+          "tool": "semgrep",
+          "type": "codeagent.kotlin.unsafe-xml.v2",
+          "message": "Unsafe xml security pattern; validate untrusted input and prefer safe API configuration.",
+          "severity": "high",
+          "file": "PayrollPreview.kt",
+          "line": 9,
+          "rule_id": "codeagent.kotlin.unsafe-xml.v2",
+          "source_hash": "ba69a600cb631598f198247aef5fae05a118bfe341152ff8e98fc49285b0156e",
+          "suggestion": null,
+          "fingerprint": "v1:4b070f7689cb0a81887992e04bebfc0d969cce9c19da86916f4c6238225da1a9",
+          "logical_id": "4ae6f60e-d408-4f58-8a25-3fb76cfd10fb",
+          "family": "unsafe-xml",
+          "cwe": "CWE-611",
+          "analysis_kind": "structural",
+          "end_line": 9,
+          "rule_digest": "a97d349acaa34380ed5fe7e3b92a4c1d3f79f6bc38d4506a8d5c6190beb953f3",
+          "dependency": null,
+          "end_column": 90,
+          "evidence": [
+            {
+              "end_line": 9,
+              "file": "PayrollPreview.kt",
+              "kind": "source_span",
+              "line": 9
+            }
+          ],
+          "evidence_digest": "eaab143437e81deb575ec5b117900f2fd4cf0ce585f231cd5dd1a71b953ca4bb",
+          "rule_revision": "2",
+          "tracking_ambiguous": false,
+          "tracking_supported": true
+        },
+        {
+          "id": "d32a6f09ad8baccc5af66ff4",
+          "tool": "semgrep",
+          "type": "codeagent.kotlin.unsafe-xml.v2",
+          "message": "Unsafe xml security pattern; validate untrusted input and prefer safe API configuration.",
+          "severity": "high",
+          "file": "PayrollPreview.kt",
+          "line": 10,
+          "rule_id": "codeagent.kotlin.unsafe-xml.v2",
+          "source_hash": "ba69a600cb631598f198247aef5fae05a118bfe341152ff8e98fc49285b0156e",
+          "suggestion": null,
+          "fingerprint": "v1:2f21c03a2c574c391264ea3dba3626e43a0a7f14163e1244c9f47b88463a4b72",
+          "logical_id": "b3d475a9-c456-489c-b9f9-6fa9465e96d7",
+          "family": "unsafe-xml",
+          "cwe": "CWE-611",
+          "analysis_kind": "structural",
+          "end_line": 10,
+          "rule_digest": "a97d349acaa34380ed5fe7e3b92a4c1d3f79f6bc38d4506a8d5c6190beb953f3",
+          "dependency": null,
+          "end_column": 92,
+          "evidence": [
+            {
+              "end_line": 10,
+              "file": "PayrollPreview.kt",
+              "kind": "source_span",
+              "line": 10
+            }
+          ],
+          "evidence_digest": "b70c4eaf43b577c9dd5ba734f267f263c7931b183beda31e50440004affa9057",
+          "rule_revision": "2",
+          "tracking_ambiguous": false,
+          "tracking_supported": true
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "tool": "semgrep",
+      "status": "completed",
+      "files_discovered": 1,
+      "files_scanned": 1,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "1.178.0",
+      "languages": [
+        "kotlin"
+      ],
+      "path_outcomes": [
+        {
+          "language": "kotlin",
+          "parser": {
+            "audited_metadata_counts": {},
+            "error_lines": 0,
+            "errors": [],
+            "policy": "native-parser-evidence/2",
+            "status": "completed",
+            "syntax_error_files": 0,
+            "unsupported_node_counts": {},
+            "untranslated_node_count": 0,
+            "untranslated_nodes": 0
+          },
+          "path": "PayrollPreview.kt",
+          "rule_ids": [
+            "codeagent.kotlin.security.v1",
+            "codeagent.kotlin.sql-injection.v2",
+            "codeagent.kotlin.unsafe-xml.v2"
+          ],
+          "status": "completed"
+        }
+      ],
+      "profile": "security-v2",
+      "rule_ids": [
+        "codeagent.bash.dynamic-evaluation.v2",
+        "codeagent.bash.security.v1",
+        "codeagent.bash.tls-validation.v2",
+        "codeagent.c.format-string.v2",
+        "codeagent.c.security.v1",
+        "codeagent.c.shell-injection.v2",
+        "codeagent.cpp.format-string.v2",
+        "codeagent.cpp.security.v1",
+        "codeagent.cpp.shell-injection.v2",
+        "codeagent.dockerfile.security.v1",
+        "codeagent.go.security.v1",
+        "codeagent.go.sql-injection.v2",
+        "codeagent.go.ssrf.v2",
+        "codeagent.go.tls-validation.v2",
+        "codeagent.html.security.v1",
+        "codeagent.java.security.v1",
+        "codeagent.java.sql-injection.v2",
+        "codeagent.java.unsafe-xml.v2",
+        "codeagent.javascript.path-traversal.v2",
+        "codeagent.javascript.security.v1",
+        "codeagent.javascript.shell-injection.v2",
+        "codeagent.javascript.ssrf.v2",
+        "codeagent.json.security.v1",
+        "codeagent.kotlin.security.v1",
+        "codeagent.kotlin.sql-injection.v2",
+        "codeagent.kotlin.unsafe-xml.v2",
+        "codeagent.php.path-traversal.v2",
+        "codeagent.php.security.v1",
+        "codeagent.php.sql-injection.v2",
+        "codeagent.python.path-traversal.v2",
+        "codeagent.python.security.v1",
+        "codeagent.python.sql-injection.v2",
+        "codeagent.python.ssrf.v2",
+        "codeagent.ruby.security.v1",
+        "codeagent.ruby.sql-injection.v2",
+        "codeagent.ruby.unsafe-deserialization.v2",
+        "codeagent.rust.security.v1",
+        "codeagent.rust.sql-injection.v2",
+        "codeagent.rust.tls-validation.v2",
+        "codeagent.scala.security.v1",
+        "codeagent.scala.sql-injection.v2",
+        "codeagent.scala.unsafe-xml.v2",
+        "codeagent.swift.security.v1",
+        "codeagent.swift.tls-validation.v2",
+        "codeagent.swift.unsafe-deserialization.v2",
+        "codeagent.typescript.path-traversal.v2",
+        "codeagent.typescript.security.v1",
+        "codeagent.typescript.shell-injection.v2",
+        "codeagent.typescript.ssrf.v2",
+        "codeagent.xml.security.v1",
+        "codeagent.yaml.security.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": [
+        "PayrollPreview.kt"
+      ]
+    },
+    {
+      "tool": "bandit",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "bandit 1.9.4",
+      "languages": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "dotnet",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "codeagent-dotnet 1.1.0",
+      "languages": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [
+        "dotnet.binary-formatter.v1",
+        "dotnet.shell-injection.v2",
+        "dotnet.sql-injection.v2",
+        "dotnet.tls-validation.v1",
+        "dotnet.weak-crypto.v1",
+        "dotnet.xml-dtd.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "depcheck",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "Version: 0.74.0",
+      "languages": [],
+      "ecosystems": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    }
+  ],
+  "ai_analysis": null,
+  "project_id": "7b816b41-cdbe-4922-9a4e-3b8501d4afc9",
+  "stream": "default",
+  "profiles": {
+    "config": "fb7742d632e6e817e0c861e2f56b7daf1df95625f771803f26f8ffb510ef7610",
+    "dependency": "d3c5734bddfcacededc7c3637200246a6e4d2c3cd4f8667f9b83c1cc62a1fc59",
+    "name": "security-v2",
+    "source": "3d3fd6e83481e5a8d8ba22433c12f5af685aa7cb028f738b423fb2883b39dbee",
+    "tools": {
+      "bandit": "3f610a8c70683c0a11dc074a835b34f3cc70a7d9f73b2c1fed4c26ec163ab042",
+      "depcheck": "d3c5734bddfcacededc7c3637200246a6e4d2c3cd4f8667f9b83c1cc62a1fc59",
+      "dotnet": "cd766f9151ae1e500aecdde0007f79c2a081d855ce91bf7e6d841cd9b548bbf5",
+      "semgrep": "a97d349acaa34380ed5fe7e3b92a4c1d3f79f6bc38d4506a8d5c6190beb953f3"
+    }
+  },
+  "baseline": {
+    "job_id": "73c3d301-7159-4142-9a95-50afc6b13374",
+    "report_hash": "11643b15e2a0547f2669db3108f69dc2fd875d361cb27d3eb89bbae1fce19963"
+  },
+  "report_hash": "b4eb8001dead6c30381029a985064816c140321eef1378cd87705e3097e7fcd1",
+  "errors": [],
+  "profile_digests": {
+    "dependency": "825b4d8e4f90e37819584a9154b18670e4dfe7eb6982164e688fad910cc20d36",
+    "dependency_details": {
+      "adapter": "ca0f18d2ad98c3d5dc9aa76369f1ed5b04575bd24191157a3b4b9fffe8ede749",
+      "database": {
+        "metadata_hash": "5b57f7738d885f1a1d506eb717e5e1dc1eb743fe99e18791b3e5d474a4d06eea",
+        "next_update": "2026-09-26T06:36:11.019457213Z",
+        "ready": true,
+        "updated_at": "2026-09-25T06:36:11.019457553Z"
+      },
+      "expected_version": "0.74.0",
+      "ingestion": {
+        "policy.py": "aee09539e944d79bcd2157f7c2f0b64a0601b29ef0e83279341cd684b50730f9",
+        "snapshots.py": "fbea9d4f41a1b3734f087570ab6ce6130ed91a1b32b175c9527b01c0dbf14780"
+      },
+      "inventory": "ebe207fa1b63e329e83224271a0d4143eb136fa30bbf465aaa4f275905bcb7d6",
+      "version": "Version: 0.74.0"
+    },
+    "source": "221377c54607dc61fe0f2097c0a4f8f87557847ed2ee877cd743a889a9c82d21",
+    "source_details": {
+      "adapters": {
+        "bandit_runner.py": "ded1e85cc29baeb6fd5e9429eaee84762b4a458f1c8355d6533e5f0c943f66fd",
+        "common.py": "ebe207fa1b63e329e83224271a0d4143eb136fa30bbf465aaa4f275905bcb7d6",
+        "dotnet_runner.py": "bda87fedcfcd8b72b40b58b6478d4a8f8e4113cdbb296cabe372f6068035a5bf",
+        "parser_evidence.py": "145b7556d3efa6e7a9ae8c313f9cd332005324987670b981e25ba5c40190b8e0",
+        "semgrep_runner.py": "e92e9c3fa9e0f43d48d575bbbfc600faa1f23e6e65be9ccdfe5f95d4d15e321e",
+        "service.py": "1992f4600e0ec6ce032b59e1ee5d6e0f73a66d472e4ea20d6a5cf7803f644971",
+        "validation.py": "811610fbd8ec75463eb2e0dcfa9f2bd0868d8aded42dd6106f8a4f4161a38c9a"
+      },
+      "coverage_contract": "native-parser-evidence/2",
+      "dotnet": {
+        "Program.fs": "78dd7da6bf86a8fb03fa2f100b9542b787725d94acb3ef6ade36adf7366c85c6",
+        "Roslyn/Analyzer.cs": "fee1df8cef9b41638c0b4f9a615c8ac60f54dd5e9991057526da22863ef2fd33"
+      },
+      "effective_tools": [
+        {
+          "name": "semgrep",
+          "version": "1.178.0"
+        },
+        {
+          "name": "bandit",
+          "version": "bandit 1.9.4"
+        },
+        {
+          "name": "dotnet",
+          "version": "codeagent-dotnet 1.1.0"
+        }
+      ],
+      "ingestion": {
+        "policy.py": "aee09539e944d79bcd2157f7c2f0b64a0601b29ef0e83279341cd684b50730f9",
+        "snapshots.py": "fbea9d4f41a1b3734f087570ab6ce6130ed91a1b32b175c9527b01c0dbf14780"
+      },
+      "profile": "security-v2",
+      "rules": "661bd24355ffd634f28fa7abe17f56c17598b7d39832a8d1c47a93fc181b633f",
+      "versions": {
+        "bandit": "1.9.4",
+        "dotnet_analyzer": "1.1.0",
+        "dotnet_sdk": "10.0.401",
+        "fsharp_compiler_service": "43.12.401",
+        "roslyn": "5.9.0",
+        "rulepack": "1.0.0",
+        "semgrep": "1.178.0"
+      }
+    }
+  },
+  "profile_reproducibility": "pinned",
+  "status": "completed",
+  "warnings": []
+}

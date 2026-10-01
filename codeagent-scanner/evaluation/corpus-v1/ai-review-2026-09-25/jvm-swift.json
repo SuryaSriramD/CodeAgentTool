@@ -1,0 +1,1134 @@
+{
+  "reviewer_kind": "ai",
+  "languages": [
+    "java",
+    "kotlin",
+    "scala",
+    "swift"
+  ],
+  "review_date": "2026-09-25",
+  "review_scope": "Technical review of all source, labels, rationales, CWE/families and remediation constraints in 48 cases. Source was read, not executed or compiled. This is AI assessment, not independent human approval. No corpus, rules, prompts, labels or human_review fields were changed.",
+  "verdict_semantics": {
+    "supported": "Technical label and remediation constraints are locally supported under listed assumptions. This does not mean independent, human-approved or release-ready.",
+    "needs_clarification": "Essential runtime, reachability or trust-boundary assumptions must be resolved before approving the label.",
+    "revise": "Concrete semantics or remediation contracts need substantive revision; label_assessment distinguishes label correctness. Global template dependence alone does not force this verdict.",
+    "invalid": "A label is contradicted by the actual supplied program/API."
+  },
+  "cases": [
+    {
+      "case_id": "java-customer-search-vulnerable",
+      "content_sha256": "60055bef017a84ea343831982ea831981a2c61cc29170f023e6f158a192a2d83",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "A caller-controlled string is inserted inside a SQL literal and sent to JDBC Statement.executeQuery. Quote-breaking input can change the query; CWE-89 and sql-injection are appropriate. Binding the single parameter is a focused remedy.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The string parameter is attacker-controlled; the Connection is trusted and the named table exists.",
+        "The consumer owns ResultSet/Statement cleanup; this corpus labels injection, not general JDBC resource-lifetime behavior."
+      ],
+      "independence_group": "jdbc-bound-name"
+    },
+    {
+      "case_id": "java-customer-search-safe",
+      "content_sha256": "1f66b907b33d28cdb806cfe6d7c1f4d5f60368828987b45dee1ef6c41ee5077b",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The SQL structure is literal and caller input is supplied with setString, so apostrophes and Unicode stay data. The returned ResultSet preserves the demonstrated query result shape. No second SQL sink is present.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The string parameter is attacker-controlled; the Connection is trusted and the named table exists.",
+        "The consumer owns ResultSet/Statement cleanup; this corpus labels injection, not general JDBC resource-lifetime behavior."
+      ],
+      "independence_group": "jdbc-bound-name"
+    },
+    {
+      "case_id": "java-xml-upload-vulnerable",
+      "content_sha256": "86597e0f92bf6444cc685b86a6c2d14216cf83351064fac499c4d15464c0d0fb",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "External entity resolution is plausible under the documented JDK defaults even though secure processing is enabled by default. The source has no explicit external-access restriction, resolver or DOCTYPE rejection. CWE-611 is appropriate in that environment.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "XML_RUNTIME_ASSUMPTIONS",
+          "message": "app.java:3: newInstance selects a provider and JAXP settings can be supplied outside this source; the metadata does not pin those settings. The vulnerable label must not be justified merely by assuming modern secure-processing defaults disable external entities.",
+          "recommendation": "Record the JDK/provider and external-access settings, plus the contract that ordinary input excludes DTD-dependent documents. Do not reject this label solely because FEATURE_SECURE_PROCESSING is on by default.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/security/java-api-xml-processing-jaxp-security-guide.html",
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.xml/javax/xml/parsers/DocumentBuilderFactory.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "Attacker-controlled XML reaches parse; the intended runtime is an OpenJDK/Oracle JDK DOM provider supporting the Apache disallow-doctype-decl feature.",
+        "The vulnerable runtime has no system/JAXP configuration denying DTD access; ordinary accepted documents do not require a DOCTYPE.",
+        "Input size is bounded outside this fragment; safe means protected against the labeled XXE family, not every XML denial-of-service condition."
+      ],
+      "independence_group": "jaxp-dom-doctype"
+    },
+    {
+      "case_id": "java-xml-upload-safe",
+      "content_sha256": "f662df25646d5a49095c4938cdd05fda424737d03926c087f72605d7c5976798",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The feature is set on the same factory before construction. Rejecting DOCTYPE blocks the document-defined external entity path, and failure to support the feature throws before parsing. Ordinary DOCTYPE-free XML remains supported.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "XML_RUNTIME_ASSUMPTIONS",
+          "message": "app.java:3: newInstance selects a provider and JAXP settings can be supplied outside this source; the metadata does not pin those settings. The vulnerable label must not be justified merely by assuming modern secure-processing defaults disable external entities.",
+          "recommendation": "Record the JDK/provider and external-access settings, plus the contract that ordinary input excludes DTD-dependent documents. Do not reject this label solely because FEATURE_SECURE_PROCESSING is on by default.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/security/java-api-xml-processing-jaxp-security-guide.html",
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.xml/javax/xml/parsers/DocumentBuilderFactory.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "Attacker-controlled XML reaches parse; the intended runtime is an OpenJDK/Oracle JDK DOM provider supporting the Apache disallow-doctype-decl feature.",
+        "The vulnerable runtime has no system/JAXP configuration denying DTD access; ordinary accepted documents do not require a DOCTYPE.",
+        "Input size is bounded outside this fragment; safe means protected against the labeled XXE family, not every XML denial-of-service condition."
+      ],
+      "independence_group": "jaxp-dom-doctype"
+    },
+    {
+      "case_id": "java-session-restore-vulnerable",
+      "content_sha256": "49ac7a28f1dcd130b6199da1d57b19222af2992236ba658c1031def7c0cb6144",
+      "verdict": "revise",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "ObjectInputStream.readObject accepts attacker-selected serialized classes without a local restriction. CWE-502 is reasonable, but concrete gadget execution depends on the available classes and filters; no specific execution chain is demonstrated.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "UNDEFINED_RESTORATION_CONTRACT",
+          "message": "app.java:2: readObject can return arbitrary object types, while this case requires a bounded data-only replacement and preservation of the demonstrated operation/input-output behavior. No legitimate data model, encoding or allowed wire-format migration defines what an acceptable repair must retain.",
+          "recommendation": "Define the legitimate restored value/schema, serialization contract, bounds and permitted migration for this vulnerable case. The separately submitted safe example is not a gold repair and does not resolve these case-local constraints.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/core/java-serialization-filters.html"
+          ]
+        },
+        {
+          "severity": "minor",
+          "code": "OVERSTATED_GADGET_EVIDENCE",
+          "message": "app.java:2: The rationale asserts reachable gadget behavior, but this source only shows unrestricted readObject and supplies neither classpath assumptions nor a gadget with an observable effect.",
+          "recommendation": "Describe potential dangerous deserialization under an explicit classpath/filter model; do not score an unproved specific execution consequence as established.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/core/java-serialization-filters.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The byte stream is attacker-controlled and no stream/JVM-wide deserialization filter is supplied elsewhere.",
+        "The JVM supports readNBytes(int) (Java 11 or later) for the safe counterpart."
+      ],
+      "independence_group": "java-object-stream-to-raw-text"
+    },
+    {
+      "case_id": "java-session-restore-safe",
+      "content_sha256": "a411152b0584b11979efe161758951b89d8560c1b467d7fa133c50149ccf4ba1",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "This standalone function reads at most 4096 bytes as UTF-8 and never constructs attacker-selected native objects. Its CWE-502 negative label is supported. The source explicitly defines bounded raw-text behavior; it is not evaluated as a gold repair for the separately submitted object-restoration case.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "RAW_TEXT_REFERENCE_SCOPE",
+          "message": "app.java:3: Reading the first 4096 bytes is a bounded raw-text operation; it does not decode Java serialization and may return a prefix for longer input. That does not contradict this standalone safe label, but prevents assuming the case is a behavior-preserving reference fix for another case.",
+          "recommendation": "Describe this case as bounded text reading. If used later as a remediation reference, separately define permitted format migration and oversize-input behavior.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/io/InputStream.html#readNBytes(int)"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The JVM supports readNBytes(int) (Java 11 or later) for the safe counterpart."
+      ],
+      "independence_group": "java-object-stream-to-raw-text"
+    },
+    {
+      "case_id": "java-legacy-digest-vulnerable",
+      "content_sha256": "65df3ed33660f1ff5515fa3f1d0c6cfa1e273f37fb41830570a868d9662fad07",
+      "verdict": "needs_clarification",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "MD5 is inappropriate for a collision-resistant integrity operation, matching CWE-328 if the claimed security role actually exists. The function alone does not establish that role.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "DIGEST_SECURITY_CONTEXT_MISSING",
+          "message": "app.java:2: The function only returns a digest; security-critical use appears solely in evaluation rationale. A non-security MD5 checksum can be legitimate, whereas an unauthenticated attacker-replaceable checksum remains unsafe even after SHA-256 substitution.",
+          "recommendation": "Include a minimal caller or explicit source-visible contract showing the trusted expected digest and collision-resistance requirement. Define how callers handle algorithm/output-length migration and include a real non-security misleading counterexample.",
+          "references": [
+            "https://www.rfc-editor.org/info/rfc6151/"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The digest is used where collision resistance is required; it is not merely a cache identifier/checksum for accidental corruption.",
+        "The expected digest is authenticated or otherwise trusted. A plain SHA-256 checksum is not message authentication and is not password hashing.",
+        "Consumers can accept the changed digest length/algorithm or an explicit migration is part of the legitimate contract."
+      ],
+      "independence_group": "java-md5-sha256"
+    },
+    {
+      "case_id": "java-legacy-digest-safe",
+      "content_sha256": "17411e6758087b4caed1502e5d69eb836a0e131a6ceefa68fab44897b570da13",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The standalone function computes SHA-256, with no password hashing or authentication construction shown. Its weak-cryptography negative label and SHA-256 preservation constraint are coherent locally.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DIGEST_SCOPE",
+          "message": "app.java:2: SHA-256 is a suitable general collision-resistant digest here. This small function does not establish authenticated integrity or password-hashing suitability, and those broader claims should not be inferred.",
+          "recommendation": "Retain the safe negative label; state that it concerns algorithm choice and makes no broader claim about unseen consumers.",
+          "references": [
+            "https://www.rfc-editor.org/info/rfc6151/"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The digest is used where collision resistance is required; it is not merely a cache identifier/checksum for accidental corruption.",
+        "The expected digest is authenticated or otherwise trusted. A plain SHA-256 checksum is not message authentication and is not password hashing."
+      ],
+      "independence_group": "java-md5-sha256"
+    },
+    {
+      "case_id": "java-support-shell-vulnerable",
+      "content_sha256": "482903a19170d9d77db5add04af75293674df20f17c1c8c77e374f3532edbd7c",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "The user-controlled value becomes part of the command interpreted by sh -c. Shell operators can introduce extra commands, matching CWE-78. A direct argument vector preserves the intended single lookup/stat operation.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The parameter is attacker-controlled and the target is a POSIX-like environment with the stated utility installed.",
+        "Executable lookup/PATH is trusted; this case is about shell interpretation, not executable-search-path hijacking."
+      ],
+      "independence_group": "jvm-shell-argv"
+    },
+    {
+      "case_id": "java-support-shell-safe",
+      "content_sha256": "2692612a70c02fbe2f69a3139be0baa892a74f4a8ea61dd05358161cf975f8cb",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "getent and hosts are separate literal arguments, and host is a single data argument. This removes shell metacharacter interpretation; the demonstrated shell-injection negative label is appropriate.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "UTILITY_ARGUMENT_CONTRACT",
+          "message": "app.java:1: The safe variant removes the shell, but its acceptance of leading-dash or malformed host strings depends on getent option parsing and the intended host-input contract. No general command-argument safety claim should be inferred from this negative shell-injection label.",
+          "recommendation": "Document the supported getent/platform and valid hostname/IP domain, or use a compatible option terminator/validation if the operation permits arbitrary caller strings.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The parameter is attacker-controlled and the target is a POSIX-like environment with the stated utility installed.",
+        "Executable lookup/PATH is trusted; this case is about shell interpretation, not executable-search-path hijacking."
+      ],
+      "independence_group": "jvm-shell-argv"
+    },
+    {
+      "case_id": "java-hostname-check-vulnerable",
+      "content_sha256": "aa53de27727156d7c66a06c0deddc8ad2612e7060cd3f29fd63654e84ccfb0d8",
+      "verdict": "needs_clarification",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "The verifier implementation always accepts a hostname result, which is an unsafe configuration if consumed by an HTTPS client. It does not itself execute a network request or disable certificate-chain validation.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "HOSTNAME_CONSUMER_UNSPECIFIED",
+          "message": "app.java:2: The source only constructs/returns a verifier and never shows the client that uses it. getDefaultHostnameVerifier returns mutable global HttpsURLConnection policy; it is not evidence that an arbitrary consumer will perform complete hostname verification.",
+          "recommendation": "Add a minimal intended HTTPS-client wiring point and trusted-default assumption. State that the finding concerns hostname checks (CWE-297 is more specific, while CWE-295 is acceptable as a parent), not wholesale TLS chain validation.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/javax/net/ssl/HttpsURLConnection.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The returned/stored HostnameVerifier is installed on the intended HTTPS client, whose certificate-chain validation remains enabled.",
+        "For the safe case, no code has replaced the global HttpsURLConnection default with a permissive verifier."
+      ],
+      "independence_group": "jvm-hostname-verifier"
+    },
+    {
+      "case_id": "java-hostname-check-safe",
+      "content_sha256": "48ffadfe494c741ca583500c43f599143bea4dcb952feff2934f9c4c59749525",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "Fetching the platform default introduces no permissive verifier in this fragment. As an HttpsURLConnection configuration counterexample it is safe under unmodified defaults, but its behavior cannot be assumed for arbitrary third-party clients or replaced global defaults.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DEFAULT_VERIFIER_SCOPE",
+          "message": "app.java:2: The code retrieves the HttpsURLConnection default and introduces no insecure override. This supports the standalone safe configuration label under an unmodified platform default; it is not a universal verifier guarantee for arbitrary third-party consumers.",
+          "recommendation": "Keep the safe label and document its intended HttpsURLConnection context. Consumer/global-default assumptions are scope notes, not evidence of a vulnerability in this supplied source.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/javax/net/ssl/HttpsURLConnection.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The returned/stored HostnameVerifier is installed on the intended HTTPS client, whose certificate-chain validation remains enabled.",
+        "For the safe case, no code has replaced the global HttpsURLConnection default with a permissive verifier."
+      ],
+      "independence_group": "jvm-hostname-verifier"
+    },
+    {
+      "case_id": "kotlin-invoice-jdbc-vulnerable",
+      "content_sha256": "a00547465c4ab146a51c1f80bbb0b10ec921c638eba37209a405961485de2cae",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "A caller-controlled string is inserted inside a SQL literal and sent to JDBC Statement.executeQuery. Quote-breaking input can change the query; CWE-89 and sql-injection are appropriate. Binding the single parameter is a focused remedy.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The string parameter is attacker-controlled; the Connection is trusted and the named table exists.",
+        "The consumer owns ResultSet/Statement cleanup; this corpus labels injection, not general JDBC resource-lifetime behavior."
+      ],
+      "independence_group": "jdbc-bound-name"
+    },
+    {
+      "case_id": "kotlin-invoice-jdbc-safe",
+      "content_sha256": "d00c22ec7199e665415f7914be43da215589d192677e1cf86f644f58d1ff20a3",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The SQL structure is literal and caller input is supplied with setString, so apostrophes and Unicode stay data. The returned ResultSet preserves the demonstrated query result shape. No second SQL sink is present.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The string parameter is attacker-controlled; the Connection is trusted and the named table exists.",
+        "The consumer owns ResultSet/Statement cleanup; this corpus labels injection, not general JDBC resource-lifetime behavior."
+      ],
+      "independence_group": "jdbc-bound-name"
+    },
+    {
+      "case_id": "kotlin-xml-dom-vulnerable",
+      "content_sha256": "be498e4a38de7b6e22208003452ca69627b6581061ab43971d7649c9864b71e9",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "External entity resolution is plausible under the documented JDK defaults even though secure processing is enabled by default. The source has no explicit external-access restriction, resolver or DOCTYPE rejection. CWE-611 is appropriate in that environment.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "XML_RUNTIME_ASSUMPTIONS",
+          "message": "app.kt:3: newInstance selects a provider and JAXP settings can be supplied outside this source; the metadata does not pin those settings. The vulnerable label must not be justified merely by assuming modern secure-processing defaults disable external entities.",
+          "recommendation": "Record the JDK/provider and external-access settings, plus the contract that ordinary input excludes DTD-dependent documents. Do not reject this label solely because FEATURE_SECURE_PROCESSING is on by default.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/security/java-api-xml-processing-jaxp-security-guide.html",
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.xml/javax/xml/parsers/DocumentBuilderFactory.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "Attacker-controlled XML reaches parse; the intended runtime is an OpenJDK/Oracle JDK DOM provider supporting the Apache disallow-doctype-decl feature.",
+        "The vulnerable runtime has no system/JAXP configuration denying DTD access; ordinary accepted documents do not require a DOCTYPE.",
+        "Input size is bounded outside this fragment; safe means protected against the labeled XXE family, not every XML denial-of-service condition."
+      ],
+      "independence_group": "jaxp-dom-doctype"
+    },
+    {
+      "case_id": "kotlin-xml-dom-safe",
+      "content_sha256": "61f5923337b627995d85280a1bca665ee4586b13f0a35071875b498aac11f583",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The feature is set on the same factory before construction. Rejecting DOCTYPE blocks the document-defined external entity path, and failure to support the feature throws before parsing. Ordinary DOCTYPE-free XML remains supported.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "XML_RUNTIME_ASSUMPTIONS",
+          "message": "app.kt:3: newInstance selects a provider and JAXP settings can be supplied outside this source; the metadata does not pin those settings. The vulnerable label must not be justified merely by assuming modern secure-processing defaults disable external entities.",
+          "recommendation": "Record the JDK/provider and external-access settings, plus the contract that ordinary input excludes DTD-dependent documents. Do not reject this label solely because FEATURE_SECURE_PROCESSING is on by default.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/security/java-api-xml-processing-jaxp-security-guide.html",
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.xml/javax/xml/parsers/DocumentBuilderFactory.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "Attacker-controlled XML reaches parse; the intended runtime is an OpenJDK/Oracle JDK DOM provider supporting the Apache disallow-doctype-decl feature.",
+        "The vulnerable runtime has no system/JAXP configuration denying DTD access; ordinary accepted documents do not require a DOCTYPE.",
+        "Input size is bounded outside this fragment; safe means protected against the labeled XXE family, not every XML denial-of-service condition."
+      ],
+      "independence_group": "jaxp-dom-doctype"
+    },
+    {
+      "case_id": "kotlin-native-state-vulnerable",
+      "content_sha256": "1cf10c9ee6189ce19fd3183bbc22b285b23ec974f5f33f2645e8580ec8b3d3de",
+      "verdict": "revise",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "ObjectInputStream.readObject accepts attacker-selected serialized classes without a local restriction. CWE-502 is reasonable, but concrete gadget execution depends on the available classes and filters; no specific execution chain is demonstrated.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "UNDEFINED_RESTORATION_CONTRACT",
+          "message": "app.kt:2: readObject can return arbitrary object types, while this case requires a bounded data-only replacement and preservation of the demonstrated operation/input-output behavior. No legitimate data model, encoding or allowed wire-format migration defines what an acceptable repair must retain.",
+          "recommendation": "Define the legitimate restored value/schema, serialization contract, bounds and permitted migration for this vulnerable case. The separately submitted safe example is not a gold repair and does not resolve these case-local constraints.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/core/java-serialization-filters.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The byte stream is attacker-controlled and no stream/JVM-wide deserialization filter is supplied elsewhere.",
+        "The JVM supports readNBytes(int) (Java 11 or later) for the safe counterpart."
+      ],
+      "independence_group": "java-object-stream-to-raw-text"
+    },
+    {
+      "case_id": "kotlin-native-state-safe",
+      "content_sha256": "4434a7e165505b4aa2d0b3a91d2455770f5cdfeafa58e80c48ee2b8b837995f7",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "This standalone function reads at most 4096 bytes as UTF-8 and never constructs attacker-selected native objects. Its CWE-502 negative label is supported. The source explicitly defines bounded raw-text behavior; it is not evaluated as a gold repair for the separately submitted object-restoration case.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "RAW_TEXT_REFERENCE_SCOPE",
+          "message": "app.kt:2: Reading the first 4096 bytes is a bounded raw-text operation; it does not decode Java serialization and may return a prefix for longer input. That does not contradict this standalone safe label, but prevents assuming the case is a behavior-preserving reference fix for another case.",
+          "recommendation": "Describe this case as bounded text reading. If used later as a remediation reference, separately define permitted format migration and oversize-input behavior.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/io/InputStream.html#readNBytes(int)"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The JVM supports readNBytes(int) (Java 11 or later) for the safe counterpart."
+      ],
+      "independence_group": "java-object-stream-to-raw-text"
+    },
+    {
+      "case_id": "kotlin-digest-choice-vulnerable",
+      "content_sha256": "a0d717dd33cac01c453edbd3247b6781de0698cd53b4389d476313336eb7168d",
+      "verdict": "needs_clarification",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "MD5 is inappropriate for a collision-resistant integrity operation, matching CWE-328 if the claimed security role actually exists. The function alone does not establish that role.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "DIGEST_SECURITY_CONTEXT_MISSING",
+          "message": "app.kt:2: The function only returns a digest; security-critical use appears solely in evaluation rationale. A non-security MD5 checksum can be legitimate, whereas an unauthenticated attacker-replaceable checksum remains unsafe even after SHA-256 substitution.",
+          "recommendation": "Include a minimal caller or explicit source-visible contract showing the trusted expected digest and collision-resistance requirement. Define how callers handle algorithm/output-length migration and include a real non-security misleading counterexample.",
+          "references": [
+            "https://www.rfc-editor.org/info/rfc6151/"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The digest is used where collision resistance is required; it is not merely a cache identifier/checksum for accidental corruption.",
+        "The expected digest is authenticated or otherwise trusted. A plain SHA-256 checksum is not message authentication and is not password hashing.",
+        "Consumers can accept the changed digest length/algorithm or an explicit migration is part of the legitimate contract."
+      ],
+      "independence_group": "java-md5-sha256"
+    },
+    {
+      "case_id": "kotlin-digest-choice-safe",
+      "content_sha256": "064293eae65a1883f73d6c6a2b6f0a7c9b036806d974678bb49c59cbd978f290",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The standalone function computes SHA-256, with no password hashing or authentication construction shown. Its weak-cryptography negative label and SHA-256 preservation constraint are coherent locally.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DIGEST_SCOPE",
+          "message": "app.kt:2: SHA-256 is a suitable general collision-resistant digest here. This small function does not establish authenticated integrity or password-hashing suitability, and those broader claims should not be inferred.",
+          "recommendation": "Retain the safe negative label; state that it concerns algorithm choice and makes no broader claim about unseen consumers.",
+          "references": [
+            "https://www.rfc-editor.org/info/rfc6151/"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The digest is used where collision resistance is required; it is not merely a cache identifier/checksum for accidental corruption.",
+        "The expected digest is authenticated or otherwise trusted. A plain SHA-256 checksum is not message authentication and is not password hashing."
+      ],
+      "independence_group": "java-md5-sha256"
+    },
+    {
+      "case_id": "kotlin-maintenance-shell-vulnerable",
+      "content_sha256": "2763f094afcea3695525ec9ad70e09be878df0dc2bb4d13e19d972dcb69a23a7",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "The user-controlled value becomes part of the command interpreted by sh -c. Shell operators can introduce extra commands, matching CWE-78. A direct argument vector preserves the intended single lookup/stat operation.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The parameter is attacker-controlled and the target is a POSIX-like environment with the stated utility installed.",
+        "Executable lookup/PATH is trusted; this case is about shell interpretation, not executable-search-path hijacking."
+      ],
+      "independence_group": "jvm-shell-argv"
+    },
+    {
+      "case_id": "kotlin-maintenance-shell-safe",
+      "content_sha256": "b60747fded701a5c01b5f8cb90eddf138b2c6ea74d30c5d7182b14ec2de6f2f6",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The utility and user input occupy separate ProcessBuilder arguments and no shell interprets metacharacters. The option terminator in stat/id also prevents an input beginning with a dash from becoming an option.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The parameter is attacker-controlled and the target is a POSIX-like environment with the stated utility installed.",
+        "Executable lookup/PATH is trusted; this case is about shell interpretation, not executable-search-path hijacking."
+      ],
+      "independence_group": "jvm-shell-argv"
+    },
+    {
+      "case_id": "kotlin-host-verifier-vulnerable",
+      "content_sha256": "399d49cefa16d49714b1ff74b2e2116b4d08694e9061ca821994116fc592a577",
+      "verdict": "needs_clarification",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "The verifier implementation always accepts a hostname result, which is an unsafe configuration if consumed by an HTTPS client. It does not itself execute a network request or disable certificate-chain validation.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "HOSTNAME_CONSUMER_UNSPECIFIED",
+          "message": "app.kt:2: The source only constructs/returns a verifier and never shows the client that uses it. getDefaultHostnameVerifier returns mutable global HttpsURLConnection policy; it is not evidence that an arbitrary consumer will perform complete hostname verification.",
+          "recommendation": "Add a minimal intended HTTPS-client wiring point and trusted-default assumption. State that the finding concerns hostname checks (CWE-297 is more specific, while CWE-295 is acceptable as a parent), not wholesale TLS chain validation.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/javax/net/ssl/HttpsURLConnection.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The returned/stored HostnameVerifier is installed on the intended HTTPS client, whose certificate-chain validation remains enabled.",
+        "For the safe case, no code has replaced the global HttpsURLConnection default with a permissive verifier."
+      ],
+      "independence_group": "jvm-hostname-verifier"
+    },
+    {
+      "case_id": "kotlin-host-verifier-safe",
+      "content_sha256": "cd0d872c73c7062ebe2ca262c1ca7c1551c4fd5d23de13c226d54065c062331a",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "Fetching the platform default introduces no permissive verifier in this fragment. As an HttpsURLConnection configuration counterexample it is safe under unmodified defaults, but its behavior cannot be assumed for arbitrary third-party clients or replaced global defaults.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DEFAULT_VERIFIER_SCOPE",
+          "message": "app.kt:2: The code retrieves the HttpsURLConnection default and introduces no insecure override. This supports the standalone safe configuration label under an unmodified platform default; it is not a universal verifier guarantee for arbitrary third-party consumers.",
+          "recommendation": "Keep the safe label and document its intended HttpsURLConnection context. Consumer/global-default assumptions are scope notes, not evidence of a vulnerability in this supplied source.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/javax/net/ssl/HttpsURLConnection.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The returned/stored HostnameVerifier is installed on the intended HTTPS client, whose certificate-chain validation remains enabled.",
+        "For the safe case, no code has replaced the global HttpsURLConnection default with a permissive verifier."
+      ],
+      "independence_group": "jvm-hostname-verifier"
+    },
+    {
+      "case_id": "scala-customer-jdbc-vulnerable",
+      "content_sha256": "47134407f8fc2e6fe7ddb9ac76e3ddc3e6d42f2e73227237d3a26934a37d04e6",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "A caller-controlled string is inserted inside a SQL literal and sent to JDBC Statement.executeQuery. Quote-breaking input can change the query; CWE-89 and sql-injection are appropriate. Binding the single parameter is a focused remedy.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The string parameter is attacker-controlled; the Connection is trusted and the named table exists.",
+        "The consumer owns ResultSet/Statement cleanup; this corpus labels injection, not general JDBC resource-lifetime behavior."
+      ],
+      "independence_group": "jdbc-bound-name"
+    },
+    {
+      "case_id": "scala-customer-jdbc-safe",
+      "content_sha256": "2b33283f9fb058e835962f1ccf155687dcb857429ec9c7ce3f52469101140c97",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The SQL structure is literal and caller input is supplied with setString, so apostrophes and Unicode stay data. The returned ResultSet preserves the demonstrated query result shape. No second SQL sink is present.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The string parameter is attacker-controlled; the Connection is trusted and the named table exists.",
+        "The consumer owns ResultSet/Statement cleanup; this corpus labels injection, not general JDBC resource-lifetime behavior."
+      ],
+      "independence_group": "jdbc-bound-name"
+    },
+    {
+      "case_id": "scala-document-factory-vulnerable",
+      "content_sha256": "6dbd8018308a8de76b3e2d26fdc1a3b0c4a0318fe5b9e68c29b19299b279c662",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "External entity resolution is plausible under the documented JDK defaults even though secure processing is enabled by default. The source has no explicit external-access restriction, resolver or DOCTYPE rejection. CWE-611 is appropriate in that environment.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "XML_RUNTIME_ASSUMPTIONS",
+          "message": "app.scala:3: newInstance selects a provider and JAXP settings can be supplied outside this source; the metadata does not pin those settings. The vulnerable label must not be justified merely by assuming modern secure-processing defaults disable external entities.",
+          "recommendation": "Record the JDK/provider and external-access settings, plus the contract that ordinary input excludes DTD-dependent documents. Do not reject this label solely because FEATURE_SECURE_PROCESSING is on by default.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/security/java-api-xml-processing-jaxp-security-guide.html",
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.xml/javax/xml/parsers/DocumentBuilderFactory.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "Attacker-controlled XML reaches parse; the intended runtime is an OpenJDK/Oracle JDK DOM provider supporting the Apache disallow-doctype-decl feature.",
+        "The vulnerable runtime has no system/JAXP configuration denying DTD access; ordinary accepted documents do not require a DOCTYPE.",
+        "Input size is bounded outside this fragment; safe means protected against the labeled XXE family, not every XML denial-of-service condition."
+      ],
+      "independence_group": "jaxp-dom-doctype"
+    },
+    {
+      "case_id": "scala-document-factory-safe",
+      "content_sha256": "41643d354c50131d7ab785aa280c305fe202fda020c5e1e85294a077fdc425e2",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The feature is set on the same factory before construction. Rejecting DOCTYPE blocks the document-defined external entity path, and failure to support the feature throws before parsing. Ordinary DOCTYPE-free XML remains supported.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "XML_RUNTIME_ASSUMPTIONS",
+          "message": "app.scala:3: newInstance selects a provider and JAXP settings can be supplied outside this source; the metadata does not pin those settings. The vulnerable label must not be justified merely by assuming modern secure-processing defaults disable external entities.",
+          "recommendation": "Record the JDK/provider and external-access settings, plus the contract that ordinary input excludes DTD-dependent documents. Do not reject this label solely because FEATURE_SECURE_PROCESSING is on by default.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/security/java-api-xml-processing-jaxp-security-guide.html",
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.xml/javax/xml/parsers/DocumentBuilderFactory.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "Attacker-controlled XML reaches parse; the intended runtime is an OpenJDK/Oracle JDK DOM provider supporting the Apache disallow-doctype-decl feature.",
+        "The vulnerable runtime has no system/JAXP configuration denying DTD access; ordinary accepted documents do not require a DOCTYPE.",
+        "Input size is bounded outside this fragment; safe means protected against the labeled XXE family, not every XML denial-of-service condition."
+      ],
+      "independence_group": "jaxp-dom-doctype"
+    },
+    {
+      "case_id": "scala-job-state-vulnerable",
+      "content_sha256": "ea0a676e820eb1d20b982cf870b4e8ff81b399f9d4e141762fc79c7260dac274",
+      "verdict": "revise",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "ObjectInputStream.readObject accepts attacker-selected serialized classes without a local restriction. CWE-502 is reasonable, but concrete gadget execution depends on the available classes and filters; no specific execution chain is demonstrated.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "UNDEFINED_RESTORATION_CONTRACT",
+          "message": "app.scala:2: readObject can return arbitrary object types, while this case requires a bounded data-only replacement and preservation of the demonstrated operation/input-output behavior. No legitimate data model, encoding or allowed wire-format migration defines what an acceptable repair must retain.",
+          "recommendation": "Define the legitimate restored value/schema, serialization contract, bounds and permitted migration for this vulnerable case. The separately submitted safe example is not a gold repair and does not resolve these case-local constraints.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/core/java-serialization-filters.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The byte stream is attacker-controlled and no stream/JVM-wide deserialization filter is supplied elsewhere.",
+        "The JVM supports readNBytes(int) (Java 11 or later) for the safe counterpart."
+      ],
+      "independence_group": "java-object-stream-to-raw-text"
+    },
+    {
+      "case_id": "scala-job-state-safe",
+      "content_sha256": "e1bf819f4e170c74cc71cfc880bae4999befa2e444bef255ff6a1462652c5252",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "This standalone function reads at most 4096 bytes as UTF-8 and never constructs attacker-selected native objects. Its CWE-502 negative label is supported. The source explicitly defines bounded raw-text behavior; it is not evaluated as a gold repair for the separately submitted object-restoration case.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "RAW_TEXT_REFERENCE_SCOPE",
+          "message": "app.scala:2: Reading the first 4096 bytes is a bounded raw-text operation; it does not decode Java serialization and may return a prefix for longer input. That does not contradict this standalone safe label, but prevents assuming the case is a behavior-preserving reference fix for another case.",
+          "recommendation": "Describe this case as bounded text reading. If used later as a remediation reference, separately define permitted format migration and oversize-input behavior.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/io/InputStream.html#readNBytes(int)"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The JVM supports readNBytes(int) (Java 11 or later) for the safe counterpart."
+      ],
+      "independence_group": "java-object-stream-to-raw-text"
+    },
+    {
+      "case_id": "scala-integrity-hash-vulnerable",
+      "content_sha256": "da145aa8a4608384db07278ecc052e02168bed553f8a8b819cea948651f94b5c",
+      "verdict": "needs_clarification",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "MD5 is inappropriate for a collision-resistant integrity operation, matching CWE-328 if the claimed security role actually exists. The function alone does not establish that role.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "DIGEST_SECURITY_CONTEXT_MISSING",
+          "message": "app.scala:2: The function only returns a digest; security-critical use appears solely in evaluation rationale. A non-security MD5 checksum can be legitimate, whereas an unauthenticated attacker-replaceable checksum remains unsafe even after SHA-256 substitution.",
+          "recommendation": "Include a minimal caller or explicit source-visible contract showing the trusted expected digest and collision-resistance requirement. Define how callers handle algorithm/output-length migration and include a real non-security misleading counterexample.",
+          "references": [
+            "https://www.rfc-editor.org/info/rfc6151/"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The digest is used where collision resistance is required; it is not merely a cache identifier/checksum for accidental corruption.",
+        "The expected digest is authenticated or otherwise trusted. A plain SHA-256 checksum is not message authentication and is not password hashing.",
+        "Consumers can accept the changed digest length/algorithm or an explicit migration is part of the legitimate contract."
+      ],
+      "independence_group": "java-md5-sha256"
+    },
+    {
+      "case_id": "scala-integrity-hash-safe",
+      "content_sha256": "ef3e4d10c818323e5bb674d731576d12afb84388266821127a40b0bd492cdb63",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The standalone function computes SHA-256, with no password hashing or authentication construction shown. Its weak-cryptography negative label and SHA-256 preservation constraint are coherent locally.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DIGEST_SCOPE",
+          "message": "app.scala:2: SHA-256 is a suitable general collision-resistant digest here. This small function does not establish authenticated integrity or password-hashing suitability, and those broader claims should not be inferred.",
+          "recommendation": "Retain the safe negative label; state that it concerns algorithm choice and makes no broader claim about unseen consumers.",
+          "references": [
+            "https://www.rfc-editor.org/info/rfc6151/"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The digest is used where collision resistance is required; it is not merely a cache identifier/checksum for accidental corruption.",
+        "The expected digest is authenticated or otherwise trusted. A plain SHA-256 checksum is not message authentication and is not password hashing."
+      ],
+      "independence_group": "java-md5-sha256"
+    },
+    {
+      "case_id": "scala-system-query-vulnerable",
+      "content_sha256": "04b52457bbb2848526c4c07f91322908fd157719259e0cff1a97d172c43e7542",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "The user-controlled value becomes part of the command interpreted by sh -c. Shell operators can introduce extra commands, matching CWE-78. A direct argument vector preserves the intended single lookup/stat operation.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The parameter is attacker-controlled and the target is a POSIX-like environment with the stated utility installed.",
+        "Executable lookup/PATH is trusted; this case is about shell interpretation, not executable-search-path hijacking."
+      ],
+      "independence_group": "jvm-shell-argv"
+    },
+    {
+      "case_id": "scala-system-query-safe",
+      "content_sha256": "e1007fa48744866226bc266050e989fc90d160db32dddc81a3419c4391417d02",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The utility and user input occupy separate ProcessBuilder arguments and no shell interprets metacharacters. The option terminator in stat/id also prevents an input beginning with a dash from becoming an option.",
+      "issues": [],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The parameter is attacker-controlled and the target is a POSIX-like environment with the stated utility installed.",
+        "Executable lookup/PATH is trusted; this case is about shell interpretation, not executable-search-path hijacking."
+      ],
+      "independence_group": "jvm-shell-argv"
+    },
+    {
+      "case_id": "scala-tls-hostnames-vulnerable",
+      "content_sha256": "513558a3b5f60c72119a44503767897ea4e85b4e9e00f888b50bbc9abdc48765",
+      "verdict": "needs_clarification",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "The verifier implementation always accepts a hostname result, which is an unsafe configuration if consumed by an HTTPS client. It does not itself execute a network request or disable certificate-chain validation.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "HOSTNAME_CONSUMER_UNSPECIFIED",
+          "message": "app.scala:2: The source only constructs/returns a verifier and never shows the client that uses it. getDefaultHostnameVerifier returns mutable global HttpsURLConnection policy; it is not evidence that an arbitrary consumer will perform complete hostname verification.",
+          "recommendation": "Add a minimal intended HTTPS-client wiring point and trusted-default assumption. State that the finding concerns hostname checks (CWE-297 is more specific, while CWE-295 is acceptable as a parent), not wholesale TLS chain validation.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/javax/net/ssl/HttpsURLConnection.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The returned/stored HostnameVerifier is installed on the intended HTTPS client, whose certificate-chain validation remains enabled.",
+        "For the safe case, no code has replaced the global HttpsURLConnection default with a permissive verifier."
+      ],
+      "independence_group": "jvm-hostname-verifier"
+    },
+    {
+      "case_id": "scala-tls-hostnames-safe",
+      "content_sha256": "7b9561506cf6ae2d449979f805c14700942dd34be6b08f6853c44d8d0fb14f9f",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "Fetching the platform default introduces no permissive verifier in this fragment. As an HttpsURLConnection configuration counterexample it is safe under unmodified defaults, but its behavior cannot be assumed for arbitrary third-party clients or replaced global defaults.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DEFAULT_VERIFIER_SCOPE",
+          "message": "app.scala:2: The code retrieves the HttpsURLConnection default and introduces no insecure override. This supports the standalone safe configuration label under an unmodified platform default; it is not a universal verifier guarantee for arbitrary third-party consumers.",
+          "recommendation": "Keep the safe label and document its intended HttpsURLConnection context. Consumer/global-default assumptions are scope notes, not evidence of a vulnerability in this supplied source.",
+          "references": [
+            "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/javax/net/ssl/HttpsURLConnection.html"
+          ]
+        }
+      ],
+      "assumptions": [
+        "The snippet is a callable source-analysis unit; omitted application entry points and routine imports/build configuration alone are not grounds to reject it.",
+        "The returned/stored HostnameVerifier is installed on the intended HTTPS client, whose certificate-chain validation remains enabled.",
+        "For the safe case, no code has replaced the global HttpsURLConnection default with a permissive verifier."
+      ],
+      "independence_group": "jvm-hostname-verifier"
+    },
+    {
+      "case_id": "swift-server-trust-policy-vulnerable",
+      "content_sha256": "b887375addf8c4931fce9639431b446c7f302b4d3b50131ae5f2dba19ba88c2c",
+      "verdict": "needs_clarification",
+      "label_assessment": "unsafe trust policy is supported; exploitable TLS bypass is conditional",
+      "rationale": "DisabledTrustEvaluator deliberately skips Alamofire evaluation, so its use is a valid policy concern. However this snippet neither installs the manager into a Session nor establishes whether ATS allows trust relaxation for the target domain.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "TLS_PLATFORM_AND_WIRING_MISSING",
+          "message": "app.swift:2: An unused ServerTrustManager does not affect requests. The rationale treats disabling Alamofire evaluation as an unconditional server-trust bypass, although Darwin URLSession can enforce ATS independently.",
+          "recommendation": "Pin the intended Darwin/Alamofire configuration, show Session use and record relevant ATS/domain exceptions, or limit the expected claim to an unsafe inactive policy. Do not weaken TLS settings merely to make a benchmark appear vulnerable.",
+          "references": [
+            "https://github.com/Alamofire/Alamofire/blob/master/Documentation/AdvancedUsage.md",
+            "https://developer.apple.com/documentation/Foundation/performing-manual-server-trust-authentication"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Alamofire 5 is available on a Darwin Foundation target.",
+        "The manager is passed to the Session making requests to api.example.org; a standalone unused manager has no network effect."
+      ],
+      "independence_group": "swift-alamofire-trust"
+    },
+    {
+      "case_id": "swift-server-trust-policy-safe",
+      "content_sha256": "b82d1ab8e892dcfc74c28c307a3b08af1dd9e4d6e9e3054ac12be08ae53b09a1",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "DefaultTrustEvaluator(validateHost: true) requests the normal chain and hostname checks for the configured host. The other-host behavior is fail-closed with the manager default. No direct insecure trust override appears.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "ALAMOFIRE_CONSUMER_NOT_SHOWN",
+          "message": "app.swift:2: The snippet constructs a trust-policy map without connecting it to a Session or request. This is a structural configuration example, not a complete trust-boundary scenario.",
+          "recommendation": "Show the Session consumer or explicitly designate this as a policy-construction unit and document its platform/version.",
+          "references": [
+            "https://alamofire.github.io/Alamofire/Classes/DefaultTrustEvaluator.html",
+            "https://github.com/Alamofire/Alamofire/blob/master/Documentation/AdvancedUsage.md"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Alamofire 5 is available on a Darwin Foundation target.",
+        "The manager is passed to the Session making requests to api.example.org; a standalone unused manager has no network effect."
+      ],
+      "independence_group": "swift-alamofire-trust"
+    },
+    {
+      "case_id": "swift-archive-import-vulnerable",
+      "content_sha256": "1116ee7d141614c17ec58c9e6181e23360d8e99f22c348e7380b948459453c9d",
+      "verdict": "revise",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "The deprecated convenience method decodes an archive without a caller-supplied expected-class restriction, supporting CWE-502 for untrusted archives. Actual consequences depend on available classes and the platform.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "ARCHIVE_CONTRACT_UNSPECIFIED",
+          "message": "app.swift:2: This case returns arbitrary archived objects but requires a fix that restricts decoding to the expected secure-coding class while preserving legitimate behavior. The expected class/object graph and supported caller/error contract are absent, so a model cannot derive the permitted narrowing from the supplied program.",
+          "recommendation": "State the legitimate archive root/object graph and compatibility/error expectations for this vulnerable case. Do not infer them from the independently evaluated NSString safe case.",
+          "references": [
+            "https://developer.apple.com/documentation/Foundation/NSKeyedUnarchiver?language=objc",
+            "https://developer.apple.com/documentation/foundation/nskeyedunarchiver/requiressecurecoding?language=objc"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Darwin Foundation supports these keyed-archive APIs; attacker-controlled archive contents reach the function.",
+        "The file-path variant assumes the caller may select an authorized archive file; it does not itself assert a protected directory boundary.",
+        "No concrete dangerous class/gadget execution is proved by these two-line snippets."
+      ],
+      "independence_group": "swift-keyed-unarchive"
+    },
+    {
+      "case_id": "swift-archive-import-safe",
+      "content_sha256": "deb807259279d429bb057e5f9f98ac40ead6ce8c30f202ab54515a4027d31432",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "This standalone API explicitly returns NSString? and restricts decoding to that expected root class, supporting the CWE-502 negative label. Throwing behavior is part of its own signature. It is not used as a gold repair for the separately submitted unrestricted decoder.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "ARCHIVE_REFERENCE_SCOPE",
+          "message": "app.swift:2: NSString is explicitly the accepted root type in this safe case. Its narrower type and throwing signature are coherent locally; they should not be assumed to preserve another API that accepted arbitrary objects.",
+          "recommendation": "Retain the safe label. Any future use as a remediation reference requires an independently specified original archive schema and caller/error contract.",
+          "references": [
+            "https://developer.apple.com/documentation/Foundation/NSKeyedUnarchiver?language=objc",
+            "https://developer.apple.com/documentation/foundation/nskeyedunarchiver/requiressecurecoding?language=objc"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Darwin Foundation supports these keyed-archive APIs; attacker-controlled archive contents reach the function.",
+        "The file-path variant assumes the caller may select an authorized archive file; it does not itself assert a protected directory boundary.",
+        "No concrete dangerous class/gadget execution is proved by these two-line snippets."
+      ],
+      "independence_group": "swift-keyed-unarchive"
+    },
+    {
+      "case_id": "swift-session-challenge-vulnerable",
+      "content_sha256": "5bc6051eef49b0f389dd1764f47153c03de80bc97d6a618a68299f777410fb47",
+      "verdict": "needs_clarification",
+      "label_assessment": "unsafe trust-handling pattern is supported; unconditional bypass label needs platform assumptions",
+      "rationale": "The helper supplies a trust credential without evaluating trust. Its actual bypass potential depends on domain ATS policy; the unconditional force unwrap also assumes every forwarded challenge is a server-trust challenge.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "ATS_CONDITION_MISSING",
+          "message": "app.swift:2: The rationale claims that server trust is accepted without qualification. Apple documents that ATS-protected domains do not permit loosening trust requirements, and no platform/domain ATS policy or delegate wiring is included.",
+          "recommendation": "Document target platform, domain policy and delegation. Keep the finding as an unsafe manual-authentication pattern unless evidence establishes the claimed bypass.",
+          "references": [
+            "https://developer.apple.com/documentation/Foundation/performing-manual-server-trust-authentication"
+          ]
+        },
+        {
+          "severity": "major",
+          "code": "NON_SERVER_CHALLENGE_CRASH",
+          "message": "app.swift:2: serverTrust! can be nil for a non-server-trust authentication challenge; the unrestricted helper signature and missing authenticationMethod guard leave an unintended crash path outside the sole TLS finding.",
+          "recommendation": "Specify that the caller filters server-trust challenges, or add the guard/default handling in the scenario and include the associated behavior constraint.",
+          "references": [
+            "https://developer.apple.com/documentation/Foundation/performing-manual-server-trust-authentication"
+          ]
+        }
+      ],
+      "assumptions": [
+        "A URLSessionDelegate forwards actual authentication challenges to this helper on Darwin.",
+        "The URLSession and URLSessionTask ownership/lifetimes are outside this small helper."
+      ],
+      "independence_group": "swift-challenge-trust"
+    },
+    {
+      "case_id": "swift-session-challenge-safe",
+      "content_sha256": "ee7c86704a9bcc3560ffd8d41df2e5becd9f8cd43199fc599e44580519da2876",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "performDefaultHandling delegates the entire challenge decision to the URL loading system, with no trust-bypass credential supplied. This is an appropriate safe alternative for standard server trust and other authentication challenges.",
+      "issues": [],
+      "assumptions": [
+        "A URLSessionDelegate forwards actual authentication challenges to this helper on Darwin.",
+        "The URLSession and URLSessionTask ownership/lifetimes are outside this small helper."
+      ],
+      "independence_group": "swift-challenge-trust"
+    },
+    {
+      "case_id": "swift-archive-file-vulnerable",
+      "content_sha256": "cfd7701d00b4c85e87f1112e74c837e2fb5436ad125a79bf21dc872eeed9987e",
+      "verdict": "revise",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "The deprecated convenience method decodes an archive without a caller-supplied expected-class restriction, supporting CWE-502 for untrusted archives. Actual consequences depend on available classes and the platform.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "ARCHIVE_CONTRACT_UNSPECIFIED",
+          "message": "app.swift:2: This case returns arbitrary archived objects but requires a fix that restricts decoding to the expected secure-coding class while preserving legitimate behavior. The expected class/object graph and supported caller/error contract are absent, so a model cannot derive the permitted narrowing from the supplied program.",
+          "recommendation": "State the legitimate archive root/object graph and compatibility/error expectations for this vulnerable case. Do not infer them from the independently evaluated NSString safe case.",
+          "references": [
+            "https://developer.apple.com/documentation/Foundation/NSKeyedUnarchiver?language=objc",
+            "https://developer.apple.com/documentation/foundation/nskeyedunarchiver/requiressecurecoding?language=objc"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Darwin Foundation supports these keyed-archive APIs; attacker-controlled archive contents reach the function.",
+        "The file-path variant assumes the caller may select an authorized archive file; it does not itself assert a protected directory boundary.",
+        "No concrete dangerous class/gadget execution is proved by these two-line snippets."
+      ],
+      "independence_group": "swift-keyed-unarchive"
+    },
+    {
+      "case_id": "swift-archive-file-safe",
+      "content_sha256": "73fdbd2c7e66b586f77d636073c86107f426fe098816bba4055ab6819ae123ca",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "This standalone API explicitly returns NSString? and restricts decoding to that expected root class, supporting the CWE-502 negative label. Throwing behavior is part of its own signature. It is not used as a gold repair for the separately submitted unrestricted decoder.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "ARCHIVE_REFERENCE_SCOPE",
+          "message": "app.swift:2: NSString is explicitly the accepted root type in this safe case. Its narrower type and throwing signature are coherent locally; they should not be assumed to preserve another API that accepted arbitrary objects.",
+          "recommendation": "Retain the safe label. Any future use as a remediation reference requires an independently specified original archive schema and caller/error contract.",
+          "references": [
+            "https://developer.apple.com/documentation/Foundation/NSKeyedUnarchiver?language=objc",
+            "https://developer.apple.com/documentation/foundation/nskeyedunarchiver/requiressecurecoding?language=objc"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Darwin Foundation supports these keyed-archive APIs; attacker-controlled archive contents reach the function.",
+        "The file-path variant assumes the caller may select an authorized archive file; it does not itself assert a protected directory boundary.",
+        "No concrete dangerous class/gadget execution is proved by these two-line snippets."
+      ],
+      "independence_group": "swift-keyed-unarchive"
+    },
+    {
+      "case_id": "swift-format-log-vulnerable",
+      "content_sha256": "760c322b7040f17d73c9043d579053df0fc21a9916e44c0c3ef2ba48cecad060",
+      "verdict": "supported",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "Input occupies NSLog's format position with no matching variadic arguments. Crafted percent directives can cause invalid reads/crashes or unintended output; CWE-134 is appropriate. A literal object-format argument preserves the intended logging operation.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "PLATFORM_SCOPE",
+          "message": "app.swift:2: The source is a minimal Foundation formatting example, with no platform/version declaration. The assessment applies to the documented printf-style NSLog contract; it does not assert a specific arbitrary-code-execution exploit.",
+          "recommendation": "Record the Foundation target and keep the expected consequence at the demonstrated uncontrolled-format level.",
+          "references": [
+            "https://developer.apple.com/library/archive/technotes/tn2347/"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Input can contain attacker-controlled percent-format directives and the target uses Darwin Foundation NSLog.",
+        "The desired operation logs arbitrary text; confidentiality/redaction of log contents is a separate policy."
+      ],
+      "independence_group": "swift-nslog-format"
+    },
+    {
+      "case_id": "swift-format-log-safe",
+      "content_sha256": "a49f04dacabe3dbda9281d18d46b33ab364cebd0ba001cff46a121561352557d",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "The format is a constant %@ and input is an object argument, so percent sequences inside input remain data. It preserves arbitrary text logging and removes the demonstrated formatting risk.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "PLATFORM_SCOPE",
+          "message": "app.swift:2: The source is a minimal Foundation formatting example, with no platform/version declaration. The assessment applies to the documented printf-style NSLog contract; it does not assert a specific arbitrary-code-execution exploit.",
+          "recommendation": "Record the Foundation target and keep the expected consequence at the demonstrated uncontrolled-format level.",
+          "references": [
+            "https://developer.apple.com/library/archive/technotes/tn2347/"
+          ]
+        }
+      ],
+      "assumptions": [
+        "Input can contain attacker-controlled percent-format directives and the target uses Darwin Foundation NSLog.",
+        "The desired operation logs arbitrary text; confidentiality/redaction of log contents is a separate policy."
+      ],
+      "independence_group": "swift-nslog-format"
+    },
+    {
+      "case_id": "swift-path-selection-vulnerable",
+      "content_sha256": "306292695447d73cccb2ac51fcf7bae873f30d1027859ea5929b60fed3b70aeb",
+      "verdict": "revise",
+      "label_assessment": "vulnerable label supported under the listed trust-boundary assumptions",
+      "rationale": "Concatenating a name containing parent-directory components into /srv/docs/ produces an escaping file path, so CWE-22 is supported under the documented confinement intent. The proposed ID mapping is safe in principle but its legitimate input set is unspecified.",
+      "issues": [
+        {
+          "severity": "major",
+          "code": "DOCUMENT_ID_CONTRACT_MISSING",
+          "message": "app.swift:2: This function accepts filenames relative to /srv/docs, while its required remedy is to map known document IDs to fixed paths and preserve legitimate input/output behavior. The legitimate ID set, mapping and permitted API migration are unspecified in this case.",
+          "recommendation": "Define the intended public ID/filename contract and allowed documents for this vulnerable case, or permit containment validation that preserves authorized filenames. Do not infer the contract from an independently evaluated safe case.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "For the vulnerable case, name is attacker-controlled and reads must remain within /srv/docs.",
+        "For the safe case, the document map and target filesystem paths are trusted and cannot be replaced by attacker-controlled symlinks."
+      ],
+      "independence_group": "swift-path-map"
+    },
+    {
+      "case_id": "swift-path-selection-safe",
+      "content_sha256": "aaffdd4b669528e5cbc72461b6252fce62f91e2ba2cc5cb2c86ccf47822f6e5a",
+      "verdict": "supported",
+      "label_assessment": "safe label supported for the stated vulnerability family",
+      "rationale": "This standalone function defines a one-ID API: terms selects a literal trusted path and other IDs are rejected. Untrusted traversal strings cannot become filesystem paths, so the CWE-22 negative label is coherent. It is not a gold repair for the separate filename-based function.",
+      "issues": [
+        {
+          "severity": "minor",
+          "code": "DOCUMENT_MAP_REFERENCE_SCOPE",
+          "message": "app.swift:2: The literal map defines the accepted ID contract for this safe function. That contract differs from a general filename API, but the difference does not make this independently evaluated negative case invalid.",
+          "recommendation": "Keep the safe label under trusted-filesystem assumptions. Do not present this one-ID API as an automatically behavior-preserving repair for arbitrary filename-based readers.",
+          "references": []
+        }
+      ],
+      "assumptions": [
+        "For the vulnerable case, name is attacker-controlled and reads must remain within /srv/docs.",
+        "For the safe case, the document map and target filesystem paths are trusted and cannot be replaced by attacker-controlled symlinks."
+      ],
+      "independence_group": "swift-path-map"
+    }
+  ],
+  "corpus_issues": [
+    {
+      "severity": "blocker",
+      "code": "TRANSLATED_SCENARIOS_NOT_INDEPENDENT",
+      "message": "Across the 36 Java/Kotlin/Scala cases, six one-operation JVM API templates are repeated with language syntax/name changes and direct safe/unsafe substitutions. Distinct hashes do not demonstrate 36 independent security scenarios.",
+      "case_ids": [
+        "java-customer-search-vulnerable",
+        "java-customer-search-safe",
+        "java-xml-upload-vulnerable",
+        "java-xml-upload-safe",
+        "java-session-restore-vulnerable",
+        "java-session-restore-safe",
+        "java-legacy-digest-vulnerable",
+        "java-legacy-digest-safe",
+        "java-support-shell-vulnerable",
+        "java-support-shell-safe",
+        "java-hostname-check-vulnerable",
+        "java-hostname-check-safe",
+        "kotlin-invoice-jdbc-vulnerable",
+        "kotlin-invoice-jdbc-safe",
+        "kotlin-xml-dom-vulnerable",
+        "kotlin-xml-dom-safe",
+        "kotlin-native-state-vulnerable",
+        "kotlin-native-state-safe",
+        "kotlin-digest-choice-vulnerable",
+        "kotlin-digest-choice-safe",
+        "kotlin-maintenance-shell-vulnerable",
+        "kotlin-maintenance-shell-safe",
+        "kotlin-host-verifier-vulnerable",
+        "kotlin-host-verifier-safe",
+        "scala-customer-jdbc-vulnerable",
+        "scala-customer-jdbc-safe",
+        "scala-document-factory-vulnerable",
+        "scala-document-factory-safe",
+        "scala-job-state-vulnerable",
+        "scala-job-state-safe",
+        "scala-integrity-hash-vulnerable",
+        "scala-integrity-hash-safe",
+        "scala-system-query-vulnerable",
+        "scala-system-query-safe",
+        "scala-tls-hostnames-vulnerable",
+        "scala-tls-hostnames-safe"
+      ],
+      "recommendation": "Retain language-coverage variants if useful, but replace repeated scenarios with substantively independent trust boundaries/control flow/contracts to meet the agreed independent-case target. Cluster translated and paired cases in statistical inference; do not lower the required corpus target silently.",
+      "references": []
+    },
+    {
+      "severity": "major",
+      "code": "RELATED_SWIFT_ARCHIVE_OVERLOADS",
+      "message": "app.swift:2 in archive-import and archive-file exercises the same unrestricted-object-class condition and expected-NSString remedy through data/file overloads. These should not be counted as independent deserialization mechanisms without an additional substantive scenario distinction.",
+      "case_ids": [
+        "swift-archive-import-vulnerable",
+        "swift-archive-import-safe",
+        "swift-archive-file-vulnerable",
+        "swift-archive-file-safe"
+      ],
+      "recommendation": "Use genuinely distinct archive contracts/context in a revised corpus and group overload variants together for independence assessment.",
+      "references": []
+    }
+  ],
+  "scoring_scope_note": "Each safe and vulnerable case is submitted independently. Safe counterparts are not supplied as gold repairs or fed to the agents. Cross-pair behavior differences below concern reference suitability and conceptual dependence; they do not prove an incorrect safe label or an automated scoring defect. Revise verdicts identify case-local undefined or conflicting remediation constraints."
+}

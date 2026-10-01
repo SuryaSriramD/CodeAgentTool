@@ -1,0 +1,7 @@
+{
+  "job_id": "8e11ecea-0066-4d04-a65d-edd81547def8",
+  "status": "failed",
+  "errors": [
+    "No saved report was produced; operational result is incomplete"
+  ]
+}

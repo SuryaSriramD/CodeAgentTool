@@ -1,0 +1,11 @@
+{
+  "cases": 204,
+  "languages": 17,
+  "proposed_vulnerable": 102,
+  "proposed_safe": 102,
+  "multi_file_cases": 54,
+  "source_lines": 3198,
+  "independence_status": "pending_human_review",
+  "release_status": "candidate",
+  "specification_set_sha256": "f9f38c8c54f7ddf4546b97646c2e7128db6e0649af084798e00d4cd8d80bbe1a"
+}

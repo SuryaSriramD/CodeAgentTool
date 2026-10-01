@@ -1,0 +1,10 @@
+{
+  "rulepack": "1.0.0",
+  "semgrep": "1.178.0",
+  "bandit": "1.9.4",
+  "trivy": "0.74.0",
+  "dotnet_sdk": "10.0.401",
+  "roslyn": "5.9.0",
+  "fsharp_compiler_service": "43.12.401",
+  "dotnet_analyzer": "1.1.0"
+}

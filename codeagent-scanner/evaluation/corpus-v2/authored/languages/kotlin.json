@@ -1,0 +1,973 @@
+{
+  "language": "kotlin",
+  "cases": [
+    {
+      "id": "v2-kotlin-safe-01",
+      "language": "kotlin",
+      "vulnerable": false,
+      "scenario": "event-audit-batched-bound-values",
+      "files": {
+        "AuditBatch.kt": "import java.sql.Connection\nclass AuditBatch(private val db: Connection) {\n    fun record(messages: List<String>): IntArray {\n        require(messages.size <= 100)\n        require(messages.all { it.length <= 2048 })\n        db.prepareStatement(\"INSERT INTO audit_events(message) VALUES (?)\").use { statement ->\n            messages.forEach { message ->\n                statement.setString(1, message)\n                statement.addBatch()\n            }\n            return statement.executeBatch()\n        }\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "SQL-looking words and quotes are values in a prepared batch. A list of messages does not become a list of SQL fragments.",
+      "remediation_constraints": [
+        "Persist each bounded audit message literally and return batch update counts.",
+        "Retain one bound value per row and batch result ordering.",
+        "Do not escape or truncate text unnecessarily or combine messages into one row."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "PostgreSQL16 and JDBC42.7.4; audit_events(message text). Connection uses a trusted insert-only role; messages are arbitrary display text, and no downstream SQL/shell interprets them."
+      },
+      "operation_contract": {
+        "purpose": "Persist each bounded audit message literally and return batch update counts.",
+        "trust_boundary": "Untrusted message strings are bound as data for every batch entry.",
+        "legitimate_examples": [
+          {
+            "input": "[can't open, SELECT * FROM users]",
+            "expected": "Two unchanged message rows"
+          },
+          {
+            "input": "Empty list",
+            "expected": "No inserts and empty update-count array"
+          }
+        ],
+        "permitted_changes": [
+          "Retain one bound value per row and batch result ordering."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not escape or truncate text unnecessarily or combine messages into one row."
+        ]
+      },
+      "regression_traps": [
+        "Do not escape or truncate text unnecessarily or combine messages into one row."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The text may be rendered only with output escaping by consumers; this storage function does not claim to sanitize future HTML."
+        ]
+      },
+      "derivation": {
+        "group": "event-audit-batched-bound-values",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around persist each bounded audit message literally and return batch update counts. Boundary: Untrusted message strings are bound as data for every batch entry. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/PreparedStatement.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-safe-02",
+      "language": "kotlin",
+      "vulnerable": false,
+      "scenario": "webhook-hmac-envelope-consumer",
+      "files": {
+        "WebhookAuthenticator.kt": "import javax.crypto.Mac\nimport javax.crypto.SecretKey\nimport java.security.MessageDigest\nclass WebhookAuthenticator(private val secret: SecretKey) {\n    fun accept(body: ByteArray, suppliedTag: ByteArray): ByteArray {\n        require(body.size <= 65536 && suppliedTag.size == 32)\n        val mac = Mac.getInstance(\"HmacSHA256\")\n        mac.init(secret)\n        val expected = mac.doFinal(body)\n        require(MessageDigest.isEqual(expected, suppliedTag)) { \"invalid signature\" }\n        return body.copyOf()\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "A keyed SHA-256 MAC, exact-byte comparison and a fail-closed consumer preserve authentication. An unkeyed checksum is not substituted for a MAC.",
+      "remediation_constraints": [
+        "Authenticate exact webhook bytes before exposing them to the event decoder.",
+        "Keep key from trusted configuration and authenticate the bytes actually consumed.",
+        "Do not parse/reserialize before checking the tag or accept requests on crypto exceptions."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "A 256-bit random HMAC key is provided from server configuration, never from the request. Replay IDs/timestamps are checked by the event consumer after authentication; only authenticated bytes are passed onward."
+      },
+      "operation_contract": {
+        "purpose": "Authenticate exact webhook bytes before exposing them to the event decoder.",
+        "trust_boundary": "Remote senders control body and tag but not the configured HMAC key.",
+        "legitimate_examples": [
+          {
+            "input": "Valid tag over UTF-8 body",
+            "expected": "Returns identical body bytes"
+          },
+          {
+            "input": "Same tag with one changed body byte",
+            "expected": "Rejects before decoder"
+          }
+        ],
+        "permitted_changes": [
+          "Keep key from trusted configuration and authenticate the bytes actually consumed."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not parse/reserialize before checking the tag or accept requests on crypto exceptions."
+        ]
+      },
+      "regression_traps": [
+        "Do not parse/reserialize before checking the tag or accept requests on crypto exceptions."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Replay defense is an explicit downstream protocol prerequisite, not falsely attributed to HMAC alone."
+        ]
+      },
+      "derivation": {
+        "group": "webhook-hmac-envelope-consumer",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around authenticate exact webhook bytes before exposing them to the event decoder. Boundary: Remote senders control body and tag but not the configured HMAC key. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/crypto/Mac.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-safe-03",
+      "language": "kotlin",
+      "vulnerable": false,
+      "scenario": "fixed-format-telemetry-binary-reader",
+      "files": {
+        "TelemetryReader.kt": "import java.io.ByteArrayInputStream\nimport java.io.DataInputStream\nobject TelemetryReader {\n    fun temperatures(packet: ByteArray): List<Short> {\n        require(packet.size in 2..514)\n        DataInputStream(ByteArrayInputStream(packet)).use { input ->\n            val count = input.readUnsignedShort()\n            require(count <= 256 && packet.size == 2 + count * 2)\n            return List(count) { input.readShort() }\n        }\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "DataInputStream reads only explicitly selected primitives. Count and exact packet size are checked before list allocation; no arbitrary object deserialization occurs despite binary input.",
+      "remediation_constraints": [
+        "Decode a bounded counted temperature packet with signed values.",
+        "Retain exact length checks and signed temperature interpretation.",
+        "Do not replace signed values with unsigned values or silently ignore trailing bytes."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "Big-endian wire format: unsigned 16-bit count followed by that many signed 16-bit centidegrees. Public sensor packets are untrusted; parsed values are displayed as measurements, not security decisions."
+      },
+      "operation_contract": {
+        "purpose": "Decode a bounded counted temperature packet with signed values.",
+        "trust_boundary": "Bytes cross the network boundary into a fixed primitive reader without class metadata or object activation.",
+        "legitimate_examples": [
+          {
+            "input": "Count 2 followed by -125 and 2034",
+            "expected": [
+              -125,
+              2034
+            ]
+          },
+          {
+            "input": "Count 0, no extra bytes",
+            "expected": []
+          }
+        ],
+        "permitted_changes": [
+          "Retain exact length checks and signed temperature interpretation."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not replace signed values with unsigned values or silently ignore trailing bytes."
+        ]
+      },
+      "regression_traps": [
+        "Do not replace signed values with unsigned values or silently ignore trailing bytes."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Sensor authenticity is outside this public display protocol; values do not authorize actions."
+        ]
+      },
+      "derivation": {
+        "group": "fixed-format-telemetry-binary-reader",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around decode a bounded counted temperature packet with signed values. Boundary: Bytes cross the network boundary into a fixed primitive reader without class metadata or object activation. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/DataInputStream.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-safe-04",
+      "language": "kotlin",
+      "vulnerable": false,
+      "scenario": "nonsecurity-cache-display-md5",
+      "files": {
+        "CacheBadge.kt": "import java.security.MessageDigest\nimport java.util.HexFormat\nobject CacheBadge {\n    fun displayId(publicThumbnail: ByteArray): String {\n        require(publicThumbnail.size <= 65536)\n        val digest = MessageDigest.getInstance(\"MD5\").digest(publicThumbnail)\n        return HexFormat.of().formatHex(digest).take(8)\n    }\n}\n",
+        "GalleryCell.kt": "class GalleryCell {\n    fun caption(publicBytes: ByteArray): String = \"Preview #\" + CacheBadge.displayId(publicBytes)\n    fun bytesForDownload(originalBytes: ByteArray): ByteArray = originalBytes.copyOf()\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The use of MD5 does not protect passwords, integrity or authenticity; the consumer only decorates a public preview. The separate download path returns its actual argument and never resolves by badge.",
+      "remediation_constraints": [
+        "Display a short deterministic cosmetic badge for a public thumbnail.",
+        "Keep the label explicitly non-authoritative; algorithm changes may update cosmetic badges.",
+        "Do not start using the truncated badge as an authorization token or unique storage identity."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "The short badge is explicitly cosmetic and may collide. Storage identity, downloads, signatures, access control and cache lookup do not use it. Thumbnails are public and size-bounded."
+      },
+      "operation_contract": {
+        "purpose": "Display a short deterministic cosmetic badge for a public thumbnail.",
+        "trust_boundary": "Untrusted thumbnail bytes affect only a label; no security-sensitive consumer trusts digest uniqueness.",
+        "legitimate_examples": [
+          {
+            "input": "Same public image bytes twice",
+            "expected": "Same 8-character badge"
+          },
+          {
+            "input": "Two colliding badges",
+            "expected": "Both thumbnails remain independently downloadable"
+          }
+        ],
+        "permitted_changes": [
+          "Keep the label explicitly non-authoritative; algorithm changes may update cosmetic badges."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not start using the truncated badge as an authorization token or unique storage identity."
+        ]
+      },
+      "regression_traps": [
+        "Do not start using the truncated badge as an authorization token or unique storage identity."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Collision resistance is not a requirement of this operation; dependency/runtime vulnerabilities are not part of the source label."
+        ]
+      },
+      "derivation": {
+        "group": "nonsecurity-cache-display-md5",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around display a short deterministic cosmetic badge for a public thumbnail. Boundary: Untrusted thumbnail bytes affect only a label; no security-sensitive consumer trusts digest uniqueness. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/security/MessageDigest.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-safe-05",
+      "language": "kotlin",
+      "vulnerable": false,
+      "scenario": "line-locator-literal-grep-pattern",
+      "files": {
+        "LineLocator.kt": "import java.nio.charset.StandardCharsets\nclass LineLocator {\n    fun locate(pattern: String): Pair<Int, String> {\n        require(pattern.length <= 80 && !pattern.contains('\\n') && !pattern.contains('\\u0000'))\n        val process = ProcessBuilder(\"/usr/bin/grep\", \"-n\", \"-F\", \"--\", pattern, \"/srv/public/manual.txt\")\n            .redirectError(ProcessBuilder.Redirect.DISCARD).start()\n        val output = process.inputStream.use { String(it.readAllBytes(), StandardCharsets.UTF_8) }\n        return process.waitFor() to output\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "No shell executes the pattern; -F and -- also prevent regex and option interpretation. Output and child status have a visible consumer contract.",
+      "remediation_constraints": [
+        "Find literal single-line text in the public manual with line numbers.",
+        "Preserve literal matching, option termination and exit-code distinctions.",
+        "Do not switch to regular expressions or report a no-match exit as success with arbitrary lines."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "GNU grep3.11 on Linux; immutable bounded public manual, trusted absolute executable path. grep exit1 means no match and is retained rather than treated as a crash."
+      },
+      "operation_contract": {
+        "purpose": "Find literal single-line text in the public manual with line numbers.",
+        "trust_boundary": "Untrusted text occupies one grep argument after option termination and fixed-string selection.",
+        "legitimate_examples": [
+          {
+            "input": "pattern=-v",
+            "expected": "Find literal -v, not an option"
+          },
+          {
+            "input": "pattern=a.*b",
+            "expected": "Find literal punctuation, not a regular expression"
+          }
+        ],
+        "permitted_changes": [
+          "Preserve literal matching, option termination and exit-code distinctions."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not switch to regular expressions or report a no-match exit as success with arbitrary lines."
+        ]
+      },
+      "regression_traps": [
+        "Do not switch to regular expressions or report a no-match exit as success with arbitrary lines."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Bounded public manual prevents unbounded output; trusted filesystem excludes attacker replacement of executable or manual."
+        ]
+      },
+      "derivation": {
+        "group": "line-locator-literal-grep-pattern",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around find literal single-line text in the public manual with line numbers. Boundary: Untrusted text occupies one grep argument after option termination and fixed-string selection. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.gnu.org/software/grep/manual/grep.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-safe-06",
+      "language": "kotlin",
+      "vulnerable": false,
+      "scenario": "calendar-xml-text-writer",
+      "files": {
+        "CalendarXml.kt": "import java.io.StringWriter\nimport javax.xml.stream.XMLOutputFactory\nobject CalendarXml {\n    fun event(title: String): String {\n        require(title.length <= 200)\n        val output = StringWriter()\n        val writer = XMLOutputFactory.newFactory().createXMLStreamWriter(output)\n        writer.writeStartDocument(\"UTF-8\", \"1.0\")\n        writer.writeStartElement(\"event\")\n        writer.writeStartElement(\"title\")\n        writer.writeCharacters(title)\n        writer.writeEndElement()\n        writer.writeEndElement()\n        writer.writeEndDocument()\n        writer.close()\n        return output.toString()\n    }\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The standard writer escapes markup-significant characters as text. Strings that resemble XML attack syntax do not change the document structure.",
+      "remediation_constraints": [
+        "Encode a calendar title as text in one XML event element.",
+        "Retain a text node and valid XML escaping.",
+        "Do not pre-escape and double-encode titles or reinterpret title text as an XML fragment."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "Titles contain valid XML1.0 Unicode characters; HTTP edge rejects invalid control characters. Output is served as application/xml, not HTML. No parser or stylesheet is invoked."
+      },
+      "operation_contract": {
+        "purpose": "Encode a calendar title as text in one XML event element.",
+        "trust_boundary": "Untrusted title reaches XMLStreamWriter.writeCharacters rather than markup concatenation.",
+        "legitimate_examples": [
+          {
+            "input": "R&D <planning>",
+            "expected": "One title text node containing R&D <planning>"
+          },
+          {
+            "input": "A title containing <!DOCTYPE",
+            "expected": "Literal title text, not a declaration"
+          }
+        ],
+        "permitted_changes": [
+          "Retain a text node and valid XML escaping."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not pre-escape and double-encode titles or reinterpret title text as an XML fragment."
+        ]
+      },
+      "regression_traps": [
+        "Do not pre-escape and double-encode titles or reinterpret title text as an XML fragment."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Invalid XML character policy is enforced at the documented edge; ordinary Unicode is preserved."
+        ]
+      },
+      "derivation": {
+        "group": "calendar-xml-text-writer",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around encode a calendar title as text in one xml event element. Boundary: Untrusted title reaches XMLStreamWriter.writeCharacters rather than markup concatenation. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.xml/javax/xml/stream/XMLStreamWriter.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-vulnerable-01",
+      "language": "kotlin",
+      "vulnerable": true,
+      "scenario": "expense-dashboard-exposed-status-filter",
+      "files": {
+        "ExpenseReport.kt": "import org.jetbrains.exposed.sql.transactions.transaction\nimport java.math.BigDecimal\nclass ExpenseReport {\n    fun total(statusFromForm: String): BigDecimal = transaction {\n        var result = BigDecimal.ZERO\n        val query = \"SELECT COALESCE(sum(amount),0) FROM expenses WHERE status = '$statusFromForm'\"\n        exec(query) { rows -> if (rows.next()) result = rows.getBigDecimal(1) }\n        result\n    }\n}\n",
+        "ReportController.kt": "class ReportController(private val report: ExpenseReport) {\n    fun show(parameters: Map<String, String>): String {\n        val status = parameters[\"status\"] ?: \"submitted\"\n        require(status.length <= 40)\n        return report.total(status).toPlainString()\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "ExpenseReport.kt"
+        }
+      ],
+      "rationale": "The raw exec API receives interpolated SQL syntax. A transaction and a read-only database account do not preserve intended row filtering.",
+      "remediation_constraints": [
+        "Calculate the decimal total of expenses having an exact workflow status.",
+        "Use Exposed typed expressions or supported bound arguments without converting decimal amounts to floating point.",
+        "Do not restrict legitimate organization-defined status labels or round the total to an integer."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "Exposed 0.55.0 initialized with PostgreSQL JDBC 42.7.4 and PostgreSQL16. expenses(status text,amount numeric); read-only reporting role can view this organization only."
+      },
+      "operation_contract": {
+        "purpose": "Calculate the decimal total of expenses having an exact workflow status.",
+        "trust_boundary": "An authenticated employee controls a report filter inserted into Exposed raw SQL.",
+        "legitimate_examples": [
+          {
+            "input": "status=awaiting manager",
+            "expected": "Exact decimal total for awaiting manager"
+          },
+          {
+            "input": "status=director's review",
+            "expected": "Apostrophe-containing custom status works"
+          }
+        ],
+        "permitted_changes": [
+          "Use Exposed typed expressions or supported bound arguments without converting decimal amounts to floating point."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not restrict legitimate organization-defined status labels or round the total to an integer."
+        ]
+      },
+      "regression_traps": [
+        "Do not restrict legitimate organization-defined status labels or round the total to an integer."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Organization isolation is database-enforced; the expected injection affects permitted report rows, not cross-tenant authorization."
+        ]
+      },
+      "derivation": {
+        "group": "expense-dashboard-exposed-status-filter",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around calculate the decimal total of expenses having an exact workflow status. Boundary: An authenticated employee controls a report filter inserted into Exposed raw SQL. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://www.jetbrains.com/help/exposed/working-with-sql-strings.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-vulnerable-02",
+      "language": "kotlin",
+      "vulnerable": true,
+      "scenario": "payroll-sax-worker-name-preview",
+      "files": {
+        "PayrollPreview.kt": "import javax.xml.parsers.SAXParserFactory\nimport javax.xml.XMLConstants\nimport org.xml.sax.helpers.DefaultHandler\nimport java.io.ByteArrayInputStream\nobject PayrollPreview {\n    fun preview(bytes: ByteArray): String {\n        require(bytes.size <= 32768)\n        val factory = SAXParserFactory.newInstance()\n        factory.setFeature(\"http://xml.org/sax/features/external-general-entities\", true)\n        factory.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", true)\n        val parser = factory.newSAXParser()\n        parser.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, \"all\")\n        val text = StringBuilder()\n        parser.parse(ByteArrayInputStream(bytes), object : DefaultHandler() {\n            override fun characters(chars: CharArray, start: Int, length: Int) {\n                text.append(chars, start, length)\n            }\n        })\n        return text.toString()\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "unsafe-xml",
+          "cwe": "CWE-611",
+          "path": "PayrollPreview.kt"
+        }
+      ],
+      "rationale": "General/parameter external entities and external DTD protocols are enabled before parsing. SAX character callbacks expose resolved external content to the preview consumer.",
+      "remediation_constraints": [
+        "Show text content from a payroll XML upload before accepting its rows.",
+        "Reject external entities and DTD use while preserving ordinary XML text extraction.",
+        "Do not treat the upload as plain UTF-8 text; entity-decoded names and document text are required."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "JDK SAX implementation, no external JAXP overrides. An authenticated outsourced payroll processor submits the XML; returned text is shown to that processor. Application files are not otherwise accessible to it."
+      },
+      "operation_contract": {
+        "purpose": "Show text content from a payroll XML upload before accepting its rows.",
+        "trust_boundary": "A payroll partner controls XML declarations and entities consumed by an explicitly permissive SAX parser.",
+        "legitimate_examples": [
+          {
+            "input": "<payroll><name>Zoë</name></payroll>",
+            "expected": "Zoë"
+          },
+          {
+            "input": "<payroll><name>A&amp;B</name></payroll>",
+            "expected": "A&B"
+          }
+        ],
+        "permitted_changes": [
+          "Reject external entities and DTD use while preserving ordinary XML text extraction."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not treat the upload as plain UTF-8 text; entity-decoded names and document text are required."
+        ]
+      },
+      "regression_traps": [
+        "Do not treat the upload as plain UTF-8 text; entity-decoded names and document text are required."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Byte limits do not bound external-resource reads. Internal expansion/depth must also be addressed by a repaired parser policy."
+        ]
+      },
+      "derivation": {
+        "group": "payroll-sax-worker-name-preview",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around show text content from a payroll xml upload before accepting its rows. Boundary: A payroll partner controls XML declarations and entities consumed by an explicitly permissive SAX parser. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/security/java-api-xml-processing-jaxp-security-guide.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-vulnerable-03",
+      "language": "kotlin",
+      "vulnerable": true,
+      "scenario": "device-provisioning-okhttp-hostname-policy",
+      "files": {
+        "Provisioning.kt": "import okhttp3.OkHttpClient\nimport okhttp3.Request\nimport java.util.concurrent.TimeUnit\nclass Provisioning {\n    private val client = OkHttpClient.Builder()\n        .hostnameVerifier { _, _ -> true }\n        .followRedirects(false)\n        .callTimeout(4, TimeUnit.SECONDS)\n        .build()\n    fun enrollmentCode(): String {\n        val request = Request.Builder().url(\"https://enroll.example.org/device-code\").build()\n        return client.newCall(request).execute().use { response ->\n            check(response.isSuccessful)\n            require((response.body?.contentLength() ?: 0) <= 4096)\n            response.body!!.string()\n        }\n    }\n}\n",
+        "DeviceScreen.kt": "class DeviceScreen(private val provisioning: Provisioning) {\n    fun displayedCode(): String = provisioning.enrollmentCode().trim()\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "Provisioning.kt"
+        }
+      ],
+      "rationale": "An always-true hostname verifier accepts an unrelated valid certificate. The fixed URL and standard trust roots do not compensate for skipped peer identity.",
+      "remediation_constraints": [
+        "Retrieve the enrollment code only from the configured enrollment origin.",
+        "Restore hostname verification while preserving configured origin and redirect refusal.",
+        "Do not accept a hostname mismatch merely because the certificate chains to a trusted CA."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "OkHttp4.12.0 with normal JVM CA roots. On-path attacker has a CA-valid certificate for an unrelated domain. Enrollment service promises fixed-length text bodies; code is displayed to bind a physical device."
+      },
+      "operation_contract": {
+        "purpose": "Retrieve the enrollment code only from the configured enrollment origin.",
+        "trust_boundary": "The peer certificate remains chain-validated, but its identity is not checked against enroll.example.org.",
+        "legitimate_examples": [
+          {
+            "input": "Valid enrolled host returns Q7X9",
+            "expected": "Displays Q7X9"
+          },
+          {
+            "input": "Unrelated-domain certificate",
+            "expected": "Must fail authentication after remediation"
+          }
+        ],
+        "permitted_changes": [
+          "Restore hostname verification while preserving configured origin and redirect refusal."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not accept a hostname mismatch merely because the certificate chains to a trusted CA."
+        ]
+      },
+      "regression_traps": [
+        "Do not accept a hostname mismatch merely because the certificate chains to a trusted CA."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Response length relies partly on the stated upstream protocol; transport authenticity is the expected defect, not attacker-chosen URL fetching."
+        ]
+      },
+      "derivation": {
+        "group": "device-provisioning-okhttp-hostname-policy",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around retrieve the enrollment code only from the configured enrollment origin. Boundary: The peer certificate remains chain-validated, but its identity is not checked against enroll.example.org. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.Builder.html#hostnameVerifier-javax.net.ssl.HostnameVerifier-"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-vulnerable-04",
+      "language": "kotlin",
+      "vulnerable": true,
+      "scenario": "clinic-export-des-encryption",
+      "files": {
+        "ClinicalExport.kt": "import javax.crypto.Cipher\nimport javax.crypto.SecretKey\nimport java.nio.charset.StandardCharsets\nobject ClinicalExport {\n    fun protect(csv: String, exportKey: SecretKey): ByteArray {\n        val cipher = Cipher.getInstance(\"DES/ECB/PKCS5Padding\")\n        cipher.init(Cipher.ENCRYPT_MODE, exportKey)\n        return cipher.doFinal(csv.toByteArray(StandardCharsets.UTF_8))\n    }\n    fun restore(blob: ByteArray, exportKey: SecretKey): String {\n        val cipher = Cipher.getInstance(\"DES/ECB/PKCS5Padding\")\n        cipher.init(Cipher.DECRYPT_MODE, exportKey)\n        return String(cipher.doFinal(blob), StandardCharsets.UTF_8)\n    }\n}\n",
+        "ExportRoute.kt": "import javax.crypto.SecretKey\nclass ExportRoute(private val key: SecretKey) {\n    fun download(authorizedRows: List<String>): ByteArray =\n        ClinicalExport.protect(authorizedRows.joinToString(\"\\n\"), key)\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "weak-cryptography",
+          "cwe": "CWE-327",
+          "path": "ClinicalExport.kt"
+        }
+      ],
+      "rationale": "DES has insufficient key strength and ECB lacks semantic security/authentication. This is a confidentiality boundary with actual encryption/decryption consumers, not a harmless algorithm-name string.",
+      "remediation_constraints": [
+        "Export and restore clinical CSV without exposing patient data to storage readers.",
+        "Introduce a versioned AEAD envelope with fresh nonce and strong key, and an explicit authenticated migration path for trusted legacy archives.",
+        "Do not emit plaintext, silently change CSV encodings, or reuse one nonce across exports."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "JCE SunJCE DES provider; a trusted keystore supplies a DES key. Authorized clinical CSV is encrypted before crossing an untrusted storage medium; confidentiality and tamper detection are requirements."
+      },
+      "operation_contract": {
+        "purpose": "Export and restore clinical CSV without exposing patient data to storage readers.",
+        "trust_boundary": "Storage attackers obtain ciphertext protected with 56-bit DES in deterministic ECB mode.",
+        "legitimate_examples": [
+          {
+            "input": "Two UTF-8 CSV rows",
+            "expected": "Round trip returns identical CSV"
+          },
+          {
+            "input": "Empty export",
+            "expected": "A valid encrypted empty payload round trips"
+          }
+        ],
+        "permitted_changes": [
+          "Introduce a versioned AEAD envelope with fresh nonce and strong key, and an explicit authenticated migration path for trusted legacy archives."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not emit plaintext, silently change CSV encodings, or reuse one nonce across exports."
+        ]
+      },
+      "regression_traps": [
+        "Do not emit plaintext, silently change CSV encodings, or reuse one nonce across exports."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Both weak cipher and unauthenticated mode belong to the same cryptographic storage defect; importing arbitrary legacy ciphertext must not silently become a downgrade route."
+        ]
+      },
+      "derivation": {
+        "group": "clinic-export-des-encryption",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around export and restore clinical csv without exposing patient data to storage readers. Boundary: Storage attackers obtain ciphertext protected with 56-bit DES in deterministic ECB mode. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/crypto/Cipher.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-vulnerable-05",
+      "language": "kotlin",
+      "vulnerable": true,
+      "scenario": "project-template-zip-install-path",
+      "files": {
+        "TemplateInstaller.kt": "import java.nio.file.Files\nimport java.nio.file.Path\nimport java.util.zip.ZipInputStream\nimport java.io.ByteArrayInputStream\nobject TemplateInstaller {\n    fun install(zipBytes: ByteArray, projectRoot: Path): Int {\n        require(zipBytes.size <= 65536)\n        var count = 0\n        ZipInputStream(ByteArrayInputStream(zipBytes)).use { archive ->\n            var entry = archive.nextEntry\n            while (entry != null) {\n                require(++count <= 20)\n                val target = projectRoot.resolve(entry.name)\n                if (entry.isDirectory) Files.createDirectories(target)\n                else {\n                    Files.createDirectories(target.parent)\n                    val content = archive.readNBytes(65537)\n                    require(content.size <= 65536)\n                    Files.write(target, content)\n                }\n                entry = archive.nextEntry\n            }\n        }\n        return count\n    }\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "path-traversal",
+          "cwe": "CWE-22",
+          "path": "TemplateInstaller.kt"
+        }
+      ],
+      "rationale": "Relative parent components and absolute archive names can escape projectRoot. Size/count bounds do not limit the filesystem destination.",
+      "remediation_constraints": [
+        "Install a bounded project-template archive while retaining its nested relative layout.",
+        "Validate every entry as a contained relative path before writing; reject traversal and escaping links, and avoid partial installation on rejection.",
+        "Do not flatten directories, rename all files, or accept archives after merely removing ../ text."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "Linux; projectRoot is a new private directory created by server in a parent containing other projects. ZIP entries are regular files/directories only; untrusted publisher supplies the archive."
+      },
+      "operation_contract": {
+        "purpose": "Install a bounded project-template archive while retaining its nested relative layout.",
+        "trust_boundary": "Archive entry names are joined with a trusted project root without containment validation.",
+        "legitimate_examples": [
+          {
+            "input": "assets/logo.txt and README.txt",
+            "expected": "Both appear inside the new project"
+          },
+          {
+            "input": "docs/guide with spaces.txt",
+            "expected": "Nested spaced filename is preserved"
+          }
+        ],
+        "permitted_changes": [
+          "Validate every entry as a contained relative path before writing; reject traversal and escaping links, and avoid partial installation on rejection."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not flatten directories, rename all files, or accept archives after merely removing ../ text."
+        ]
+      },
+      "regression_traps": [
+        "Do not flatten directories, rename all files, or accept archives after merely removing ../ text."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Fresh root has no pre-existing symlinks and is private; archive expansion limits are explicitly present. A fix still needs fail-safe cleanup of rejected imports."
+        ]
+      },
+      "derivation": {
+        "group": "project-template-zip-install-path",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around install a bounded project-template archive while retaining its nested relative layout. Boundary: Archive entry names are joined with a trusted project root without containment validation. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html#resolve(java.lang.String)"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-kotlin-vulnerable-06",
+      "language": "kotlin",
+      "vulnerable": true,
+      "scenario": "nightly-backup-comment-shell-pipeline",
+      "files": {
+        "BackupAnnotation.kt": "class BackupAnnotation {\n    fun annotate(comment: String): Int {\n        require(comment.length <= 80)\n        val command = \"printf '%s\\\\n' \\\"$comment\\\" >> /srv/backups/notes.txt\"\n        val process = ProcessBuilder(\"/bin/sh\", \"-c\", command)\n            .redirectError(ProcessBuilder.Redirect.DISCARD)\n            .redirectOutput(ProcessBuilder.Redirect.DISCARD).start()\n        return process.waitFor()\n    }\n}\n",
+        "BackupForm.kt": "class BackupForm(private val writer: BackupAnnotation) {\n    fun addComment(fields: Map<String, String>): Boolean =\n        writer.annotate(fields.getValue(\"comment\")) == 0\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "BackupAnnotation.kt"
+        }
+      ],
+      "rationale": "Double quotes do not disable shell command substitution or variable expansion. The string is interpreted by /bin/sh before printf receives it.",
+      "remediation_constraints": [
+        "Append the exact backup comment and one newline to the notes file.",
+        "Append using a trusted file API with UTF-8 and append semantics, or pass data via stdin without shell evaluation.",
+        "Do not overwrite prior notes, omit the newline, or expand environment-variable text."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Kotlin 2.0.21 on OpenJDK 21",
+        "libraries_platform_setup": "Linux POSIX shell; notes file is trusted and fixed, requests are serialized, authenticated backup viewers may add bounded comments but may not execute host commands."
+      },
+      "operation_contract": {
+        "purpose": "Append the exact backup comment and one newline to the notes file.",
+        "trust_boundary": "A comment is interpolated inside a shell double-quoted word, where command substitution remains active.",
+        "legitimate_examples": [
+          {
+            "input": "Friday's backup",
+            "expected": "Append Friday's backup and newline"
+          },
+          {
+            "input": "literal $HOME text",
+            "expected": "Append dollar sign and HOME literally"
+          }
+        ],
+        "permitted_changes": [
+          "Append using a trusted file API with UTF-8 and append semantics, or pass data via stdin without shell evaluation."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not overwrite prior notes, omit the newline, or expand environment-variable text."
+        ]
+      },
+      "regression_traps": [
+        "Do not overwrite prior notes, omit the newline, or expand environment-variable text."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "File path and concurrency policy are trusted; comment authors lack host execution permission."
+        ]
+      },
+      "derivation": {
+        "group": "nightly-backup-comment-shell-pipeline",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around append the exact backup comment and one newline to the notes file. Boundary: A comment is interpolated inside a shell double-quoted word, where command substitution remains active. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ProcessBuilder.html"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

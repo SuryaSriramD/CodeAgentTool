@@ -1,0 +1,65 @@
+name: CodeAgent static scan example
+# Opt-in example: no hosted model, PR comment, or repository modification.
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Scanner profile (candidate remains opt-in)
+        default: security-v1
+        required: true
+        type: choice
+        options: [security-v1, security-v2]
+      severity:
+        description: Fail for this severity or higher
+        default: high
+        required: true
+        type: choice
+        options: [critical, high, medium, low]
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SCAN_DIRECTORY: .
+      SCAN_PROFILE: ${{ inputs.profile }}
+      SCAN_SEVERITY: ${{ inputs.severity }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --require-hashes -r codeagent-scanner/requirements.txt
+      - name: Start isolated API, worker and scanner
+        run: python scripts/compose.py up --build --wait -d backend worker
+      - name: Scan and retain the SARIF report before enforcing findings policy
+        id: scan
+        shell: bash
+        run: |
+          set +e
+          python codeagent-scanner/cli.py --server http://localhost:8000 scan "$SCAN_DIRECTORY" \
+            --project-name "CI $GITHUB_REPOSITORY" --profile "$SCAN_PROFILE" \
+            --policy all --severity "$SCAN_SEVERITY" --format sarif --output codeagent-results.sarif
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload existing SARIF to GitHub code scanning
+        if: always() && hashFiles('codeagent-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: codeagent-results.sarif
+          category: codeagent-static
+      - name: Enforce scan outcome
+        if: always() && steps.scan.outputs.status != ''
+        env:
+          SCAN_EXIT_STATUS: ${{ steps.scan.outputs.status }}
+        run: exit "$SCAN_EXIT_STATUS"
+      - name: Capture operational logs
+        if: always()
+        run: docker compose logs --no-color backend worker scanner
+      - name: Remove this ephemeral runner's stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans

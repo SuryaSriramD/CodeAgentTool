@@ -1,0 +1,967 @@
+{
+  "language": "go",
+  "cases": [
+    {
+      "id": "v2-go-safe-01",
+      "language": "go",
+      "vulnerable": false,
+      "scenario": "allocation-change-bound-transaction",
+      "files": {
+        "allocation.go": "package allocation\nimport (\n    \"context\"\n    \"database/sql\"\n    \"fmt\"\n)\nfunc Rename(ctx context.Context, db *sql.DB, id int64, display string) error {\n    if len(display)>100 { return fmt.Errorf(\"display too long\") }\n    tx, err := db.BeginTx(ctx,nil)\n    if err!=nil { return err }\n    defer tx.Rollback()\n    result, err := tx.ExecContext(ctx,\"UPDATE allocations SET display_name=$1 WHERE id=$2\",display,id)\n    if err!=nil { return err }\n    count,err:=result.RowsAffected()\n    if err!=nil { return err }; if count!=1 { return fmt.Errorf(\"unknown allocation\") }\n    return tx.Commit()\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Both values are separated from query syntax. Result count and commit behavior preserve a real update contract, and the driver/placeholder compatibility is explicit.",
+      "remediation_constraints": [
+        "Rename exactly one authorized allocation atomically using a literal display string.",
+        "Retain bound parameters, rollback on errors and exactly-one-row semantics.",
+        "Do not strip punctuation, commit after failed updates, or treat zero changed rows as success."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "pgx/v5.7.2 database/sql driver, PostgreSQL16. Handler has authorized allocation id for the current tenant; database view enforces tenant ownership. Empty display labels are permitted."
+      },
+      "operation_contract": {
+        "purpose": "Rename exactly one authorized allocation atomically using a literal display string.",
+        "trust_boundary": "Untrusted name is bound using PostgreSQL-compatible placeholders; numeric ID is also bound.",
+        "legitimate_examples": [
+          {
+            "input": "display=Ops team's pool",
+            "expected": "Exact display stored"
+          },
+          {
+            "input": "Unknown authorized-view ID",
+            "expected": "Error and rollback"
+          }
+        ],
+        "permitted_changes": [
+          "Retain bound parameters, rollback on errors and exactly-one-row semantics."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not strip punctuation, commit after failed updates, or treat zero changed rows as success."
+        ]
+      },
+      "regression_traps": [
+        "Do not strip punctuation, commit after failed updates, or treat zero changed rows as success."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Authorization is provided by handler and tenant-scoped view; this function does not infer ownership from the display text."
+        ]
+      },
+      "derivation": {
+        "group": "allocation-change-bound-transaction",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around rename exactly one authorized allocation atomically using a literal display string. Boundary: Untrusted name is bound using PostgreSQL-compatible placeholders; numeric ID is also bound. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://go.dev/doc/database/execute-transactions"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-safe-02",
+      "language": "go",
+      "vulnerable": false,
+      "scenario": "private-ca-metrics-client",
+      "files": {
+        "metrics.go": "package metrics\nimport (\n    \"crypto/tls\"\n    \"crypto/x509\"\n    \"fmt\"\n    \"io\"\n    \"net/http\"\n    \"time\"\n)\nfunc Read(caPEM []byte) ([]byte,error) {\n    roots:=x509.NewCertPool()\n    if !roots.AppendCertsFromPEM(caPEM) { return nil,fmt.Errorf(\"invalid configured CA\") }\n    transport:=&http.Transport{TLSClientConfig:&tls.Config{RootCAs:roots,MinVersion:tls.VersionTLS12}}\n    defer transport.CloseIdleConnections()\n    client:=&http.Client{Transport:transport,Timeout:3*time.Second,\n        CheckRedirect:func(_ *http.Request,_ []*http.Request) error { return http.ErrUseLastResponse }}\n    response,err:=client.Get(\"https://metrics.internal.example.org/snapshot\")\n    if err!=nil { return nil,err }; defer response.Body.Close()\n    if response.StatusCode!=200 { return nil,fmt.Errorf(\"metrics unavailable\") }\n    return io.ReadAll(io.LimitReader(response.Body,8192))\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "A custom root store is not disabled validation. Standard hostname verification remains enabled and redirects are refused. Internal address use is an authorized fixed operation.",
+      "remediation_constraints": [
+        "Read a bounded metrics snapshot authenticated to the configured private CA.",
+        "Retain hostname verification and fail closed on invalid CA configuration.",
+        "Do not set InsecureSkipVerify to accommodate a private CA or accept CA bytes from a request."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "Trusted deployment supplies a private CA PEM, not request data. Internal hostname has a certificate issued by that CA and matching SAN. This server is intentionally authorized to contact the internal metrics service."
+      },
+      "operation_contract": {
+        "purpose": "Read a bounded metrics snapshot authenticated to the configured private CA.",
+        "trust_boundary": "Network peer must validate to the operator CA and requested hostname; callers do not choose destination or trust roots.",
+        "legitimate_examples": [
+          {
+            "input": "Valid private-CA server",
+            "expected": "Returns snapshot bytes"
+          },
+          {
+            "input": "Different/self-signed certificate",
+            "expected": "TLS error"
+          }
+        ],
+        "permitted_changes": [
+          "Retain hostname verification and fail closed on invalid CA configuration."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not set InsecureSkipVerify to accommodate a private CA or accept CA bytes from a request."
+        ]
+      },
+      "regression_traps": [
+        "Do not set InsecureSkipVerify to accommodate a private CA or accept CA bytes from a request."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "This is not an arbitrary SSRF fetch: both origin and private trust anchor are deployment-controlled."
+        ]
+      },
+      "derivation": {
+        "group": "private-ca-metrics-client",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around read a bounded metrics snapshot authenticated to the configured private ca. Boundary: Network peer must validate to the operator CA and requested hostname; callers do not choose destination or trust roots. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/crypto/tls#Config"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-safe-03",
+      "language": "go",
+      "vulnerable": false,
+      "scenario": "public-manual-rooted-file-reader",
+      "files": {
+        "manual.go": "package manual\nimport (\n    \"io\"\n    \"os\"\n)\nfunc Read(rootDirectory string, relativeName string) ([]byte,error) {\n    root,err:=os.OpenRoot(rootDirectory)\n    if err!=nil { return nil,err }; defer root.Close()\n    file,err:=root.Open(relativeName)\n    if err!=nil { return nil,err }; defer file.Close()\n    info,err:=file.Stat()\n    if err!=nil { return nil,err }\n    if !info.Mode().IsRegular() { return nil,os.ErrInvalid }\n    return io.ReadAll(io.LimitReader(file,65536))\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The root handle enforces containment during path traversal. This preserves a legitimate relative-file interface without inventing a one-item allow-list or relying on a racy prefix check.",
+      "remediation_constraints": [
+        "Read a bounded relative manual file, including nested paths, under the configured public root.",
+        "Retain os.Root containment and regular-file checks.",
+        "Do not substitute lexical cleaning alone or allow absolute paths outside the manual tree."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "Go1.24 os.Root API; rootDirectory is an immutable public manual tree selected by server configuration. Every file within it is public. Mount/device namespaces are trusted; no privileged special files exist inside it."
+      },
+      "operation_contract": {
+        "purpose": "Read a bounded relative manual file, including nested paths, under the configured public root.",
+        "trust_boundary": "Untrusted path resolution is constrained by os.Root, including parent/symlink escapes.",
+        "legitimate_examples": [
+          {
+            "input": "guide/install.txt",
+            "expected": "Bytes of that manual file"
+          },
+          {
+            "input": "../private/key",
+            "expected": "Path escape rejected"
+          }
+        ],
+        "permitted_changes": [
+          "Retain os.Root containment and regular-file checks."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not substitute lexical cleaning alone or allow absolute paths outside the manual tree."
+        ]
+      },
+      "regression_traps": [
+        "Do not substitute lexical cleaning alone or allow absolute paths outside the manual tree."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "The root is entirely public and immutable; directory authorization and filesystem mount ownership are stated prerequisites."
+        ]
+      },
+      "derivation": {
+        "group": "public-manual-rooted-file-reader",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around read a bounded relative manual file, including nested paths, under the configured public root. Boundary: Untrusted path resolution is constrained by os.Root, including parent/symlink escapes. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://go.dev/blog/osroot"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-safe-04",
+      "language": "go",
+      "vulnerable": false,
+      "scenario": "literal-lines-sort-process-input",
+      "files": {
+        "sort.go": "package display\nimport (\n    \"bytes\"\n    \"context\"\n    \"fmt\"\n    \"os/exec\"\n    \"strings\"\n    \"time\"\n)\nfunc Sort(lines []string) ([]byte,error) {\n    if len(lines)>50 { return nil,fmt.Errorf(\"too many lines\") }\n    for _,line:=range lines { if len(line)>80 || strings.ContainsAny(line,\"\\x00\\n\") { return nil,fmt.Errorf(\"invalid line\") } }\n    ctx,cancel:=context.WithTimeout(context.Background(),time.Second); defer cancel()\n    command:=exec.CommandContext(ctx,\"/usr/bin/sort\")\n    command.Env=[]string{\"LC_ALL=C\"}\n    payload:=strings.Join(lines,\"\\n\")\n    if len(lines)>0 { payload+=\"\\n\" }\n    command.Stdin=bytes.NewBufferString(payload)\n    return command.Output()\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Input punctuation cannot become options or shell grammar because it is process data on stdin. Timeout and bounds also apply to the actual process.",
+      "remediation_constraints": [
+        "Sort literal user labels in byte order and return newline-delimited output.",
+        "Preserve C-locale sort order, duplicates and exit errors.",
+        "Do not treat a leading dash as an option, deduplicate labels, or switch to locale-dependent collation."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "GNU coreutils9.5 sort; trusted executable; input is a bounded list of lines with no NUL/newlines. Locale is deliberately C for stable byte ordering."
+      },
+      "operation_contract": {
+        "purpose": "Sort literal user labels in byte order and return newline-delimited output.",
+        "trust_boundary": "Labels flow only to child stdin; no user-controlled executable, option or shell source exists.",
+        "legitimate_examples": [
+          {
+            "input": "[-r, beta, alpha]",
+            "expected": "-r\nalpha\nbeta\n"
+          },
+          {
+            "input": "Empty list",
+            "expected": "Empty output"
+          }
+        ],
+        "permitted_changes": [
+          "Preserve C-locale sort order, duplicates and exit errors."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not treat a leading dash as an option, deduplicate labels, or switch to locale-dependent collation."
+        ]
+      },
+      "regression_traps": [
+        "Do not treat a leading dash as an option, deduplicate labels, or switch to locale-dependent collation."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Control characters are explicitly rejected; line text is displayed as text by the caller."
+        ]
+      },
+      "derivation": {
+        "group": "literal-lines-sort-process-input",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around sort literal user labels in byte order and return newline-delimited output. Boundary: Labels flow only to child stdin; no user-controlled executable, option or shell source exists. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/os/exec"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-safe-05",
+      "language": "go",
+      "vulnerable": false,
+      "scenario": "typed-public-feed-xml-decoder",
+      "files": {
+        "feed.go": "package feed\nimport (\n    \"encoding/xml\"\n    \"fmt\"\n)\ntype Announcement struct { Title string `xml:\"title\"`; Category string `xml:\"category\"` }\ntype Feed struct { Items []Announcement `xml:\"item\"` }\nfunc Read(data []byte) ([]Announcement,error) {\n    if len(data)>32768 { return nil,fmt.Errorf(\"feed too large\") }\n    var value Feed\n    if err:=xml.Unmarshal(data,&value); err!=nil { return nil,err }\n    if len(value.Items)>30 { return nil,fmt.Errorf(\"too many items\") }\n    for _,item:=range value.Items { if len(item.Title)>200 { return nil,fmt.Errorf(\"title too long\") } }\n    return value.Items,nil\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "Standard encoding/xml decoding into fixed fields does not activate arbitrary classes or resolve external resources. XML use alone does not imply Java-style XXE behavior.",
+      "remediation_constraints": [
+        "Decode bounded public announcement titles/categories into a fixed Go struct.",
+        "Retain fixed data types, bounded input and no custom external-resource callbacks.",
+        "Do not add an unrestricted entity resolver to make unsupported feeds parse."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "encoding/xml standard implementation, no custom Entity map, CharsetReader or unmarshaler. Feed text is public and displayed with escaping; unknown entities cause decoding error, and the parser does not fetch external DTDs."
+      },
+      "operation_contract": {
+        "purpose": "Decode bounded public announcement titles/categories into a fixed Go struct.",
+        "trust_boundary": "Network XML is data for the standard decoder, with no user-selected types or external entity resolver.",
+        "legitimate_examples": [
+          {
+            "input": "<feed><item><title>A&amp;B</title></item></feed>",
+            "expected": "One title A&B"
+          },
+          {
+            "input": "Unrecognized external entity reference",
+            "expected": "Decode error; no resource fetch"
+          }
+        ],
+        "permitted_changes": [
+          "Retain fixed data types, bounded input and no custom external-resource callbacks."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not add an unrestricted entity resolver to make unsupported feeds parse."
+        ]
+      },
+      "regression_traps": [
+        "Do not add an unrestricted entity resolver to make unsupported feeds parse."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Unknown fields may be ignored by this documented feed format; the consumer does not derive privileged actions from them."
+        ]
+      },
+      "derivation": {
+        "group": "typed-public-feed-xml-decoder",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around decode bounded public announcement titles/categories into a fixed go struct. Boundary: Network XML is data for the standard decoder, with no user-selected types or external entity resolver. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/encoding/xml"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-safe-06",
+      "language": "go",
+      "vulnerable": false,
+      "scenario": "avatar-html-template-autoescaping",
+      "files": {
+        "card.go": "package cards\nimport (\n    \"bytes\"\n    \"fmt\"\n    \"html/template\"\n)\nvar card=template.Must(template.New(\"card\").Parse(`<article><h2>{{.Name}}</h2><p>{{.Bio}}</p></article>`))\ntype Person struct { Name string; Bio string }\nfunc Render(person Person) (string,error) {\n    if len(person.Name)>100 || len(person.Bio)>500 { return \"\",fmt.Errorf(\"profile too large\") }\n    var output bytes.Buffer\n    if err:=card.Execute(&output,person); err!=nil { return \"\",err }\n    return output.String(),nil\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The template structure is trusted and html/template escapes ordinary strings. There is no evaluation of user template syntax or safe-type override.",
+      "remediation_constraints": [
+        "Render a public profile card while treating name and bio as text.",
+        "Preserve automatic escaping and fixed template structure.",
+        "Do not cast user content to template.HTML, switch to text/template, or pre-escape into double-encoded output."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "Fixed application-owned html/template; user strings stay ordinary string values, never template.HTML. HTTP caller serves the resulting document as text/html with UTF-8."
+      },
+      "operation_contract": {
+        "purpose": "Render a public profile card while treating name and bio as text.",
+        "trust_boundary": "User profile content enters template text positions with contextual automatic escaping.",
+        "legitimate_examples": [
+          {
+            "input": "Name <admin>",
+            "expected": "Visible literal <admin>, no element creation"
+          },
+          {
+            "input": "Bio containing a script tag",
+            "expected": "Escaped text, no script execution"
+          }
+        ],
+        "permitted_changes": [
+          "Preserve automatic escaping and fixed template structure."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not cast user content to template.HTML, switch to text/template, or pre-escape into double-encoded output."
+        ]
+      },
+      "regression_traps": [
+        "Do not cast user content to template.HTML, switch to text/template, or pre-escape into double-encoded output."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "No dynamic URL/JavaScript/CSS context exists; browser delivery must preserve the stated text/html semantics."
+        ]
+      },
+      "derivation": {
+        "group": "avatar-html-template-autoescaping",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around render a public profile card while treating name and bio as text. Boundary: User profile content enters template text positions with contextual automatic escaping. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/html/template"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-vulnerable-01",
+      "language": "go",
+      "vulnerable": true,
+      "scenario": "tenant-search-json-array-sql-fragments",
+      "files": {
+        "search.go": "package catalog\nimport (\n    \"database/sql\"\n    \"encoding/json\"\n    \"net/http\"\n    \"strings\"\n)\ntype Search struct { DB *sql.DB }\nfunc (s Search) ServeHTTP(w http.ResponseWriter, r *http.Request) {\n    var request struct { Codes []string `json:\"codes\"` }\n    r.Body = http.MaxBytesReader(w, r.Body, 4096)\n    if json.NewDecoder(r.Body).Decode(&request) != nil || len(request.Codes) > 20 {\n        http.Error(w, \"invalid request\", 400); return\n    }\n    quoted := make([]string, 0, len(request.Codes))\n    for _, code := range request.Codes { quoted = append(quoted, \"'\"+code+\"'\") }\n    if len(quoted) == 0 { w.WriteHeader(204); return }\n    query := \"SELECT name FROM catalog WHERE code IN (\" + strings.Join(quoted, \",\") + \") ORDER BY code\"\n    rows, err := s.DB.QueryContext(r.Context(), query)\n    if err != nil { http.Error(w, \"query failed\", 500); return }\n    defer rows.Close()\n    names := []string{}\n    for rows.Next() { var name string; if rows.Scan(&name) != nil { http.Error(w,\"read failed\",500);return }; names=append(names,name) }\n    if rows.Err()!=nil { http.Error(w,\"read failed\",500);return }\n    w.Header().Set(\"Content-Type\",\"application/json\")\n    json.NewEncoder(w).Encode(names)\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "search.go"
+        }
+      ],
+      "rationale": "JSON decoding and wrapping values in single quotes do not escape SQL syntax. A malicious array member can change the IN predicate even when the list length and request size are bounded.",
+      "remediation_constraints": [
+        "Resolve a bounded JSON list of catalog codes to names ordered by code.",
+        "Construct placeholders for the bounded list and bind every code using the configured PostgreSQL driver.",
+        "Do not flatten all codes into one parameter, discard apostrophes, or change the empty-list204 behavior."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "database/sql with pgx/v5.7.2 stdlib driver and PostgreSQL16. catalog(code text,name text) is a tenant-scoped read-only view. HTTP routing attaches this handler to POST /lookup."
+      },
+      "operation_contract": {
+        "purpose": "Resolve a bounded JSON list of catalog codes to names ordered by code.",
+        "trust_boundary": "Decoded JSON array members become quoted SQL fragments without binding.",
+        "legitimate_examples": [
+          {
+            "input": "{codes:[A-7,B-2]}",
+            "expected": "Matching names in code order"
+          },
+          {
+            "input": "{codes:[author's-kit]}",
+            "expected": "Exact apostrophe-containing code supported"
+          }
+        ],
+        "permitted_changes": [
+          "Construct placeholders for the bounded list and bind every code using the configured PostgreSQL driver."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not flatten all codes into one parameter, discard apostrophes, or change the empty-list204 behavior."
+        ]
+      },
+      "regression_traps": [
+        "Do not flatten all codes into one parameter, discard apostrophes, or change the empty-list204 behavior."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Tenant isolation is in the view; incorrect membership remains a source vulnerability even under a read-only role."
+        ]
+      },
+      "derivation": {
+        "group": "tenant-search-json-array-sql-fragments",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around resolve a bounded json list of catalog codes to names ordered by code. Boundary: Decoded JSON array members become quoted SQL fragments without binding. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://go.dev/doc/database/sql-injection"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-vulnerable-02",
+      "language": "go",
+      "vulnerable": true,
+      "scenario": "maintenance-api-optional-client-certificate",
+      "files": {
+        "server.go": "package maintenance\nimport (\n    \"crypto/tls\"\n    \"crypto/x509\"\n    \"fmt\"\n    \"net/http\"\n)\nfunc Server(cert tls.Certificate, clientCA *x509.CertPool) *http.Server {\n    handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n        if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {\n            http.Error(w, \"client certificate required\", http.StatusUnauthorized); return\n        }\n        fmt.Fprint(w, \"maintenance-authorized\")\n    })\n    return &http.Server{\n        Addr: \":8443\", Handler: handler,\n        TLSConfig: &tls.Config{\n            MinVersion: tls.VersionTLS12,\n            Certificates: []tls.Certificate{cert}, ClientCAs: clientCA,\n            ClientAuth: tls.RequestClientCert,\n        },\n    }\n}\nfunc Serve(cert tls.Certificate, roots *x509.CertPool) error {\n    return Server(cert, roots).ListenAndServeTLS(\"\", \"\")\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "server.go"
+        }
+      ],
+      "rationale": "RequestClientCert requests a certificate but does not authenticate its chain. PeerCertificates presence is not equivalent to a verified client identity, so a self-signed certificate passes the handler check.",
+      "remediation_constraints": [
+        "Serve a maintenance authorization response only to clients certified by the configured client CA.",
+        "Require and verify client certificates against the configured CA before the handler authorizes them.",
+        "Do not replace mTLS with presence checks, authorize empty chains, or accidentally require the server CA to equal the client CA."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "Trusted server TLS certificate and intended client CA are supplied by deployment. An attacker can reach port8443 and present an arbitrary self-signed client certificate. All CA-issued clients are authorized; no additional identity ACL is required."
+      },
+      "operation_contract": {
+        "purpose": "Serve a maintenance authorization response only to clients certified by the configured client CA.",
+        "trust_boundary": "Handler trusts certificate presence, while RequestClientCert does not require verification to ClientCAs.",
+        "legitimate_examples": [
+          {
+            "input": "Valid configured-CA client",
+            "expected": "maintenance-authorized"
+          },
+          {
+            "input": "No client certificate",
+            "expected": "Rejected"
+          }
+        ],
+        "permitted_changes": [
+          "Require and verify client certificates against the configured CA before the handler authorizes them."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not replace mTLS with presence checks, authorize empty chains, or accidentally require the server CA to equal the client CA."
+        ]
+      },
+      "regression_traps": [
+        "Do not replace mTLS with presence checks, authorize empty chains, or accidentally require the server CA to equal the client CA."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "This is inbound mutual-TLS authorization, not an outbound InsecureSkipVerify template. Server certificate verification by legitimate clients remains intact."
+        ]
+      },
+      "derivation": {
+        "group": "maintenance-api-optional-client-certificate",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around serve a maintenance authorization response only to clients certified by the configured client ca. Boundary: Handler trusts certificate presence, while RequestClientCert does not require verification to ClientCAs. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/crypto/tls#ClientAuthType"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-vulnerable-03",
+      "language": "go",
+      "vulnerable": true,
+      "scenario": "trusted-image-origin-redirect-following",
+      "files": {
+        "preview.go": "package preview\nimport (\n    \"fmt\"\n    \"io\"\n    \"net/http\"\n    \"net/url\"\n    \"time\"\n)\nfunc Fetch(raw string) ([]byte, error) {\n    target, err := url.Parse(raw)\n    if err != nil || target.Scheme != \"https\" || target.Host != \"images.example.org\" || target.User != nil {\n        return nil, fmt.Errorf(\"image origin required\")\n    }\n    client := &http.Client{Timeout: 3*time.Second}\n    response, err := client.Get(target.String())\n    if err != nil { return nil, err }\n    defer response.Body.Close()\n    if response.StatusCode != 200 { return nil, fmt.Errorf(\"unexpected status\") }\n    return io.ReadAll(io.LimitReader(response.Body, 65536))\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "ssrf",
+          "cwe": "CWE-918",
+          "path": "preview.go"
+        }
+      ],
+      "rationale": "The default client follows redirects after the initial validation. The declared image redirect endpoint permits a tenant to pivot the privileged fetch to a private HTTP URL; initial TLS does not constrain the next hop.",
+      "remediation_constraints": [
+        "Return a bounded preview from the configured image origin.",
+        "Disable redirects or revalidate every hop against the approved destination policy, including scheme and resolved address behavior.",
+        "Do not simply recheck the original URL or return the URL string instead of preview bytes."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "The public image service supports /redirect?to=... with an arbitrary Location for legacy delivery. Server network can reach private HTTP management addresses. Users may preview images from the published origin but may not access private services."
+      },
+      "operation_contract": {
+        "purpose": "Return a bounded preview from the configured image origin.",
+        "trust_boundary": "The initial URL is host-checked, but the standard HTTP client follows redirects to unchecked destinations.",
+        "legitimate_examples": [
+          {
+            "input": "https://images.example.org/a.png",
+            "expected": "Preview bytes from image service"
+          },
+          {
+            "input": "Same-origin relative redirect",
+            "expected": "Preview remains supported if destination policy allows"
+          }
+        ],
+        "permitted_changes": [
+          "Disable redirects or revalidate every hop against the approved destination policy, including scheme and resolved address behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not simply recheck the original URL or return the URL string instead of preview bytes."
+        ]
+      },
+      "regression_traps": [
+        "Do not simply recheck the original URL or return the URL string instead of preview bytes."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Trusted DNS for the initial configured host is assumed; this candidate isolates the redirect trust transition rather than prefix matching."
+        ]
+      },
+      "derivation": {
+        "group": "trusted-image-origin-redirect-following",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around return a bounded preview from the configured image origin. Boundary: The initial URL is host-checked, but the standard HTTP client follows redirects to unchecked destinations. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/net/http#Client"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-vulnerable-04",
+      "language": "go",
+      "vulnerable": true,
+      "scenario": "support-bundle-journal-shell-window",
+      "files": {
+        "journal.go": "package support\nimport (\n    \"context\"\n    \"fmt\"\n    \"os/exec\"\n    \"time\"\n)\nfunc Collect(since string) ([]byte, error) {\n    if len(since)>80 { return nil, fmt.Errorf(\"time expression too long\") }\n    ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)\n    defer cancel()\n    command := \"journalctl --no-pager --unit=myapp --since='\"+since+\"'\"\n    return exec.CommandContext(ctx, \"/bin/sh\", \"-c\", command).Output()\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "journal.go"
+        }
+      ],
+      "rationale": "The shell parses a concatenated command before the trusted journal tool can interpret the time expression. A request timeout limits duration, not injected command execution.",
+      "remediation_constraints": [
+        "Collect the application journal since a requested time expression.",
+        "Invoke journalctl directly with separate argv entries and keep timeout/cancellation.",
+        "Do not remove spaces from supported date expressions, lose command errors, or broaden the journal unit."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "systemd255 journalctl; service account can read only the application journal but also has writable application state. Support users may request natural-language journal start times, never shell programs."
+      },
+      "operation_contract": {
+        "purpose": "Collect the application journal since a requested time expression.",
+        "trust_boundary": "Support form text becomes a shell single-quoted argument before journalctl processes it.",
+        "legitimate_examples": [
+          {
+            "input": "since=2026-09-01 09:30:00",
+            "expected": "Journal records since that instant"
+          },
+          {
+            "input": "since=2 hours ago",
+            "expected": "Preserve supported natural-language time syntax"
+          }
+        ],
+        "permitted_changes": [
+          "Invoke journalctl directly with separate argv entries and keep timeout/cancellation."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not remove spaces from supported date expressions, lose command errors, or broaden the journal unit."
+        ]
+      },
+      "regression_traps": [
+        "Do not remove spaces from supported date expressions, lose command errors, or broaden the journal unit."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Journal output has a deployment retention/size bound; process timeout is explicit. Time-expression validation is distinct from shell escaping."
+        ]
+      },
+      "derivation": {
+        "group": "support-bundle-journal-shell-window",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around collect the application journal since a requested time expression. Boundary: Support form text becomes a shell single-quoted argument before journalctl processes it. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/os/exec"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-vulnerable-05",
+      "language": "go",
+      "vulnerable": true,
+      "scenario": "theme-asset-write-relative-manifest",
+      "files": {
+        "assets.go": "package themes\nimport (\n    \"fmt\"\n    \"os\"\n    \"path/filepath\"\n)\ntype Asset struct { Name string; Bytes []byte }\nfunc Install(root string, assets []Asset) error {\n    if len(assets)>20 { return fmt.Errorf(\"too many assets\") }\n    for _, asset := range assets {\n        if len(asset.Bytes)>32768 { return fmt.Errorf(\"asset too large\") }\n        target := filepath.Join(root, asset.Name)\n        if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil { return err }\n        if err := os.WriteFile(target, asset.Bytes, 0600); err != nil { return err }\n    }\n    return nil\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "path-traversal",
+          "cwe": "CWE-22",
+          "path": "assets.go"
+        }
+      ],
+      "rationale": "filepath.Join cleans parent components but does not establish authorization to the resulting path. A traversal name can overwrite outside the fresh theme directory.",
+      "remediation_constraints": [
+        "Install bounded named theme assets while preserving subdirectories.",
+        "Use a root-constrained filesystem API or verified containment with safe symlink handling and reject the entire invalid import.",
+        "Do not flatten nested assets or remove all parent-component substrings and assume containment."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "root is a fresh server-owned theme directory under /srv/themes; an untrusted theme publisher supplies decoded manifest names/content. No pre-existing symlinks inside root, but sibling themes and server state must remain protected."
+      },
+      "operation_contract": {
+        "purpose": "Install bounded named theme assets while preserving subdirectories.",
+        "trust_boundary": "Manifest-relative paths are normalized but not checked for containment before filesystem writes.",
+        "legitimate_examples": [
+          {
+            "input": "css/theme.css",
+            "expected": "Written under the selected theme root"
+          },
+          {
+            "input": "fonts/large print.woff",
+            "expected": "Nested spaces preserved"
+          }
+        ],
+        "permitted_changes": [
+          "Use a root-constrained filesystem API or verified containment with safe symlink handling and reject the entire invalid import."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not flatten nested assets or remove all parent-component substrings and assume containment."
+        ]
+      },
+      "regression_traps": [
+        "Do not flatten nested assets or remove all parent-component substrings and assume containment."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Fresh private root excludes a pre-existing symlink attacker; concurrent writable ancestors are not part of the trusted deployment."
+        ]
+      },
+      "derivation": {
+        "group": "theme-asset-write-relative-manifest",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around install bounded named theme assets while preserving subdirectories. Boundary: Manifest-relative paths are normalized but not checked for containment before filesystem writes. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/os#OpenRoot",
+          "https://pkg.go.dev/path/filepath#Join"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-go-vulnerable-06",
+      "language": "go",
+      "vulnerable": true,
+      "scenario": "password-reset-predictable-prng",
+      "files": {
+        "reset.go": "package accounts\nimport (\n    \"fmt\"\n    \"math/rand\"\n    \"sync\"\n)\ntype ResetTokens struct { mu sync.Mutex; random *rand.Rand; owners map[string]string }\nfunc NewResetTokens() *ResetTokens {\n    return &ResetTokens{random: rand.New(rand.NewSource(42)), owners: make(map[string]string)}\n}\nfunc (s *ResetTokens) Issue(account string) string {\n    s.mu.Lock(); defer s.mu.Unlock()\n    token := fmt.Sprintf(\"%016x\", s.random.Uint64())\n    s.owners[token] = account\n    return token\n}\nfunc (s *ResetTokens) Redeem(token string) (string, bool) {\n    s.mu.Lock(); defer s.mu.Unlock()\n    owner, ok := s.owners[token]\n    if ok { delete(s.owners,token) }\n    return owner,ok\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "insecure-randomness",
+          "cwe": "CWE-338",
+          "path": "reset.go"
+        }
+      ],
+      "rationale": "The fixed seed produces a reproducible sequence, permitting prediction without controlling email. Mutexes and one-time deletion do not provide unpredictability.",
+      "remediation_constraints": [
+        "Issue unguessable one-time password-reset tokens mapped to an account.",
+        "Use sufficient crypto/rand entropy, retain atomic one-time redemption and propagate entropy failures.",
+        "Do not replace tokens with sequential IDs, weaken expiry, or allow a token to redeem twice."
+      ],
+      "runtime_assumptions": {
+        "runtime": "Go 1.24.2, Linux amd64",
+        "libraries_platform_setup": "Service creates one store with NewResetTokens on startup and sends issued tokens to account email addresses. Redeem success authorizes password reset. Trusted routing expires records after15minutes; attacker knows implementation and can observe its own issued token."
+      },
+      "operation_contract": {
+        "purpose": "Issue unguessable one-time password-reset tokens mapped to an account.",
+        "trust_boundary": "A public bearer token derives from a deterministic fixed-seed non-cryptographic generator.",
+        "legitimate_examples": [
+          {
+            "input": "Issue for account alice, redeem emitted token",
+            "expected": "Returns alice once"
+          },
+          {
+            "input": "Second redemption of same token",
+            "expected": "Returns false"
+          }
+        ],
+        "permitted_changes": [
+          "Use sufficient crypto/rand entropy, retain atomic one-time redemption and propagate entropy failures."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant, or bypass its caller.",
+          "Do not replace tokens with sequential IDs, weaken expiry, or allow a token to redeem twice."
+        ]
+      },
+      "regression_traps": [
+        "Do not replace tokens with sequential IDs, weaken expiry, or allow a token to redeem twice."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Source security under the stated runtime and trust boundary; no dependency advisory ground truth is implied.",
+        "reviewed_residual_risks": [
+          "Account lookup and email delivery are trusted; the defect is bearer-token entropy, not delivery-channel compromise."
+        ]
+      },
+      "derivation": {
+        "group": "password-reset-predictable-prng",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around issue unguessable one-time password-reset tokens mapped to an account. Boundary: A public bearer token derives from a deterministic fixed-seed non-cryptographic generator. No source was copied from development fixtures or corpus-v1; conceptual independence remains subject to cross-corpus human assessment."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://pkg.go.dev/math/rand",
+          "https://pkg.go.dev/crypto/rand"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}

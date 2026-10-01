@@ -1,0 +1,26 @@
+{
+  "validation_version": "candidate-static-validation/1",
+  "corpus_version": "heldout-2.0.0-candidate",
+  "expected_cases": 204,
+  "recorded_cases": 204,
+  "operational_statuses": {
+    "incomplete": 49,
+    "completed": 155
+  },
+  "parser_statuses": {
+    "incomplete": 49,
+    "completed": 155
+  },
+  "proposed_label_observations": {
+    "matches_proposed_labels": 119,
+    "expected_not_observed": 80,
+    "unexpected_findings": 4,
+    "missing_and_unexpected": 1
+  },
+  "collection_complete": true,
+  "human_approvals_created": 0,
+  "model_calls": 0,
+  "runtime_tested": false,
+  "release_status": "candidate",
+  "limitation": "Unapproved authored labels; these observations are not accuracy estimates or proof of security/independence."
+}

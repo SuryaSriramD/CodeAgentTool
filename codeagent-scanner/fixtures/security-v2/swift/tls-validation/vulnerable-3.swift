@@ -1,0 +1,5 @@
+import Foundation
+import Alamofire
+func handler(data: Data, trust: SecTrust, challenge: URLAuthenticationChallenge) {
+let credential = URLCredential(trust: challenge.protectionSpace.serverTrust!)
+}

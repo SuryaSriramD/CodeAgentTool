@@ -1,0 +1,8 @@
+# Product runtime. Legacy CAMEL/research dependencies are intentionally separate.
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+pydantic>=2.10,<3
+httpx>=0.28,<1
+python-multipart>=0.0.20,<1
+openai>=2,<3
+python-dotenv>=1,<2

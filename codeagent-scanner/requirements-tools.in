@@ -1,0 +1,3 @@
+# Isolated scanner-only virtualenv, never the API environment.
+semgrep==1.178.0
+bandit==1.9.4

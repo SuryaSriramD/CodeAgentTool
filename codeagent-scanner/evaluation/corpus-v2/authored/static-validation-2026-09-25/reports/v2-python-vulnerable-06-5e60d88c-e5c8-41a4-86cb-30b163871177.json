@@ -1,0 +1,380 @@
+{
+  "schema_version": "2.0",
+  "job_id": "5e60d88c-e5c8-41a4-86cb-30b163871177",
+  "meta": {
+    "duration_ms": 5258,
+    "generated_at": "2026-09-25T14:51:31.123190+00:00",
+    "labels": [
+      "corpus-v2",
+      "authoring-validation",
+      "unapproved"
+    ],
+    "repo": {
+      "baseline": {
+        "job_id": "556d1d01-f5ba-4e59-a4ef-e76da67734c0",
+        "report_hash": "695a1a7675824b8465f65dbd9f66730a2e6cb7b47fe77a4b08353cbba401df42"
+      },
+      "commit": null,
+      "digest": "8c1d3b3298dc584d8d91b19c93224164ee2f8ecab8fddf0fc6cfe3f190e9fa6f",
+      "filename": "v2-python-vulnerable-06.zip",
+      "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+      "snapshot_id": "5e60d88c-e5c8-41a4-86cb-30b163871177",
+      "source": "zip",
+      "stream": "default"
+    },
+    "rulepack_version": "2.0.0-candidate",
+    "snapshot": {
+      "digest": "8c1d3b3298dc584d8d91b19c93224164ee2f8ecab8fddf0fc6cfe3f190e9fa6f",
+      "excluded_files": [],
+      "files": {
+        "job.py": "9bf10c71d40b84c4aa5ee1da75b3d6e295bb6f2a75072869cd6bc4d75f7f07b6",
+        "telemetry.py": "25f169e36ee59024f0895eb434e5944734bf0f5d9d4a374a716fc6aa15a1e09b"
+      },
+      "id": "5e60d88c-e5c8-41a4-86cb-30b163871177",
+      "ingestion_version": 2,
+      "inventory_complete": true,
+      "source": {
+        "baseline": {
+          "job_id": "556d1d01-f5ba-4e59-a4ef-e76da67734c0",
+          "report_hash": "695a1a7675824b8465f65dbd9f66730a2e6cb7b47fe77a4b08353cbba401df42"
+        },
+        "commit": null,
+        "digest": "8c1d3b3298dc584d8d91b19c93224164ee2f8ecab8fddf0fc6cfe3f190e9fa6f",
+        "filename": "v2-python-vulnerable-06.zip",
+        "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+        "snapshot_id": "5e60d88c-e5c8-41a4-86cb-30b163871177",
+        "source": "zip",
+        "stream": "default"
+      },
+      "source_inventory": [
+        "job.py",
+        "telemetry.py"
+      ],
+      "warnings": []
+    },
+    "tool_runs": [
+      {
+        "duration_ms": 3433,
+        "name": "semgrep",
+        "status": "partial",
+        "version": "1.178.0"
+      },
+      {
+        "duration_ms": 548,
+        "name": "bandit",
+        "status": "completed",
+        "version": "bandit 1.9.4"
+      },
+      {
+        "duration_ms": 0,
+        "name": "dotnet",
+        "status": "skipped",
+        "version": "codeagent-dotnet 1.1.0"
+      },
+      {
+        "duration_ms": 0,
+        "name": "depcheck",
+        "status": "skipped",
+        "version": "Version: 0.74.0"
+      }
+    ],
+    "tools": [
+      "semgrep",
+      "bandit",
+      "dotnet",
+      "depcheck"
+    ]
+  },
+  "summary": {
+    "critical": 0,
+    "high": 1,
+    "low": 0,
+    "medium": 0
+  },
+  "files": [
+    {
+      "path": "telemetry.py",
+      "issues": [
+        {
+          "id": "3ee1618a6f64517165726e21",
+          "tool": "bandit",
+          "type": "B501",
+          "message": "Call to requests with verify=False disabling SSL certificate checks, security issue.",
+          "severity": "high",
+          "file": "telemetry.py",
+          "line": 9,
+          "rule_id": "B501",
+          "source_hash": "25f169e36ee59024f0895eb434e5944734bf0f5d9d4a374a716fc6aa15a1e09b",
+          "suggestion": "See: https://bandit.readthedocs.io/en/1.9.4/plugins/b501_request_with_no_cert_validation.html",
+          "fingerprint": "v1:fcd4cf13e2be39e2b5caec512a58645a70f8178c0c7a0e31064d16803ca5e166",
+          "logical_id": "23300e1c-010c-4bb1-9c5e-dcadc0023d31",
+          "family": "request_with_no_cert_validation",
+          "cwe": "CWE-295",
+          "analysis_kind": "structural",
+          "end_line": 10,
+          "rule_digest": "f9eeff7a1ad667596326358c2d2b95c3ae7beb0bded3a68724212ecadaded9fb",
+          "dependency": null,
+          "end_column": null,
+          "evidence": [
+            {
+              "file": "telemetry.py",
+              "kind": "source_span",
+              "line": 9,
+              "text": "8     response = requests.post(ENDPOINT, json={'events': events},\n9                              cert=CERT, verify=False, timeout=4,\n10                              allow_redirects=False)\n11     response.raise_for_status()\n12     return response.json()['receipt']\n"
+            }
+          ],
+          "evidence_digest": "48e6a08958aacb1baf3f36644b07f21f8d528001cff1513429ebabd2d10e3144",
+          "rule_revision": "1",
+          "tracking_ambiguous": false,
+          "tracking_supported": true
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "tool": "semgrep",
+      "status": "partial",
+      "files_discovered": 2,
+      "files_scanned": 1,
+      "files_skipped": 1,
+      "errors": [
+        "telemetry.py: source could not be fully parsed",
+        "1 source files were skipped or did not parse: telemetry.py"
+      ],
+      "version": "1.178.0",
+      "languages": [
+        "python"
+      ],
+      "path_outcomes": [
+        {
+          "language": "python",
+          "path": "job.py",
+          "rule_ids": [
+            "codeagent.python.security.v1",
+            "codeagent.python.sql-injection.v2",
+            "codeagent.python.path-traversal.v2",
+            "codeagent.python.ssrf.v2"
+          ],
+          "status": "completed"
+        },
+        {
+          "language": "python",
+          "path": "telemetry.py",
+          "rule_ids": [
+            "codeagent.python.security.v1",
+            "codeagent.python.sql-injection.v2",
+            "codeagent.python.path-traversal.v2",
+            "codeagent.python.ssrf.v2"
+          ],
+          "status": "not_assessed"
+        }
+      ],
+      "profile": "security-v2",
+      "rule_ids": [
+        "codeagent.bash.dynamic-evaluation.v2",
+        "codeagent.bash.security.v1",
+        "codeagent.bash.tls-validation.v2",
+        "codeagent.c.format-string.v2",
+        "codeagent.c.security.v1",
+        "codeagent.c.shell-injection.v2",
+        "codeagent.cpp.format-string.v2",
+        "codeagent.cpp.security.v1",
+        "codeagent.cpp.shell-injection.v2",
+        "codeagent.dockerfile.security.v1",
+        "codeagent.go.security.v1",
+        "codeagent.go.sql-injection.v2",
+        "codeagent.go.ssrf.v2",
+        "codeagent.go.tls-validation.v2",
+        "codeagent.html.security.v1",
+        "codeagent.java.security.v1",
+        "codeagent.java.sql-injection.v2",
+        "codeagent.java.unsafe-xml.v2",
+        "codeagent.javascript.path-traversal.v2",
+        "codeagent.javascript.security.v1",
+        "codeagent.javascript.shell-injection.v2",
+        "codeagent.javascript.ssrf.v2",
+        "codeagent.json.security.v1",
+        "codeagent.kotlin.security.v1",
+        "codeagent.kotlin.sql-injection.v2",
+        "codeagent.kotlin.unsafe-xml.v2",
+        "codeagent.php.path-traversal.v2",
+        "codeagent.php.security.v1",
+        "codeagent.php.sql-injection.v2",
+        "codeagent.python.path-traversal.v2",
+        "codeagent.python.security.v1",
+        "codeagent.python.sql-injection.v2",
+        "codeagent.python.ssrf.v2",
+        "codeagent.ruby.security.v1",
+        "codeagent.ruby.sql-injection.v2",
+        "codeagent.ruby.unsafe-deserialization.v2",
+        "codeagent.rust.security.v1",
+        "codeagent.rust.sql-injection.v2",
+        "codeagent.rust.tls-validation.v2",
+        "codeagent.scala.security.v1",
+        "codeagent.scala.sql-injection.v2",
+        "codeagent.scala.unsafe-xml.v2",
+        "codeagent.swift.security.v1",
+        "codeagent.swift.tls-validation.v2",
+        "codeagent.swift.unsafe-deserialization.v2",
+        "codeagent.typescript.path-traversal.v2",
+        "codeagent.typescript.security.v1",
+        "codeagent.typescript.shell-injection.v2",
+        "codeagent.typescript.ssrf.v2",
+        "codeagent.xml.security.v1",
+        "codeagent.yaml.security.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": [
+        "job.py"
+      ]
+    },
+    {
+      "tool": "bandit",
+      "status": "completed",
+      "files_discovered": 2,
+      "files_scanned": 2,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "bandit 1.9.4",
+      "languages": [
+        "python"
+      ],
+      "path_outcomes": [
+        {
+          "language": "python",
+          "path": "job.py",
+          "rule_ids": [],
+          "status": "completed"
+        },
+        {
+          "language": "python",
+          "path": "telemetry.py",
+          "rule_ids": [],
+          "status": "completed"
+        }
+      ],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": [
+        "job.py",
+        "telemetry.py"
+      ]
+    },
+    {
+      "tool": "dotnet",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "codeagent-dotnet 1.1.0",
+      "languages": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [
+        "dotnet.binary-formatter.v1",
+        "dotnet.shell-injection.v2",
+        "dotnet.sql-injection.v2",
+        "dotnet.tls-validation.v1",
+        "dotnet.weak-crypto.v1",
+        "dotnet.xml-dtd.v1"
+      ],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    },
+    {
+      "tool": "depcheck",
+      "status": "skipped",
+      "files_discovered": 0,
+      "files_scanned": 0,
+      "files_skipped": 0,
+      "errors": [],
+      "version": "Version: 0.74.0",
+      "languages": [],
+      "ecosystems": [],
+      "path_outcomes": [],
+      "profile": "security-v2",
+      "rule_ids": [],
+      "ruleset_version": "2.0.0-candidate",
+      "scanned_paths": []
+    }
+  ],
+  "ai_analysis": null,
+  "project_id": "7e12012d-e95e-4eed-b73e-359d0dbdffce",
+  "stream": "default",
+  "profiles": {
+    "config": "a4fe670958b7e7e5211507e6eedd06b7a9529657e36cdfb695bc3b240b722e50",
+    "dependency": "506ced042a7c4d394e4645ff697a57003bef4f09ef6163ccd46a31fb6b69955d",
+    "name": "security-v2",
+    "source": "ba3ad3aa99b3ed698cad695e5fde69d3636effb1eac852347458d7daa70dff56",
+    "tools": {
+      "bandit": "f9eeff7a1ad667596326358c2d2b95c3ae7beb0bded3a68724212ecadaded9fb",
+      "depcheck": "506ced042a7c4d394e4645ff697a57003bef4f09ef6163ccd46a31fb6b69955d",
+      "dotnet": "5931ae9b9a311d36013df95db06efe91d42f4db9264a785c84424464f5109df4",
+      "semgrep": "6a70bfcededb875c0b17aade117babb7ffaf0640abe2b3e5299d31a353c7bd16"
+    }
+  },
+  "baseline": {
+    "job_id": "556d1d01-f5ba-4e59-a4ef-e76da67734c0",
+    "report_hash": "695a1a7675824b8465f65dbd9f66730a2e6cb7b47fe77a4b08353cbba401df42"
+  },
+  "report_hash": "453b6bfd7fbab5435756f001cf58ff06d22fc7c5212a6034f4ddccb73ef40432",
+  "errors": [],
+  "profile_digests": {
+    "dependency": "b2a78d8167fb4b467bc3674bccf022ff4ed6923e17e86ffa68b5921f4312644b",
+    "dependency_details": {
+      "adapter": "ca0f18d2ad98c3d5dc9aa76369f1ed5b04575bd24191157a3b4b9fffe8ede749",
+      "database": {
+        "metadata_hash": "5b57f7738d885f1a1d506eb717e5e1dc1eb743fe99e18791b3e5d474a4d06eea",
+        "next_update": "2026-09-26T06:36:11.019457213Z",
+        "ready": true,
+        "updated_at": "2026-09-25T06:36:11.019457553Z"
+      },
+      "expected_version": "0.74.0",
+      "version": "Version: 0.74.0"
+    },
+    "source": "addb5891684c529093e5e3dbb181becb30ba3db4909989a95666609a2fbd076e",
+    "source_details": {
+      "adapters": {
+        "bandit_runner.py": "ded1e85cc29baeb6fd5e9429eaee84762b4a458f1c8355d6533e5f0c943f66fd",
+        "common.py": "9746e28ee5e07e3df08846b4ef48f5c185ab8cc85ac055ad8f21bbb05a597a49",
+        "dotnet_runner.py": "bda87fedcfcd8b72b40b58b6478d4a8f8e4113cdbb296cabe372f6068035a5bf",
+        "semgrep_runner.py": "f621ba6e2097b6dd4a6e7d045bb826d8c6f62a0eba25391b213c73f15a38af7d"
+      },
+      "dotnet": {
+        "Program.fs": "78dd7da6bf86a8fb03fa2f100b9542b787725d94acb3ef6ade36adf7366c85c6",
+        "Roslyn/Analyzer.cs": "fee1df8cef9b41638c0b4f9a615c8ac60f54dd5e9991057526da22863ef2fd33"
+      },
+      "effective_tools": [
+        {
+          "name": "semgrep",
+          "version": "1.178.0"
+        },
+        {
+          "name": "bandit",
+          "version": "bandit 1.9.4"
+        },
+        {
+          "name": "dotnet",
+          "version": "codeagent-dotnet 1.1.0"
+        }
+      ],
+      "profile": "security-v2",
+      "rules": "661bd24355ffd634f28fa7abe17f56c17598b7d39832a8d1c47a93fc181b633f",
+      "versions": {
+        "bandit": "1.9.4",
+        "dotnet_analyzer": "1.1.0",
+        "dotnet_sdk": "10.0.401",
+        "fsharp_compiler_service": "43.12.401",
+        "roslyn": "5.9.0",
+        "rulepack": "1.0.0",
+        "semgrep": "1.178.0"
+      }
+    }
+  },
+  "profile_reproducibility": "pinned",
+  "status": "partial",
+  "warnings": []
+}

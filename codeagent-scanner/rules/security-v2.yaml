@@ -1,0 +1,1609 @@
+{
+  "rules": [
+    {
+      "id": "codeagent.python.security.v1",
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "message": "Running a command through a shell requires careful input validation.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "subprocess.run(..., shell=True, ...)"
+    },
+    {
+      "id": "codeagent.javascript.security.v1",
+      "languages": [
+        "javascript"
+      ],
+      "severity": "WARNING",
+      "message": "Dynamic evaluation can execute untrusted code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "eval($CODE)",
+      "paths": {
+        "include": [
+          "*.js",
+          "*.jsx",
+          "*.mjs",
+          "*.cjs"
+        ]
+      }
+    },
+    {
+      "id": "codeagent.typescript.security.v1",
+      "languages": [
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "message": "Dynamic evaluation can execute untrusted code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "eval($CODE)"
+    },
+    {
+      "id": "codeagent.java.security.v1",
+      "languages": [
+        "java"
+      ],
+      "severity": "WARNING",
+      "message": "MD5 must not be used for a security-sensitive digest.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "MessageDigest.getInstance(\"MD5\")"
+    },
+    {
+      "id": "codeagent.go.security.v1",
+      "languages": [
+        "go"
+      ],
+      "severity": "WARNING",
+      "message": "Shell command execution exposes shell interpretation.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "exec.Command(\"sh\", \"-c\", ...)"
+    },
+    {
+      "id": "codeagent.c.security.v1",
+      "languages": [
+        "c"
+      ],
+      "severity": "WARNING",
+      "message": "Unbounded string copying can overflow the destination.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "strcpy(...)"
+    },
+    {
+      "id": "codeagent.cpp.security.v1",
+      "languages": [
+        "cpp"
+      ],
+      "severity": "WARNING",
+      "message": "Unbounded string copying can overflow the destination.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "strcpy(...)"
+    },
+    {
+      "id": "codeagent.ruby.security.v1",
+      "languages": [
+        "ruby"
+      ],
+      "severity": "WARNING",
+      "message": "Dynamic evaluation can execute untrusted code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "eval(...)"
+    },
+    {
+      "id": "codeagent.php.security.v1",
+      "languages": [
+        "php"
+      ],
+      "severity": "WARNING",
+      "message": "Dynamic evaluation can execute untrusted code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "eval(...)"
+    },
+    {
+      "id": "codeagent.scala.security.v1",
+      "languages": [
+        "scala"
+      ],
+      "severity": "WARNING",
+      "message": "MD5 must not be used for a security-sensitive digest.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "java.security.MessageDigest.getInstance(\"MD5\")"
+    },
+    {
+      "id": "codeagent.kotlin.security.v1",
+      "languages": [
+        "kotlin"
+      ],
+      "severity": "WARNING",
+      "message": "MD5 must not be used for a security-sensitive digest.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "MessageDigest.getInstance(\"MD5\")"
+    },
+    {
+      "id": "codeagent.swift.security.v1",
+      "languages": [
+        "swift"
+      ],
+      "severity": "WARNING",
+      "message": "MD5 must not be used for a security-sensitive digest.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "CC_MD5(...)"
+    },
+    {
+      "id": "codeagent.rust.security.v1",
+      "languages": [
+        "rust"
+      ],
+      "severity": "WARNING",
+      "message": "Shell command execution exposes shell interpretation.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "std::process::Command::new(\"sh\").arg(\"-c\")"
+    },
+    {
+      "id": "codeagent.bash.security.v1",
+      "languages": [
+        "bash"
+      ],
+      "severity": "WARNING",
+      "message": "Piping downloaded content directly into a shell executes unverified code.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "curl $URL | bash"
+    },
+    {
+      "id": "codeagent.yaml.security.v1",
+      "languages": [
+        "yaml"
+      ],
+      "severity": "WARNING",
+      "message": "A privileged container bypasses normal container isolation.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "securityContext:\n  privileged: true\n"
+    },
+    {
+      "id": "codeagent.json.security.v1",
+      "languages": [
+        "json"
+      ],
+      "severity": "WARNING",
+      "message": "This TLS option disables server certificate verification.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "{ \"rejectUnauthorized\": false }"
+    },
+    {
+      "id": "codeagent.xml.security.v1",
+      "languages": [
+        "xml"
+      ],
+      "severity": "WARNING",
+      "message": "Authentication cookies should require HTTPS.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "<httpCookies requireSSL=\"false\" />"
+    },
+    {
+      "id": "codeagent.html.security.v1",
+      "languages": [
+        "html"
+      ],
+      "severity": "WARNING",
+      "message": "Combining scripts and same-origin weakens sandbox isolation for same-origin iframe content.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "<iframe sandbox=\"allow-scripts allow-same-origin\" ...>...</iframe>"
+    },
+    {
+      "id": "codeagent.dockerfile.security.v1",
+      "languages": [
+        "dockerfile"
+      ],
+      "severity": "WARNING",
+      "message": "Run application containers as an unprivileged user.",
+      "metadata": {
+        "rulepack_version": "1.0.0",
+        "confidence": "MEDIUM",
+        "category": "security",
+        "license": "MIT"
+      },
+      "pattern": "USER root"
+    },
+    {
+      "id": "codeagent.python.sql-injection.v2",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Sql injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "request.args.get(...)"
+        },
+        {
+          "pattern": "request.form.get(...)"
+        },
+        {
+          "pattern": "request.json[...]"
+        },
+        {
+          "pattern": "$REQUEST.GET.get(...)"
+        },
+        {
+          "pattern": "$REQUEST.POST.get(...)"
+        },
+        {
+          "pattern": "$REQUEST.GET[...]"
+        },
+        {
+          "pattern": "$REQUEST.POST[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "$DB.execute($SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.python.path-traversal.v2",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Path traversal security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "path-traversal",
+        "cwe": "CWE-22",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "request.args.get(...)"
+        },
+        {
+          "pattern": "request.form.get(...)"
+        },
+        {
+          "pattern": "request.json[...]"
+        },
+        {
+          "pattern": "$REQUEST.GET.get(...)"
+        },
+        {
+          "pattern": "$REQUEST.POST.get(...)"
+        },
+        {
+          "pattern": "$REQUEST.GET[...]"
+        },
+        {
+          "pattern": "$REQUEST.POST[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "open($PATH, ...)"
+            },
+            {
+              "focus-metavariable": "$PATH"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.python.ssrf.v2",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Ssrf security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "ssrf",
+        "cwe": "CWE-918",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "request.args.get(...)"
+        },
+        {
+          "pattern": "request.form.get(...)"
+        },
+        {
+          "pattern": "request.json[...]"
+        },
+        {
+          "pattern": "$REQUEST.GET.get(...)"
+        },
+        {
+          "pattern": "$REQUEST.POST.get(...)"
+        },
+        {
+          "pattern": "$REQUEST.GET[...]"
+        },
+        {
+          "pattern": "$REQUEST.POST[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "requests.get($URL, ...)"
+            },
+            {
+              "focus-metavariable": "$URL"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "requests.post($URL, ...)"
+            },
+            {
+              "focus-metavariable": "$URL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.javascript.shell-injection.v2",
+      "languages": [
+        "javascript"
+      ],
+      "severity": "ERROR",
+      "message": "Shell injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "shell-injection",
+        "cwe": "CWE-78",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$REQ.query.$KEY"
+        },
+        {
+          "pattern": "$REQ.body.$KEY"
+        },
+        {
+          "pattern": "$REQ.params.$KEY"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "child_process.exec($COMMAND, ...)"
+            },
+            {
+              "focus-metavariable": "$COMMAND"
+            }
+          ]
+        }
+      ],
+      "paths": {
+        "include": [
+          "*.js",
+          "*.jsx",
+          "*.mjs",
+          "*.cjs"
+        ]
+      }
+    },
+    {
+      "id": "codeagent.javascript.path-traversal.v2",
+      "languages": [
+        "javascript"
+      ],
+      "severity": "ERROR",
+      "message": "Path traversal security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "path-traversal",
+        "cwe": "CWE-22",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$REQ.query.$KEY"
+        },
+        {
+          "pattern": "$REQ.body.$KEY"
+        },
+        {
+          "pattern": "$REQ.params.$KEY"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "fs.readFile($PATH, ...)"
+            },
+            {
+              "focus-metavariable": "$PATH"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "fs.readFileSync($PATH, ...)"
+            },
+            {
+              "focus-metavariable": "$PATH"
+            }
+          ]
+        }
+      ],
+      "paths": {
+        "include": [
+          "*.js",
+          "*.jsx",
+          "*.mjs",
+          "*.cjs"
+        ]
+      }
+    },
+    {
+      "id": "codeagent.javascript.ssrf.v2",
+      "languages": [
+        "javascript"
+      ],
+      "severity": "ERROR",
+      "message": "Ssrf security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "ssrf",
+        "cwe": "CWE-918",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$REQ.query.$KEY"
+        },
+        {
+          "pattern": "$REQ.body.$KEY"
+        },
+        {
+          "pattern": "$REQ.params.$KEY"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "fetch($URL, ...)"
+            },
+            {
+              "focus-metavariable": "$URL"
+            }
+          ]
+        }
+      ],
+      "paths": {
+        "include": [
+          "*.js",
+          "*.jsx",
+          "*.mjs",
+          "*.cjs"
+        ]
+      }
+    },
+    {
+      "id": "codeagent.typescript.shell-injection.v2",
+      "languages": [
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "message": "Shell injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "shell-injection",
+        "cwe": "CWE-78",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$REQ.query.$KEY"
+        },
+        {
+          "pattern": "$REQ.body.$KEY"
+        },
+        {
+          "pattern": "$REQ.params.$KEY"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "child_process.exec($COMMAND, ...)"
+            },
+            {
+              "focus-metavariable": "$COMMAND"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.typescript.path-traversal.v2",
+      "languages": [
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "message": "Path traversal security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "path-traversal",
+        "cwe": "CWE-22",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$REQ.query.$KEY"
+        },
+        {
+          "pattern": "$REQ.body.$KEY"
+        },
+        {
+          "pattern": "$REQ.params.$KEY"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "fs.readFile($PATH, ...)"
+            },
+            {
+              "focus-metavariable": "$PATH"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "fs.readFileSync($PATH, ...)"
+            },
+            {
+              "focus-metavariable": "$PATH"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.typescript.ssrf.v2",
+      "languages": [
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "message": "Ssrf security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "ssrf",
+        "cwe": "CWE-918",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$REQ.query.$KEY"
+        },
+        {
+          "pattern": "$REQ.body.$KEY"
+        },
+        {
+          "pattern": "$REQ.params.$KEY"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "fetch($URL, ...)"
+            },
+            {
+              "focus-metavariable": "$URL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.java.sql-injection.v2",
+      "languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "message": "Sql injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$STMT.executeQuery($A + $B)"
+        },
+        {
+          "pattern": "$STMT.executeUpdate($A + $B)"
+        },
+        {
+          "pattern": "$STMT.execute($A + $B)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.java.unsafe-xml.v2",
+      "languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "message": "Unsafe xml security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "unsafe-xml",
+        "cwe": "CWE-611",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$F.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", false)"
+        },
+        {
+          "pattern": "$F.setFeature(\"http://xml.org/sax/features/external-general-entities\", true)"
+        },
+        {
+          "pattern": "$F.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", true)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.kotlin.sql-injection.v2",
+      "languages": [
+        "kotlin"
+      ],
+      "severity": "ERROR",
+      "message": "Sql injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$STMT.executeQuery($A + $B)"
+        },
+        {
+          "pattern": "$STMT.executeUpdate($A + $B)"
+        },
+        {
+          "pattern": "$STMT.execute($A + $B)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.kotlin.unsafe-xml.v2",
+      "languages": [
+        "kotlin"
+      ],
+      "severity": "ERROR",
+      "message": "Unsafe xml security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "unsafe-xml",
+        "cwe": "CWE-611",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$F.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", false)"
+        },
+        {
+          "pattern": "$F.setFeature(\"http://xml.org/sax/features/external-general-entities\", true)"
+        },
+        {
+          "pattern": "$F.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", true)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.scala.sql-injection.v2",
+      "languages": [
+        "scala"
+      ],
+      "severity": "ERROR",
+      "message": "Sql injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$STMT.executeQuery($A + $B)"
+        },
+        {
+          "pattern": "$STMT.executeUpdate($A + $B)"
+        },
+        {
+          "pattern": "$STMT.execute($A + $B)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.scala.unsafe-xml.v2",
+      "languages": [
+        "scala"
+      ],
+      "severity": "ERROR",
+      "message": "Unsafe xml security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "unsafe-xml",
+        "cwe": "CWE-611",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$F.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", false)"
+        },
+        {
+          "pattern": "$F.setFeature(\"http://xml.org/sax/features/external-general-entities\", true)"
+        },
+        {
+          "pattern": "$F.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", true)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.go.sql-injection.v2",
+      "languages": [
+        "go"
+      ],
+      "severity": "ERROR",
+      "message": "Sql injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$R.URL.Query().Get(...)"
+        },
+        {
+          "pattern": "$R.FormValue(...)"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "$DB.Query($SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "$DB.Exec($SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "$DB.QueryRow($SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.go.ssrf.v2",
+      "languages": [
+        "go"
+      ],
+      "severity": "ERROR",
+      "message": "Ssrf security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "ssrf",
+        "cwe": "CWE-918",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$R.URL.Query().Get(...)"
+        },
+        {
+          "pattern": "$R.FormValue(...)"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "http.Get($URL)"
+            },
+            {
+              "focus-metavariable": "$URL"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "http.Post($URL, ...)"
+            },
+            {
+              "focus-metavariable": "$URL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.go.tls-validation.v2",
+      "languages": [
+        "go"
+      ],
+      "severity": "ERROR",
+      "message": "Tls validation security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "tls-validation",
+        "cwe": "CWE-295",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "tls.Config{..., InsecureSkipVerify: true, ...}"
+        },
+        {
+          "pattern": "$CFG.InsecureSkipVerify = true"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.c.format-string.v2",
+      "languages": [
+        "c"
+      ],
+      "severity": "ERROR",
+      "message": "Format string security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "format-string",
+        "cwe": "CWE-134",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "printf($FMT, ...)"
+            },
+            {
+              "pattern": "fprintf($FD, $FMT, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-pattern": {
+            "metavariable": "$FMT",
+            "patterns": [
+              {
+                "pattern-not": "\"...\""
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "codeagent.c.shell-injection.v2",
+      "languages": [
+        "c"
+      ],
+      "severity": "ERROR",
+      "message": "Shell injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "shell-injection",
+        "cwe": "CWE-78",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "system($CMD)"
+            },
+            {
+              "pattern": "popen($CMD, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-pattern": {
+            "metavariable": "$CMD",
+            "patterns": [
+              {
+                "pattern-not": "\"...\""
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "codeagent.cpp.format-string.v2",
+      "languages": [
+        "cpp"
+      ],
+      "severity": "ERROR",
+      "message": "Format string security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "format-string",
+        "cwe": "CWE-134",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "printf($FMT, ...)"
+            },
+            {
+              "pattern": "fprintf($FD, $FMT, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-pattern": {
+            "metavariable": "$FMT",
+            "patterns": [
+              {
+                "pattern-not": "\"...\""
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "codeagent.cpp.shell-injection.v2",
+      "languages": [
+        "cpp"
+      ],
+      "severity": "ERROR",
+      "message": "Shell injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "shell-injection",
+        "cwe": "CWE-78",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "system($CMD)"
+            },
+            {
+              "pattern": "popen($CMD, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-pattern": {
+            "metavariable": "$CMD",
+            "patterns": [
+              {
+                "pattern-not": "\"...\""
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "codeagent.ruby.sql-injection.v2",
+      "languages": [
+        "ruby"
+      ],
+      "severity": "ERROR",
+      "message": "Sql injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "params[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "$MODEL.where($SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            },
+            {
+              "metavariable-pattern": {
+                "metavariable": "$SQL",
+                "patterns": [
+                  {
+                    "pattern-not": "[...]"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "$MODEL.find_by_sql($SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            },
+            {
+              "metavariable-pattern": {
+                "metavariable": "$SQL",
+                "patterns": [
+                  {
+                    "pattern-not": "[...]"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.ruby.unsafe-deserialization.v2",
+      "languages": [
+        "ruby"
+      ],
+      "severity": "ERROR",
+      "message": "Unsafe deserialization security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "unsafe-deserialization",
+        "cwe": "CWE-502",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "params[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "Marshal.load($DATA)"
+            },
+            {
+              "focus-metavariable": "$DATA"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "YAML.load($DATA)"
+            },
+            {
+              "focus-metavariable": "$DATA"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "YAML.unsafe_load($DATA)"
+            },
+            {
+              "focus-metavariable": "$DATA"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.php.sql-injection.v2",
+      "languages": [
+        "php"
+      ],
+      "severity": "ERROR",
+      "message": "Sql injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$_GET[...]"
+        },
+        {
+          "pattern": "$_POST[...]"
+        },
+        {
+          "pattern": "$_REQUEST[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "mysqli_query($DB,$SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "$DB->query($SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "$DB->exec($SQL)"
+            },
+            {
+              "focus-metavariable": "$SQL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.php.path-traversal.v2",
+      "languages": [
+        "php"
+      ],
+      "severity": "ERROR",
+      "message": "Path traversal security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "path-traversal",
+        "cwe": "CWE-22",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "function-local-taint",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "$_GET[...]"
+        },
+        {
+          "pattern": "$_POST[...]"
+        },
+        {
+          "pattern": "$_REQUEST[...]"
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "readfile($PATH)"
+            },
+            {
+              "focus-metavariable": "$PATH"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "file_get_contents($PATH)"
+            },
+            {
+              "focus-metavariable": "$PATH"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "fopen($PATH, ...)"
+            },
+            {
+              "focus-metavariable": "$PATH"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codeagent.swift.tls-validation.v2",
+      "languages": [
+        "swift"
+      ],
+      "severity": "ERROR",
+      "message": "Tls validation security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "tls-validation",
+        "cwe": "CWE-295",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "DisabledTrustEvaluator(...)"
+        },
+        {
+          "pattern": "URLCredential(trust: ...)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.swift.unsafe-deserialization.v2",
+      "languages": [
+        "swift"
+      ],
+      "severity": "ERROR",
+      "message": "Unsafe deserialization security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "unsafe-deserialization",
+        "cwe": "CWE-502",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "NSKeyedUnarchiver.unarchiveObject(with: ...)"
+        },
+        {
+          "pattern": "NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(...)"
+        },
+        {
+          "pattern": "NSKeyedUnarchiver(forReadingWith: ...)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.rust.sql-injection.v2",
+      "languages": [
+        "rust"
+      ],
+      "severity": "ERROR",
+      "message": "Sql injection security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "sqlx::query(&format!(...))"
+        },
+        {
+          "pattern": "$DB.execute(&format!(...), ...)"
+        },
+        {
+          "pattern": "$DB.prepare(&format!(...))"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.rust.tls-validation.v2",
+      "languages": [
+        "rust"
+      ],
+      "severity": "ERROR",
+      "message": "Tls validation security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "tls-validation",
+        "cwe": "CWE-295",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "$BUILDER.danger_accept_invalid_certs(true)"
+        },
+        {
+          "pattern": "$BUILDER.danger_accept_invalid_hostnames(true)"
+        }
+      ]
+    },
+    {
+      "id": "codeagent.bash.dynamic-evaluation.v2",
+      "languages": [
+        "bash"
+      ],
+      "severity": "ERROR",
+      "message": "Dynamic evaluation security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "dynamic-evaluation",
+        "cwe": "CWE-95",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "eval ..."
+        }
+      ]
+    },
+    {
+      "id": "codeagent.bash.tls-validation.v2",
+      "languages": [
+        "bash"
+      ],
+      "severity": "ERROR",
+      "message": "Tls validation security pattern; validate untrusted input and prefer safe API configuration.",
+      "metadata": {
+        "family": "tls-validation",
+        "cwe": "CWE-295",
+        "rule_revision": "2",
+        "rulepack_version": "2.0.0-candidate",
+        "analysis_kind": "structural",
+        "license": "MIT",
+        "confidence": "MEDIUM"
+      },
+      "pattern-either": [
+        {
+          "pattern": "curl ... -k ..."
+        },
+        {
+          "pattern": "curl ... --insecure ..."
+        },
+        {
+          "pattern": "wget ... --no-check-certificate ..."
+        }
+      ]
+    }
+  ]
+}

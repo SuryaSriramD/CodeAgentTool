@@ -1,0 +1,922 @@
+{
+  "language": "typescript",
+  "cases": [
+    {
+      "id": "v2-typescript-vulnerable-01",
+      "language": "typescript",
+      "vulnerable": true,
+      "scenario": "tenant-printer-queue-routing",
+      "files": {
+        "print.ts": "import { exec } from 'node:child_process';\nimport { promisify } from 'node:util';\nconst run = promisify(exec);\ntype PrintJob = { serverFileId: number; copies: number };\nexport async function printJob(job: PrintJob, settings: { queueName: string }) {\n  if (!Number.isSafeInteger(job.serverFileId) || job.serverFileId < 1 ||\n      !Number.isInteger(job.copies) || job.copies < 1 || job.copies > 5) {\n    throw new Error('invalid server print job');\n  }\n  const file = `/srv/print/${job.serverFileId}.pdf`;\n  const command = `/usr/bin/lpr -P ${settings.queueName} -# ${job.copies} ${file}`;\n  await run(command, { timeout: 5000, maxBuffer: 4096 });\n  return { submitted: true, copies: job.copies };\n}\n",
+        "settings.ts": "export function savePrinter(body: unknown, store: { setQueue(value: string): void }) {\n  const candidate = body as { queueName?: unknown };\n  if (typeof candidate.queueName !== 'string' || candidate.queueName.length > 80) {\n    throw new Error('queue name');\n  }\n  store.setQueue(candidate.queueName);\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "shell-injection",
+          "cwe": "CWE-78",
+          "path": "print.ts"
+        }
+      ],
+      "rationale": "Numeric job validation does not protect the persisted printer name. The name is interpolated into a shell command when the worker executes lpr.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Use direct execFile arguments and enforce the deployment’s documented queue-name grammar or trusted queue-ID mapping."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "CUPS 2.4.10 /usr/bin/lpr; printer names approved for this tenant by trusted ownership middleware; tenant may edit the text setting but not execute worker commands. PDFs are server-rendered and IDs trusted."
+      },
+      "operation_contract": {
+        "purpose": "Submit the requested number of copies of a server-rendered PDF to the tenant’s selected printer.",
+        "trust_boundary": "A tenant administrator stores a printer queue name that later reaches a more privileged print worker.",
+        "legitimate_examples": [
+          {
+            "input": "serverFileId=31; copies=2; queueName=west-wing",
+            "expected": "Submit two copies of /srv/print/31.pdf to west-wing and return submitted=true."
+          }
+        ],
+        "permitted_changes": [
+          "Use direct execFile arguments and enforce the deployment’s documented queue-name grammar or trusted queue-ID mapping."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Retain the copy count and wait for successful submission; a fix that only validates the live job payload misses the stored queue setting."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for submit the requested number of copies of a server-rendered pdf to the tenant’s selected printer. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "tenant-printer-queue-routing",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A tenant administrator stores a printer queue name that later reaches a more privileged print worker. The operation is submit the requested number of copies of a server-rendered pdf to the tenant’s selected printer.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/child_process.html#child_processexeccommand-options-callback"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-vulnerable-02",
+      "language": "typescript",
+      "vulnerable": true,
+      "scenario": "saved-mail-attachment-path",
+      "files": {
+        "mail-digest.ts": "import { readFile } from 'node:fs/promises';\nimport { join } from 'node:path';\ntype Subscription = { accountId: number; attachmentName: string; recipient: string };\nexport async function sendDigest(subscription: Subscription,\n    send: (recipient: string, bytes: Buffer) => Promise<void>) {\n  const root = `/srv/account-reports/${subscription.accountId}`;\n  const attachment = await readFile(join(root, subscription.attachmentName));\n  await send(subscription.recipient, attachment);\n  return { sentBytes: attachment.length };\n}\n",
+        "subscription.ts": "export function savedSubscription(accountId: number, accountEmail: string, body: { file: unknown }) {\n  if (typeof body.file !== 'string' || body.file.length > 200) throw new Error('file');\n  // The digest worker reads this record after the HTTP request has ended.\n  return { accountId, recipient: accountEmail, attachmentName: body.file };\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "path-traversal",
+          "cwe": "CWE-22",
+          "path": "mail-digest.ts"
+        }
+      ],
+      "rationale": "A stored filename crosses into a later mail worker without containment validation, allowing parent traversal into another account or service-readable file.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Validate canonical containment under the account root when the worker reads the attachment."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "Read-only report tree during each job; account IDs numeric, recipients verified server values; subscriber cannot create symlinks. send transmits bytes as an attachment and never treats file content as commands."
+      },
+      "operation_contract": {
+        "purpose": "Email an owned account report, including nested monthly reports, to the account’s verified email.",
+        "trust_boundary": "A subscriber controls a saved relative attachment name; account ID and verified recipient are server-owned.",
+        "legitimate_examples": [
+          {
+            "input": "accountId=5; file=2025/summary.pdf",
+            "expected": "Email the bytes of /srv/account-reports/5/2025/summary.pdf to account 5’s verified address."
+          }
+        ],
+        "permitted_changes": [
+          "Validate canonical containment under the account root when the worker reads the attachment."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Checking only the live subscription request is insufficient if historical rows remain unsafe; validate at the read boundary and preserve nested reports."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for email an owned account report, including nested monthly reports, to the account’s verified email. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "saved-mail-attachment-path",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A subscriber controls a saved relative attachment name; account ID and verified recipient are server-owned. The operation is email an owned account report, including nested monthly reports, to the account’s verified email.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/path.html#pathjoinpaths"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-vulnerable-03",
+      "language": "typescript",
+      "vulnerable": true,
+      "scenario": "opengraph-image-second-hop",
+      "files": {
+        "open-graph.ts": "import * as cheerio from 'cheerio';\nexport async function previewImage(publicPageHtml: string, publicPageUrl: string) {\n  // An upstream service already verified and downloaded the public page.\n  const $ = cheerio.load(publicPageHtml);\n  const imageValue = $('meta[property=\"og:image\"]').attr('content');\n  if (!imageValue) return null;\n  const imageUrl = new URL(imageValue, publicPageUrl);\n  if (!['http:', 'https:'].includes(imageUrl.protocol)) throw new Error('image scheme');\n  const response = await fetch(imageUrl, { redirect: 'follow', signal: AbortSignal.timeout(2500) });\n  if (!response.ok) throw new Error('image unavailable');\n  await response.body?.cancel();\n  return { source: imageUrl.toString(), mime: response.headers.get('content-type') };\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "ssrf",
+          "cwe": "CWE-918",
+          "path": "open-graph.ts"
+        }
+      ],
+      "rationale": "Validation of the initial page URL does not cover its image URL. A page author can select an internal absolute URL or public URL that redirects internally.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Apply public-destination and redirect policy independently to the resolved image URL and the actual connection address."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "cheerio 1.0.0; Node fetch; trusted upstream provides bounded public HTML and canonical final page URL. Preview worker can reach private HTTP services; no HTML scripts execute."
+      },
+      "operation_contract": {
+        "purpose": "Inspect the advertised image of a verified public web page and return its media type.",
+        "trust_boundary": "A public-page author controls og:image metadata, which becomes a second network destination inside the preview service.",
+        "legitimate_examples": [
+          {
+            "input": "Public page at https://blog.example.org/a with og:image=/photo.png",
+            "expected": "Fetch https://blog.example.org/photo.png and return its media type."
+          }
+        ],
+        "permitted_changes": [
+          "Apply public-destination and redirect policy independently to the resolved image URL and the actual connection address."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Preserve relative image resolution against the page URL; approving the original page host is not approval for every resource referenced by its HTML."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for inspect the advertised image of a verified public web page and return its media type. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "opengraph-image-second-hop",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A public-page author controls og:image metadata, which becomes a second network destination inside the preview service. The operation is inspect the advertised image of a verified public web page and return its media type.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://cheerio.js.org/docs/api/classes/Cheerio#attr",
+          "https://nodejs.org/api/globals.html#fetch"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-vulnerable-04",
+      "language": "typescript",
+      "vulnerable": true,
+      "scenario": "queued-transform-worker-source",
+      "files": {
+        "transform.ts": "import { Worker } from 'node:worker_threads';\ntype TransformRequest = { javascript: string; rows: Array<Record<string, string>> };\nexport function transformRows(request: TransformRequest): Promise<unknown> {\n  if (request.javascript.length > 2048 || request.rows.length > 20) throw new Error('size');\n  const source = \"const {parentPort,workerData}=require('node:worker_threads');\" +\n    'const transform=' + request.javascript + ';parentPort.postMessage(workerData.map(transform));';\n  return new Promise((resolve, reject) => {\n    const worker = new Worker(source, { eval: true, workerData: request.rows });\n    const timer = setTimeout(() => { void worker.terminate(); reject(new Error('deadline')); }, 1000);\n    worker.once('message', value => { clearTimeout(timer); void worker.terminate(); resolve(value); });\n    worker.once('error', error => { clearTimeout(timer); reject(error); });\n  });\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "dynamic-evaluation",
+          "cwe": "CWE-95",
+          "path": "transform.ts"
+        }
+      ],
+      "rationale": "Worker eval executes supplied JavaScript with Node capabilities; a separate thread and a time limit do not sandbox filesystem or network access.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Migrate accepted transforms to a bounded data-only field map with explicit versioning; reject legacy executable transforms."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "No permission sandbox is configured; worker_threads shares process permissions. The public feature promises only field projection/renaming, not arbitrary user programs. Request is size-limited and authenticated."
+      },
+      "operation_contract": {
+        "purpose": "Apply user-selected field projection and renaming to a small batch of tabular string rows.",
+        "trust_boundary": "A low-privilege analyst supplies transformation text; worker threads retain the server’s filesystem/network/process authority.",
+        "legitimate_examples": [
+          {
+            "input": "javascript=(row)=>({city:row.town}); rows=[{town:\"Oslo\",note:\"x\"}]",
+            "expected": "Return [{city:\"Oslo\"}] without granting arbitrary server execution."
+          }
+        ],
+        "permitted_changes": [
+          "Migrate accepted transforms to a bounded data-only field map with explicit versioning; reject legacy executable transforms."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "A fix must preserve projection/renaming behavior through a declared data-only transformation schema; moving the same code to another worker does not remove authority."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for apply user-selected field projection and renaming to a small batch of tabular string rows. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "queued-transform-worker-source",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A low-privilege analyst supplies transformation text; worker threads retain the server’s filesystem/network/process authority. The operation is apply user-selected field projection and renaming to a small batch of tabular string rows.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/worker_threads.html#new-workerfilename-options"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-vulnerable-05",
+      "language": "typescript",
+      "vulnerable": true,
+      "scenario": "sqlite-user-selected-order-expression",
+      "files": {
+        "case-list.ts": "import Database from 'better-sqlite3';\nexport function listCases(db: Database.Database, owner: number, sort: string) {\n  if (sort.length > 200) throw new Error('sort length');\n  const statement = db.prepare('SELECT id, created_at FROM cases WHERE owner = ? ORDER BY ' + sort + ' LIMIT 20');\n  return statement.all(owner);\n}\nexport function handleList(db: Database.Database, accountId: number, query: { sort?: string }) {\n  return listCases(db, accountId, query.sort ?? 'created_at DESC');\n}\n",
+        "schema.sql": "CREATE TABLE cases(id INTEGER PRIMARY KEY, owner INTEGER NOT NULL, created_at TEXT NOT NULL);\nCREATE TABLE private_flags(name TEXT PRIMARY KEY, enabled INTEGER NOT NULL);\nINSERT INTO cases VALUES(1, 4, '2025-01-01'), (2, 4, '2025-03-01');\nINSERT INTO private_flags VALUES('billing-migration', 1);\n"
+      },
+      "expected_findings": [
+        {
+          "family": "sql-injection",
+          "cwe": "CWE-89",
+          "path": "case-list.ts"
+        }
+      ],
+      "rationale": "The owner value is bound, but ORDER BY contains uncontrolled SQL structure. SQLite can evaluate attacker-selected expressions or subqueries in that position without multiple statements.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Use an explicit map for created_at ASC and created_at DESC; retain owner binding and limit."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "better-sqlite3 11.8.1 and SQLite 3.48; @types/better-sqlite3 7.6.12, esModuleInterop enabled. schema.sql installed; accountId trusted; private_flags is intentionally not accessible through this endpoint."
+      },
+      "operation_contract": {
+        "purpose": "List an owner’s first twenty cases using either chronological or reverse chronological ordering.",
+        "trust_boundary": "A user controls a sort expression but is authorized only for two documented orderings, not arbitrary SQL expressions.",
+        "legitimate_examples": [
+          {
+            "input": "accountId=4; sort=created_at DESC",
+            "expected": "Return case 2 before case 1."
+          }
+        ],
+        "permitted_changes": [
+          "Use an explicit map for created_at ASC and created_at DESC; retain owner binding and limit."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Binding the string \"created_at DESC\" as a value yields constant ordering; map the two supported sort choices to trusted SQL fragments instead."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for list an owner’s first twenty cases using either chronological or reverse chronological ordering. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "sqlite-user-selected-order-expression",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A user controls a sort expression but is authorized only for two documented orderings, not arbitrary SQL expressions. The operation is list an owner’s first twenty cases using either chronological or reverse chronological ordering.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://github.com/WiseLibs/better-sqlite3/blob/v11.8.1/docs/api.md",
+          "https://www.sqlite.org/lang_select.html#orderby"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-vulnerable-06",
+      "language": "typescript",
+      "vulnerable": true,
+      "scenario": "line-protocol-token-before-peer-auth",
+      "files": {
+        "token-client.ts": "import * as tls from 'node:tls';\nexport function authenticate(token: string): Promise<string> {\n  if (!/^[A-Za-z0-9_-]{16,100}$/.test(token)) throw new Error('token format');\n  return new Promise((resolve, reject) => {\n    const socket = tls.connect({ host: 'relay.example.net', port: 7443,\n      servername: 'relay.example.net', rejectUnauthorized: false }, () => {\n      socket.write('AUTH ' + token + '\\r\\n');\n    });\n    socket.setTimeout(3000, () => socket.destroy(new Error('deadline')));\n    socket.once('data', bytes => { socket.end(); resolve(bytes.toString('utf8')); });\n    socket.once('error', reject);\n  });\n}\n"
+      },
+      "expected_findings": [
+        {
+          "family": "tls-validation",
+          "cwe": "CWE-295",
+          "path": "token-client.ts"
+        }
+      ],
+      "rationale": "rejectUnauthorized=false allows the secure-connect callback even when the peer certificate is untrusted, exposing the token before any authorization check.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract.",
+        "Enable certificate rejection and use the correct CA plus hostname/SNI before writing AUTH."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "Trusted relay responds with one bounded acknowledgment chunk; token supplied from trusted secret storage, no CR/LF; relay certificate issued by deployed enterprise CA."
+      },
+      "operation_contract": {
+        "purpose": "Authenticate to a private line-protocol relay and return its acknowledgment.",
+        "trust_boundary": "An active network attacker can impersonate the relay unless its certificate is validated before the server token is transmitted.",
+        "legitimate_examples": [
+          {
+            "input": "A server-issued token and authentic relay reply OK",
+            "expected": "Transmit AUTH over an authenticated TLS channel and return OK."
+          }
+        ],
+        "permitted_changes": [
+          "Enable certificate rejection and use the correct CA plus hostname/SNI before writing AUTH."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Checking socket.authorized only after writing AUTH is too late; preserve SNI and reject before sending secrets."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for authenticate to a private line-protocol relay and return its acknowledgment. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "line-protocol-token-before-peer-auth",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around An active network attacker can impersonate the relay unless its certificate is validated before the server token is transmitted. The operation is authenticate to a private line-protocol relay and return its acknowledgment.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/tls.html#tlsconnectoptions-callback"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-safe-01",
+      "language": "typescript",
+      "vulnerable": false,
+      "scenario": "streaming-artifact-checksum-in-process",
+      "files": {
+        "checksum.ts": "import { createHash } from 'node:crypto';\nimport { createReadStream } from 'node:fs';\nexport async function shellChecksumForArtifact(storageId: number): Promise<string> {\n  if (!Number.isSafeInteger(storageId) || storageId < 1) throw new Error('artifact ID');\n  const hash = createHash('sha256');\n  const stream = createReadStream(`/srv/artifacts/${storageId}.bin`);\n  for await (const chunk of stream) hash.update(chunk);\n  return hash.digest('hex');\n}\nexport async function artifactResponse(ownedArtifact: { storageId: number }) {\n  return { sha256: await shellChecksumForArtifact(ownedArtifact.storageId) };\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The legacy shellChecksum name is misleading: the implementation uses crypto and streams without spawning a process. Numeric IDs prevent path syntax.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "Root-owned storage tree with no symlinks; artifact access checked by the caller; blobs at most 8 MiB; SHA-256 used only as an integrity/content identifier."
+      },
+      "operation_contract": {
+        "purpose": "Compute the SHA-256 digest of an owned stored artifact using a streaming in-process hash.",
+        "trust_boundary": "The caller supplies an authorized numeric artifact record; artifact bytes are hashed as data and never form a command.",
+        "legitimate_examples": [
+          {
+            "input": "storageId=6 storing UTF-8 bytes abc",
+            "expected": "Return ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Replacing the streaming hash with exec of a command string is unnecessary and would add a boundary; SHA-256 is a content digest, not an authentication MAC here."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for compute the sha-256 digest of an owned stored artifact using a streaming in-process hash. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "streaming-artifact-checksum-in-process",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around The caller supplies an authorized numeric artifact record; artifact bytes are hashed as data and never form a command. The operation is compute the sha-256 digest of an owned stored artifact using a streaming in-process hash.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/crypto.html#class-hash"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-safe-02",
+      "language": "typescript",
+      "vulnerable": false,
+      "scenario": "virtual-zip-member-download",
+      "files": {
+        "archive-member.ts": "import AdmZip from 'adm-zip';\nexport function downloadMember(trustedArchiveBytes: Buffer, memberName: string): Buffer {\n  if (memberName.length > 200) throw new Error('member name');\n  const archive = new AdmZip(trustedArchiveBytes);\n  const member = archive.getEntry(memberName);\n  if (!member || member.isDirectory || member.header.size > 65536) {\n    throw new Error('missing or oversized member');\n  }\n  // Member names are virtual keys: nothing is extracted to the filesystem.\n  return member.getData();\n}\nexport function responseForMember(archive: Buffer, query: { name: string }) {\n  return { mime: 'application/octet-stream', body: downloadMember(archive, query.name) };\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "getEntry looks up archive metadata and getData decompresses its contents into memory. A ../-looking key cannot traverse the host filesystem because no path-based write or read consumes it.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "adm-zip 0.5.16; @types/adm-zip 0.5.7; esModuleInterop. Archives created by trusted publishing, bounded total uncompressed size 1 MiB, correct headers, no attacker-controlled decompression bombs. All entries of the selected archive are authorized."
+      },
+      "operation_contract": {
+        "purpose": "Return one named entry from an already-authorized, trusted ZIP archive as download bytes.",
+        "trust_boundary": "A user controls only a virtual member key; the server provides an immutable validated archive and performs no filesystem extraction.",
+        "legitimate_examples": [
+          {
+            "input": "name=manuals/intro.txt in an authorized archive",
+            "expected": "Return that archive entry’s bytes, not a host filesystem file."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Adding extraction to a temporary directory would require a separate containment policy; do not mistake virtual archive paths for host paths."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for return one named entry from an already-authorized, trusted zip archive as download bytes. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "virtual-zip-member-download",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A user controls only a virtual member key; the server provides an immutable validated archive and performs no filesystem extraction. The operation is return one named entry from an already-authorized, trusted zip archive as download bytes.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://github.com/cthackers/adm-zip/blob/v0.5.16/README.md"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-safe-03",
+      "language": "typescript",
+      "vulnerable": false,
+      "scenario": "mail-api-fixed-origin-recipient-data",
+      "files": {
+        "mail-api.ts": "export async function deliverMessage(recipientId: string, text: string, secret: string) {\n  if (!/^[a-z0-9-]{1,40}$/.test(recipientId) || text.length > 1000) throw new Error('message');\n  const response = await fetch('https://mailer.example.net/v2/send', {\n    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(3000),\n    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret },\n    body: JSON.stringify({ recipientId, text })\n  });\n  if (response.status !== 202) throw new Error('message rejected');\n  return { accepted: true };\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "URL-looking text lives in a JSON request body, not the request destination. The constant HTTPS origin and redirect:error prevent a recipient-controlled second network target.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "Mailer resolves recipientId to verified account addresses and sends plain text; it does not fetch URLs in text. Node CA/environment configuration trusted; no custom unverified dispatcher or proxy."
+      },
+      "operation_contract": {
+        "purpose": "Send a plain-text message to a verified internal account through the configured mail API.",
+        "trust_boundary": "A user supplies message data and an authorized recipient identifier; endpoint, token and redirect policy are server-owned.",
+        "legitimate_examples": [
+          {
+            "input": "recipientId=member-7; text=Visit http://127.0.0.1",
+            "expected": "POST literal message text to the fixed mail API and report accepted=true on 202."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Do not promote message text or recipient ID into a URL; preserve newlines and Unicode as JSON data without converting them to email headers."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for send a plain-text message to a verified internal account through the configured mail api. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "mail-api-fixed-origin-recipient-data",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A user supplies message data and an authorized recipient identifier; endpoint, token and redirect policy are server-owned. The operation is send a plain-text message to a verified internal account through the configured mail api.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://fetch.spec.whatwg.org/#request-redirect-mode"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-safe-04",
+      "language": "typescript",
+      "vulnerable": false,
+      "scenario": "workflow-action-map-dispatch",
+      "files": {
+        "workflow.ts": "type Job = { state: 'held' | 'released'; audit: string[] };\nconst actions = new Map<string, (job: Job) => void>([\n  ['release', job => { job.state = 'released'; job.audit.push('released'); }],\n  ['hold', job => { job.state = 'held'; job.audit.push('held'); }]\n]);\nexport function evaluateAction(job: Job, suppliedName: string): Job {\n  const action = actions.get(suppliedName);\n  if (!action) throw new Error('unknown action');\n  action(job);\n  return job;\n}\nexport function applyRequest(ownedJob: Job, body: { action: string }) {\n  return evaluateAction(ownedJob, body.action);\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The action name selects a predeclared function through Map; it is never evaluated as source and names such as constructor or __proto__ are absent.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "The caller confirms ownership and permission to perform either action; job is a server-created object, not a request-controlled prototype. The returned object is serialized as JSON."
+      },
+      "operation_contract": {
+        "purpose": "Apply one of two authorized workflow state transitions and append an audit entry.",
+        "trust_boundary": "A user selects a literal action name; executable handlers are fixed server code and Map lookups have no inherited properties.",
+        "legitimate_examples": [
+          {
+            "input": "held job with empty audit; action=release",
+            "expected": {
+              "state": "released",
+              "audit": [
+                "released"
+              ]
+            }
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Converting the Map to a plain object with unchecked property lookup would change behavior for inherited names; returning only a status without updating audit is a regression."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for apply one of two authorized workflow state transitions and append an audit entry. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "workflow-action-map-dispatch",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A user selects a literal action name; executable handlers are fixed server code and Map lookups have no inherited properties. The operation is apply one of two authorized workflow state transitions and append an audit entry.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://tc39.es/ecma262/#sec-map-objects"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-safe-05",
+      "language": "typescript",
+      "vulnerable": false,
+      "scenario": "prepared-audit-message-insertion",
+      "files": {
+        "audit-store.ts": "import Database from 'better-sqlite3';\nexport function appendAudit(db: Database.Database, account: number, message: string) {\n  if (!Number.isSafeInteger(account) || account < 1 || message.length > 1000) throw new Error('audit');\n  const statement = db.prepare('INSERT INTO audit(account_id, message) VALUES (?, ?)');\n  const result = statement.run(account, message);\n  return Number(result.lastInsertRowid);\n}\nexport function saveUserNote(db: Database.Database, accountId: number, body: { note: string }) {\n  return { id: appendAudit(db, accountId, body.note) };\n}\n",
+        "schema.sql": "CREATE TABLE audit(id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, message TEXT NOT NULL);\n"
+      },
+      "expected_findings": [],
+      "rationale": "The SQL structure is constant and better-sqlite3 run binds both values. SQL-looking note text remains data and is not reconstructed as a later query.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "better-sqlite3 11.8.1; SQLite 3.48; @types/better-sqlite3 7.6.12 and esModuleInterop; trusted schema initialization; audit displayed as escaped text."
+      },
+      "operation_contract": {
+        "purpose": "Append an exact user note to the authenticated account’s audit table and return its new row ID.",
+        "trust_boundary": "A user supplies the message; the account identifier comes from trusted authentication and both are bound values.",
+        "legitimate_examples": [
+          {
+            "input": "accountId=9; note=Sam's \"DROP TABLE\" reminder",
+            "expected": "Insert that exact text once under account 9 and return the inserted ID."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "Manual quote stripping or replacing INSERT with a read-only operation violates exact message storage; retain the inserted row ID."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for append an exact user note to the authenticated account’s audit table and return its new row id. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "prepared-audit-message-insertion",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around A user supplies the message; the account identifier comes from trusted authentication and both are bound values. The operation is append an exact user note to the authenticated account’s audit table and return its new row id.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://github.com/WiseLibs/better-sqlite3/blob/v11.8.1/docs/api.md"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    },
+    {
+      "id": "v2-typescript-safe-06",
+      "language": "typescript",
+      "vulnerable": false,
+      "scenario": "smtp-implicit-tls-system-ca",
+      "files": {
+        "smtp-greeting.ts": "import * as tls from 'node:tls';\nexport function readSmtpGreeting(): Promise<string> {\n  return new Promise((resolve, reject) => {\n    const socket = tls.connect({ host: 'smtp.example.org', port: 465,\n      servername: 'smtp.example.org', rejectUnauthorized: true,\n      minVersion: 'TLSv1.2' });\n    let response = '';\n    socket.setTimeout(3000, () => socket.destroy(new Error('deadline')));\n    socket.on('data', chunk => {\n      response += chunk.toString('utf8');\n      if (response.length > 4096) socket.destroy(new Error('greeting too large'));\n      else if (response.includes('\\r\\n')) { socket.end(); resolve(response.split('\\r\\n')[0]); }\n    });\n    socket.once('error', reject);\n  });\n}\n"
+      },
+      "expected_findings": [],
+      "rationale": "The TLS client explicitly verifies peer certificates, supplies SNI for hostname checks and does not override checkServerIdentity. Data is delivered only after the TLS handshake succeeds.",
+      "remediation_constraints": [
+        "Preserve the operation and legitimate input/output examples in operation_contract."
+      ],
+      "runtime_assumptions": {
+        "runtime": "TypeScript 5.7.3; Node.js 22.14.0; strict mode; @types/node 22.13.10",
+        "platform": "Linux x86_64",
+        "setup": "SMTP server offers a publicly trusted certificate for smtp.example.org and closes idle connections; no process-level TLS bypass or custom global trust hooks."
+      },
+      "operation_contract": {
+        "purpose": "Read the first SMTP greeting line over implicit TLS from the configured mail server.",
+        "trust_boundary": "Network traffic is untrusted while hostname and Node certificate roots are trusted deployment configuration.",
+        "legitimate_examples": [
+          {
+            "input": "Valid matching SMTP server certificate and greeting 220 ready\r\n",
+            "expected": "Return 220 ready; reject invalid certificates."
+          }
+        ],
+        "permitted_changes": [
+          "Internal validation and error handling may change while preserving documented legitimate behavior."
+        ],
+        "forbidden_changes": [
+          "Do not remove the operation, return a constant result, or execute user input as code."
+        ]
+      },
+      "regression_traps": [
+        "A matching SNI string is not itself verification; retain rejectUnauthorized and the default hostname checker."
+      ],
+      "ground_truth_scope": {
+        "profile": "security-v2",
+        "scope": "Candidate whole-snippet source-security judgment for read the first smtp greeting line over implicit tls from the configured mail server. under the declared deployment; not a claim about absent middleware or third-party package CVEs.",
+        "reviewed_residual_risks": [
+          "The caller enforces the stated authentication, resource limits and ownership before this bounded operation; that integration must be confirmed by human review.",
+          "Availability and vulnerability of pinned third-party packages require separate dependency evidence; no dependency install or execution was performed."
+        ]
+      },
+      "derivation": {
+        "group": "smtp-implicit-tls-system-ca",
+        "origin": "new AI-authored candidate",
+        "related_case_ids": [],
+        "independence_rationale": "Conceived around Network traffic is untrusted while hostname and Node certificate roots are trusted deployment configuration. The operation is read the first smtp greeting line over implicit tls from the configured mail server.; this candidate is not a paired safe/vulnerable rewrite. Scenario independence across the full corpus requires human judgment and is not established by its distinct identifier."
+      },
+      "provenance": {
+        "origin": "original AI-authored evaluation candidate",
+        "author": "Codex AI author",
+        "generated": true,
+        "license": "CC0-1.0",
+        "references": [
+          "https://nodejs.org/api/tls.html#tlsconnectoptions-callback"
+        ]
+      },
+      "split": "held_out",
+      "human_review": {
+        "status": "pending",
+        "reviewer_kind": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": null,
+        "review_schema_version": "2.0",
+        "reviewed_content_sha256": null,
+        "reviewed_case_sha256": null
+      }
+    }
+  ]
+}
