@@ -1,6 +1,6 @@
-# CodeAgent
+# CodeAgentTool
 
-CodeAgent scans a GitHub repository or ZIP archive and turns selected security findings into reviewed patch proposals. It is designed for one workstation or a small team sharing one host. Static analysis works without an AI account. Optional multi-agent review supports an explicitly selected OpenAI model or a local Ollama model.
+CodeAgentTool scans a GitHub repository or ZIP archive and turns selected security findings into reviewed patch proposals. It is designed for one workstation or a small team sharing one host. Static analysis works without an AI account. Optional multi-agent review supports an explicitly selected OpenAI model or a local Ollama model.
 
 Start the application with Docker Compose:
 
